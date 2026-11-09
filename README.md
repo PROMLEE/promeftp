@@ -1,6 +1,6 @@
 # PromeFTP
 
-[한국어 설치 가이드](docs/INSTALL.ko.md) · [0.0.2 베타 다운로드](https://github.com/PROMLEE/promeftp/releases/tag/v0.0.2)
+[한국어 설치 가이드](docs/INSTALL.ko.md) · [한국어 사용 가이드](docs/USAGE.ko.md) · [0.0.3 베타 다운로드](https://github.com/PROMLEE/promeftp/releases/tag/v0.0.3)
 
 PromeFTP is a beta macOS SSH and SFTP client for Apple Silicon. It offers a split local/remote file browser, terminal tabs and groups, and saved workspace layouts. Connections use the system OpenSSH client and can use existing SSH configuration and keyboard-interactive authentication.
 
