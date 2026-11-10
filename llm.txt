@@ -2,13 +2,13 @@
 
 > A local SSH and SFTP desktop client for Apple Silicon Macs running macOS 13 or later.
 
-Current stable release: 1.0.0. SSH and SFTP use system OpenSSH. The app supports direct connections, OpenSSH aliases and overrides, keyboard-interactive authentication, split SSH terminals, dual-pane SFTP, bookmarks, and saved workspace layouts. Preferences includes installed terminal fonts and optional session-memory scrollback. Saved PAM replies are encrypted locally with Keychain protection. No account, cloud sync, or team service is required.
+Current stable release: 1.0.1. SSH and SFTP use system OpenSSH. The app supports direct connections, OpenSSH aliases and overrides, keyboard-interactive authentication, split SSH terminals, dual-pane SFTP, bookmarks, and saved workspace layouts. Preferences has a dedicated window and supports English, Korean, Japanese, and Simplified Chinese. Terminal options include installed fonts and optional session-memory scrollback. Saved PAM replies are encrypted locally with Keychain protection. No account, cloud sync, or team service is required.
 
 - [English overview](https://raw.githubusercontent.com/PROMLEE/promeftp/main/README.md): System requirements and feature overview.
 - [Installation and updates](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/INSTALL.md): DMG, checksums, Gatekeeper, permissions, and signed updates.
 - [User guide](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/USAGE.md): SSH, SFTP, workspaces, terminal settings, and PAM.
-- [1.0.0 release notes](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/releases/1.0.0.md): Stable release changes and upgrade instructions.
-- [Official release assets](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.0): DMG, ZIP, and SHA-256 checksum files.
+- [1.0.1 release notes](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/releases/1.0.1.md): Stable release changes and upgrade instructions.
+- [Official release assets](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.1): DMG, ZIP, and SHA-256 checksum files.
 
 Workspace restores open fresh connections and preserve running tabs. Unlimited scrollback is session-scoped and consumes memory. Releases are signed but lack Apple notarization. Global PAM rules should only contain reusable answers appropriate across connections.
 

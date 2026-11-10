@@ -1,8 +1,8 @@
 # Features and limits
 
-| Area | Supported in 1.0.0 | Practical limits |
+| Area | Supported in 1.0.1 | Practical limits |
 | --- | --- | --- |
-| Platform | macOS 13 and later on Apple Silicon | Distribution is arm64. The interface is in English. |
+| Platform | macOS 13 and later on Apple Silicon | Distribution is arm64. Preferences and major interface controls support English, Korean, Japanese, and Simplified Chinese. |
 | SSH and local shell | System OpenSSH, interactive terminal, search, resize, split panes, prompt navigation, and output export | Port forwarding is disabled. Prompt navigation needs OSC 133 markers. iTerm2 profile import and tmux integration mode are outside scope. |
 | OpenSSH config | Concrete aliases from `Host` and `Include`, effective settings, alternate config files, hostname/user/port overrides | Enter wildcard-matched aliases manually. PromeFTP opens files in the system editor and does not write config directives. |
 | SFTP | Shared local browser with one or more remote panes in a tab, folder trees, recent paths, drag and drop, and selection with Shift and ⌘ | SFTP must be enabled on the server. Transfer permissions depend on both the local filesystem and the remote account. |

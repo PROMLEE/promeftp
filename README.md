@@ -2,12 +2,12 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · Version 1.0.0</p>
+  <p>macOS 13 or later · Apple Silicon · Version 1.0.1</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
 
-*PromeFTP 1.0.0 connected to a test server with sample files.*
+*PromeFTP connected to a test server with sample files.*
 
 ## What you can do
 
@@ -37,7 +37,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
 | [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
-| [Release notes](docs/releases/1.0.0.md) | Review the 1.0.0 changes and beta upgrade path. |
+| [Release notes](docs/releases/1.0.1.md) | Review the 1.0.1 changes and beta upgrade path. |
 | [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
 
 ## Keyboard shortcuts
@@ -50,4 +50,4 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | ⌘K | Clear the buffer and keep the cursor line |
 | ⌘, | Open Preferences |
 
-See **Preferences → General → Keyboard Shortcuts** for the complete list. Report ordinary bugs through [GitHub Issues](https://github.com/PROMLEE/promeftp/issues).
+See **Preferences → Shortcuts** for the complete list. Report ordinary bugs through [GitHub Issues](https://github.com/PROMLEE/promeftp/issues).

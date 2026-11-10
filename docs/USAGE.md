@@ -22,7 +22,7 @@ Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and 
 
 Open **Preferences → Terminal** to choose an installed fixed-width font or enter a font family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
-**⌘P** opens Snippets. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → General → Keyboard Shortcuts** lists the available bindings.
+**⌘P** opens Snippets. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
 
 ## SFTP
 
@@ -44,14 +44,12 @@ Choose **Workspaces** and select the tabs to include before saving. A workspace 
 
 When OpenSSH requests host verification, compare the displayed fingerprint with one supplied by your administrator before trusting it. **Don’t ask again for this verified key** remembers the verified address, port, and fingerprint. A different key requires its own verification.
 
-OpenSSH keyboard-interactive authentication can show password, OTP, or other PAM questions. Respond when the input appears. **Save answer** stores a reusable response after successful authentication. Its checkbox remembers your last choice. In **Preferences → General → PAM Authentication**, manage saved answers, control whether they send automatically, or move an answer to **Global PAM Rules**. Turn off **Send saved answers automatically** if you want to review a filled response before sending.
+OpenSSH keyboard-interactive authentication can show password, OTP, or other PAM questions. Respond when the input appears. **Save answer** stores a reusable response after successful authentication. Its checkbox remembers your last choice. In **Preferences → Authentication**, manage saved answers, control whether they send automatically, or move an answer to **Global PAM Rules**. Turn off **Send saved answers automatically** if you want to review a filled response before sending.
 
 Global rules use exact questions or RE2 regular expressions. For example, `^Password:$` matches that whole prompt, and `\n` matches a line break inside a question. Rules send a fixed reply once per matching question per connection. Connection-specific rules and saved replies take priority. Use global rules only for answers appropriate across the hosts you connect to. Leave one-time codes unsaved. **Authentication Activity** shows the question, time, and rule source for automatic replies.
 
 ## Preferences and About
 
-![Terminal Preferences showing a font preview and unlimited scrollback](assets/terminal-preferences.png)
+Open **PromeFTP → Preferences…** or press **⌘,**. General contains language, appearance, SSH config, and updates. Terminal contains font and buffer options. Authentication manages PAM answers and Shortcuts lists key bindings. About displays the running version and build with links to the guide, release notes, and issue tracker.
 
-Open **PromeFTP → Preferences…** or press **⌘,**. General contains appearance, keyboard shortcuts, authentication, SSH config, and updates. Terminal contains font and buffer options. About displays the running version and build with links to the guide, release notes, and issue tracker.
-
-![About shows PromeFTP version and build](assets/about.png)
+Use **Preferences → General → Language** to select English, Korean, Japanese, Simplified Chinese, or the macOS language. Click **Save** to apply the language while your connections stay open. Server output and prompts remain in their original language.

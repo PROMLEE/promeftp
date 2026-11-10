@@ -1,0 +1,11 @@
+{
+  "heading": "A dedicated Preferences window",
+  "summary": "Manage PromeFTP settings in a separate macOS window, with four interface languages.",
+  "changes": [
+    ["Open Preferences with ⌘,", "Use the General, Terminal, Authentication, Shortcuts, and About tabs without covering your workspace."],
+    ["Choose an interface language", "In General → Language, choose English, Korean, Japanese, Simplified Chinese, or follow macOS. Save to apply the language while your sessions stay open."],
+    ["Manage PAM and shortcuts", "Review saved answers and global rules under Authentication. Find keyboard commands under Shortcuts."],
+    ["Keep your terminal preferences", "Existing font and scrollback choices carry forward and apply to open terminals when you save."]
+  ],
+  "notice": "Close active SSH, SFTP, and local shell sessions before installing. Requires macOS 13 or later on Apple Silicon."
+}
