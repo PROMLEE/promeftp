@@ -1,0 +1,11 @@
+{
+  "heading": "Terminal triggers and editable snippets",
+  "summary": "Create a trigger from selected terminal output and manage how SSH connections use Keychain.",
+  "changes": [
+    ["Create a trigger from selected text", "Select terminal text, then right-click and choose Create Trigger from Selection. PromeFTP prepares an editable RE2 pattern and records matches as new output arrives."],
+    ["Edit an existing snippet", "Press ⌘P and use the pencil button to change a snippet’s name, command, or scope."],
+    ["Control Keychain access", "Open Preferences → Authentication → Keychain. OpenSSH Keychain access is off by default. Loading saved PAM answers is a separate option."],
+    ["Improve hover alignment", "Connection options, PAM controls, and SFTP labels have more consistent alignment."]
+  ],
+  "notice": "Close active sessions before updating. Triggers record matches in the terminal pane. Requires macOS 13 or later on Apple Silicon."
+}

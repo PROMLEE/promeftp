@@ -14,6 +14,10 @@ For an alternate config, add `-F /path/to/config` before the alias. Clear any ex
 
 In **Preferences → Authentication**, check **Send saved answers automatically**. A stored reply can only be reused after matching the connection and prompt, and automatic replies are limited to one attempt for a matching question per connection. If the server repeats the prompt, answer manually and check **Authentication Activity**. A jump-host prompt requires a manual answer. If a Global rule does not match, compare the full prompt and use a fixed answer for testing. Use `\n` for a line break within a single prompt.
 
+## macOS asks for a Keychain password when I connect
+
+Under **Preferences → Authentication → Keychain**, check whether OpenSSH Keychain access is enabled or PromeFTP is set to load stored PAM answers. Turn off each option you do not use. Saving or revealing a PAM answer still uses Keychain. A key passphrase or a prompt from an external SSH agent or jump-host configuration may have its own authentication requirements.
+
 ## I see a host-key warning
 
 Confirm the current fingerprint with the server administrator. PromeFTP remembers approval by address, port, and fingerprint. A changed fingerprint requires fresh verification. See [Host keys and PAM](USAGE.md#host-keys-and-pam).

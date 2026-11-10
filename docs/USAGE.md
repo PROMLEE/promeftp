@@ -22,7 +22,13 @@ Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and 
 
 Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
-**⌘P** opens Snippets. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
+**⌘P** opens Snippets. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
+
+## Terminal triggers
+
+Select text in a local or SSH terminal, then right-click and choose **Create Trigger from Selection…**. PromeFTP turns the selection into an RE2 pattern by escaping punctuation and representing line breaks with `\n`. Edit the pattern if you want to match a variable part of the output. Use **This connection** to apply the rule to terminals opened with the same connection, or **All sessions** to share it across terminals.
+
+Triggers watch new output after authentication, including prompts without a final newline. A match adds an entry to the pane's **Triggers** indicator. Open **Terminal Triggers…** from the context menu to edit or remove rules and view recent matches. Rules are stored locally. Recent matches belong to the open pane and contain the rule name and time.
 
 ## SFTP
 
@@ -41,6 +47,8 @@ Use the tab menu to name, color, or group a tab. Return saves an edited name and
 Choose **Workspaces** and select the tabs to include before saving. A workspace stores tab names, groups, colors, order, pane sizes and directions, connection settings, and SFTP paths. **Open Tabs** appends the saved layout while your current connections continue running. Restored connections authenticate again. Terminal output and running processes are outside the saved layout. To replace a saved layout, delete it and save a new one.
 
 ## Host keys and PAM
+
+**Preferences → Authentication → Keychain** has separate controls for OpenSSH Keychain access and loading saved PAM answers. OpenSSH Keychain access is off by default in PromeFTP. Turn off loading saved answers if you want to enter all PAM responses manually without opening saved credentials. Explicitly saving or revealing an answer still uses Keychain. An SSH identity, agent, or external jump-host configuration can have its own authentication requirements.
 
 When OpenSSH requests host verification, compare the displayed fingerprint with one supplied by your administrator before trusting it. **Don’t ask again for this verified key** remembers the verified address, port, and fingerprint. A different key requires its own verification.
 

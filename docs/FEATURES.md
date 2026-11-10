@@ -1,6 +1,6 @@
 # Features and limits
 
-| Area | Supported in 1.0.2 | Practical limits |
+| Area | Supported in 1.0.3 | Practical limits |
 | --- | --- | --- |
 | Platform | macOS 13 and later on Apple Silicon | Distribution is arm64. Preferences and major interface controls support English, Korean, Japanese, and Simplified Chinese. |
 | SSH and local shell | System OpenSSH, interactive terminal, search, resize, split panes, prompt navigation, and output export | Port forwarding is disabled. Prompt navigation needs OSC 133 markers. iTerm2 profile import and tmux integration mode are outside scope. |
@@ -10,6 +10,7 @@
 | Conflicts | Skip or replace an existing remote file on upload | Existing download targets and same-name folders are protected. Folder copies skip symlinks. Remote folder deletion requires an empty directory. |
 | Layouts | Tab names, colors, groups, splits, and selected-tab workspace snapshots | Restoring a layout appends tabs and opens fresh connections. It does not resume remote processes or restore terminal output. To change a saved snapshot, delete and recreate it. |
 | Authentication | Interactive prompts, saved replies, exact or RE2 global rules, and authentication activity | New connections can prompt again. RE2 rules match a prompt and send a fixed single-line answer. Jump-host prompts are answered manually. |
+| Terminal triggers | Selection-to-RE2, connection or global scope, and a match history per pane | Matches new terminal output and records an alert. |
 | Scrollback | Finite setting or optional unlimited mode in session memory | Long output uses memory. The terminal library has a buffer ceiling. Session log export uses a separate, bounded capture. |
 | Updates | Signed arm64 archive and feed, manual checks, and opt-in automatic installation | First launch can require approval because the release is not Apple notarized. |
 

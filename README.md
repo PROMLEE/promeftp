@@ -2,7 +2,7 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · Version 1.0.2</p>
+  <p>macOS 13 or later · Apple Silicon · Version 1.0.3</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
@@ -18,7 +18,7 @@
 | Reuse OpenSSH settings | Search aliases and see the resolved destination, user, and port. Override individual values for a connection. |
 | Organize repeat work | Keep bookmarks in folders, reopen recent hosts from History, and save selected tabs and pane layouts as a workspace. |
 | Handle interactive login | Verify host fingerprints, respond to keyboard-interactive prompts, and manage encrypted saved answers or global PAM rules. |
-| Make the terminal yours | Pick a font, preview it, set scrollback, and open connection-specific snippets with ⌘P. |
+| Make the terminal yours | Pick a font, preview it, set scrollback, edit connection-specific snippets with ⌘P, and create RE2 triggers from selected output. |
 
 ## Install and connect
 
@@ -37,7 +37,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
 | [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
-| [Release notes](docs/releases/1.0.2.md) | Review the 1.0.2 changes and beta upgrade path. |
+| [Release notes](docs/releases/1.0.3.md) | Review the 1.0.3 changes and beta upgrade path. |
 | [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
 
 ## Keyboard shortcuts
