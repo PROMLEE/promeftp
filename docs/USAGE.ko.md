@@ -1,6 +1,6 @@
 # PromeFTP 사용 가이드
 
-[설치 가이드](INSTALL.ko.md) · [0.0.9 베타 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v0.0.9)
+[설치 가이드](INSTALL.ko.md) · [English](USAGE.md)
 
 ## 호스트 연결
 
@@ -42,7 +42,7 @@ SSH와 SFTP는 모두 macOS의 `/usr/bin/ssh`를 사용합니다. 호스트 키 
 - SSH 탭에서는 서버의 로그인 셸과 설정이 적용됩니다. 원격에서 Oh My Zsh를 쓰려면 서버 계정에 설정되어 있어야 합니다. 로컬 셸 설정이나 플러그인은 서버에 복사하지 않습니다.
 - 터미널을 우클릭하면 **Copy**, **Paste**, **Find**, **Clear Buffer**, **Clear Scrollback**, 분할 및 창 닫기 메뉴가 표시됩니다.
 - **⌘F**는 출력 검색, **⌘D**는 새 연결을 열어 나란히 분할, **⌘K**는 커서가 있는 줄을 남기고 버퍼를 정리합니다. **⌘+ (또는 ⌘=) / ⌘− / ⌘0**으로 글꼴 크기를 조절합니다. 터미널에서 **⌘클릭**으로 HTTP(S) 링크를 엽니다.
-- **⌘,**에서 System·Light·Dark 테마와 글꼴·크기·스크롤백·Option as Meta를 조절합니다. 분할된 터미널의 도구바 중앙에는 연결 이름이 표시됩니다. 테마의 기호가 깨지면 Mac에 설치된 Nerd Font를 지정할 수 있습니다. 셸이 OSC 133 프롬프트 마커를 출력하면 **⌘⌥↑ / ⌘⌥↓**로 이동합니다.
+- **⌘,**로 설정을 엽니다. General에서 테마와 업데이트를, Terminal에서 설치된 고정폭 글꼴·크기·스크롤백·Option as Meta를 설정할 수 있습니다. Unlimited scrollback은 현재 세션의 출력을 메모리에 보존합니다. About에서 실행 중인 버전과 빌드를 확인할 수 있습니다. 분할된 터미널의 도구바 중앙에는 연결 이름이 표시됩니다. 테마의 기호가 깨지면 Mac에 설치된 Nerd Font를 지정할 수 있습니다. 셸이 OSC 133 프롬프트 마커를 출력하면 **⌘⌥↑ / ⌘⌥↓**로 이동합니다.
 - 일반적인 ANSI 터미널과 셸 기능을 지원합니다. iTerm2 전용 기능인 tmux 통합 모드와 프로필 가져오기는 이 버전의 범위에 포함되지 않습니다. [Oh My Zsh 프로젝트](https://github.com/ohmyzsh/ohmyzsh)
 
 ## 스니펫
@@ -77,6 +77,6 @@ OpenSSH가 새 접속 대상의 호스트 키 확인을 요청하면 **Verify SS
 
 - 공식 앱 식별자는 `com.promlee.promeftp`입니다. 이후 버전도 같은 식별자와 고정 인증서를 사용합니다. 예전 임시 서명 빌드에서 넘어올 때 macOS가 파일 접근 권한을 다시 물을 수 있습니다.
 - 앱은 SSH 개인 키와 호스트 신뢰를 시스템 OpenSSH에 맡깁니다. 사용자가 입력하는 제품 활성화 키는 없습니다. 앱 코드 서명과 Sparkle 업데이트 서명은 서로 다른 서명입니다.
-- macOS 메뉴 **PromeFTP → Check for Updates…**에서 수동으로 확인합니다. **Install Updates Automatically**는 기본적으로 꺼져 있습니다. 켜면 Sparkle이 베타 업데이트를 확인·다운로드합니다. SSH, SFTP 또는 로컬 셸 세션이 열린 동안 설치·재실행을 미룹니다. 업데이트가 준비된 경우 앱을 종료할 때 설치될 수 있습니다.
-- 업데이트는 PromeFTP 전용 HTTPS 베타 앱캐스트를 사용하며, Sparkle이 피드와 업데이트 ZIP의 Ed25519 서명을 확인합니다. 서명 실패나 다운로드 오류가 발생하면 기존 앱이 유지됩니다. 배포용 DMG와 ZIP의 SHA-256 파일은 같은 릴리스에 있습니다.
+- macOS 메뉴 **PromeFTP → Check for Updates…**에서 수동으로 확인합니다. **Install Updates Automatically**는 기본적으로 꺼져 있습니다. 켜면 Sparkle이 업데이트를 확인·다운로드합니다. SSH, SFTP 또는 로컬 셸 세션이 열린 동안 설치·재실행을 미룹니다. 업데이트가 준비된 경우 앱을 종료할 때 설치될 수 있습니다.
+- 업데이트는 PromeFTP 전용 HTTPS 정식 업데이트 피드를 사용하며, Sparkle이 피드와 업데이트 ZIP의 Ed25519 서명을 확인합니다. 서명 실패나 다운로드 오류가 발생하면 기존 앱이 유지됩니다. 배포용 DMG와 ZIP의 SHA-256 파일은 같은 릴리스에 있습니다.
 - 자체 서명과 Apple 공증은 별개입니다. 배포 빌드에는 Apple Developer ID 공증이 적용되지 않았습니다.

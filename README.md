@@ -1,13 +1,20 @@
 # PromeFTP
 
-[한국어 설치 가이드](docs/INSTALL.ko.md) · [한국어 사용 가이드](docs/USAGE.ko.md) · [0.0.9 베타 다운로드](https://github.com/PROMLEE/promeftp/releases/tag/v0.0.9)
+**A macOS workspace for SSH and SFTP.** Open terminals, move files, and save the layout of the connections you use together. PromeFTP follows PromePaste’s local desktop approach.
 
-PromeFTP is a beta macOS SSH and SFTP client for Apple Silicon. It offers a split local/remote file browser, terminal tabs and groups, and saved workspace layouts. Connections use the system OpenSSH client and can use existing SSH configuration and keyboard-interactive authentication.
+[Download 1.0.0](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.0) · [Install guide](docs/INSTALL.md) · [User guide](docs/USAGE.md) · [Release notes](docs/releases/1.0.0.md) · [Documentation index for assistants](llm.txt) · [한국어](README.ko.md)
 
-**[Download the beta](https://github.com/PROMLEE/promeftp/releases)**
+Requires macOS 13 or later on Apple Silicon.
 
-Open the DMG and drag **PromeFTP** to **Applications**. Releases use a persistent self-signed macOS identity and signed Sparkle updates. Apple notarization is not currently included. If macOS blocks the first launch, use **System Settings → Privacy & Security → Open Anyway** after confirming the download and its checksum.
+| Area | What you can do |
+| --- | --- |
+| SSH | Open local or remote shells, split terminals horizontally or vertically, search output, and paste global or connection-specific snippets. |
+| SFTP | Browse local and remote files side by side. Drag files between panels, or copy between remote panels in the same tab. |
+| Connections | Connect directly, reuse OpenSSH aliases, or organize bookmarks in folders. Successful connections appear in History. |
+| Workspaces | Save selected tabs with their groups, colors, split layout, and SFTP paths. Open the saved tabs alongside running sessions. |
+| Authentication | Verify SSH host keys and respond to keyboard-interactive questions. Manage saved replies and global PAM rules locally. |
+| Preferences | Choose appearance, an installed monospace font, font size, scrollback, Option as Meta, and update behavior. Open with ⌘,. |
 
-Use **PromeFTP → Check for Updates…** to check manually. Automatic installation is optional and off by default. Close open terminal and transfer sessions before applying an update.
+Install the DMG by dragging PromeFTP to Applications. The app uses a persistent signing identity and signed Sparkle updates. If macOS blocks the first launch, follow the Open Anyway steps in the install guide. [Installation and updates](docs/INSTALL.md)
 
-This repository hosts release downloads, checksums, and release notes.
+Bookmarks, workspaces, and authentication settings live on this Mac. PromeFTP uses system OpenSSH for SSH configuration, host trust, and private keys. Saved PAM replies are encrypted with a key protected by the macOS Keychain. [Authentication guide](docs/USAGE.md#host-keys-and-pam)
