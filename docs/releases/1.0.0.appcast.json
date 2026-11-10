@@ -1,0 +1,11 @@
+{
+  "heading": "PromeFTP 1.0.0 is now stable",
+  "summary": "Use SSH terminals and transfer files from one workspace on your Mac.",
+  "changes": [
+    ["Preferences in one place", "Press ⌘, to manage appearance, updates, OpenSSH config, PAM answers, and terminal settings. About shows the running version and build."],
+    ["Choose a terminal font", "Pick an installed monospace font or enter a family name. Preview the result before saving."],
+    ["Keep more terminal output", "Turn on Unlimited scrollback under Terminal to retain output for the current session. The finite line limit is still available."],
+    ["Bring back a workspace", "Save selected tabs and their split layouts. Open them alongside current sessions, then use side-by-side SFTP or split SSH as usual."]
+  ],
+  "notice": "Close active SSH, SFTP, and local shells before updating. Existing settings carry over. Requires macOS 13 or later and Apple Silicon."
+}

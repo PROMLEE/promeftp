@@ -10,11 +10,26 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
       <sparkle:version>1.0.0</sparkle:version>
       <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
-      <description>PromeFTP for macOS. See the release notes for changes and installation instructions.</description>
       <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.0/PromeFTP-1.0.0-macos-arm64.zip" length="140018919" type="application/octet-stream" sparkle:edSignature="19uuFF7adA0/4xcZB4tmyCo7YFz+eBVS0uiQHAEnT9ekCf4VAanoPkZM8yzYPgJW3FfhB/ZJwpFX1ULKY7QGDQ=="></enclosure>
+      <description sparkle:format="html">&lt;!doctype html&gt;
+&lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
+&lt;style&gt;
+:root { color-scheme: light dark; }
+body { font: 13px/1.55 -apple-system, sans-serif; margin: 16px 20px; color: CanvasText; }
+h2 { font-size: 18px; margin: 0 0 8px; }
+ul { padding-left: 19px; }
+li { margin-bottom: 10px; }
+.notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
+&lt;/style&gt;&lt;body&gt;
+&lt;h2&gt;PromeFTP 1.0.0 is now stable&lt;/h2&gt;
+&lt;p&gt;Use SSH terminals and transfer files from one workspace on your Mac.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Preferences in one place&lt;/strong&gt;&lt;br&gt;Press ⌘, to manage appearance, updates, OpenSSH config, PAM answers, and terminal settings. About shows the running version and build.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Choose a terminal font&lt;/strong&gt;&lt;br&gt;Pick an installed monospace font or enter a family name. Preview the result before saving.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Keep more terminal output&lt;/strong&gt;&lt;br&gt;Turn on Unlimited scrollback under Terminal to retain output for the current session. The finite line limit is still available.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Bring back a workspace&lt;/strong&gt;&lt;br&gt;Save selected tabs and their split layouts. Open them alongside current sessions, then use side-by-side SFTP or split SSH as usual.&lt;/li&gt;&lt;/ul&gt;
+&lt;p class="notice"&gt;Close active SSH, SFTP, and local shells before updating. Existing settings carry over. Requires macOS 13 or later and Apple Silicon.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.0"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;</description>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Says3RIyhUsg/+16ASkHEYaQCimNIPvhnLRnBDdQ6q0zfhoRHV3B4xbwB06PIb/LZ7fPElD1GuRHHHFDQnL6AA==
-length: 1227
+edSignature: vd3xVsug5mOov675AB+uiLIqfIEkMQbkq1aEwQgZ0/G7m9EB0Xsa5fY34gXSXJXGZvawolmbiH2oH91RIf4UAQ==
+length: 2960
 -->
