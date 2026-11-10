@@ -37,3 +37,7 @@ Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수
 | 설정 | ⌘,로 열어 테마, 글꼴, 무제한 스크롤백, 업데이트, 버전을 확인합니다. |
 
 자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.0.2 릴리스 노트](docs/releases/1.0.2.md)
+
+## 로드맵
+
+예정된 작업은 [TODO.md](TODO.md)에서 확인할 수 있습니다.

@@ -51,3 +51,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | ⌘, | Open Preferences |
 
 See **Preferences → Shortcuts** for the complete list. Report ordinary bugs through [GitHub Issues](https://github.com/PROMLEE/promeftp/issues).
+
+## Roadmap
+
+See [TODO.md](TODO.md) for planned work.
