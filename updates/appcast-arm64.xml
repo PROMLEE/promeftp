@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.0.2</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.2</link>
-      <pubDate>Tue, 10 Nov 2026 06:03:19 +0000</pubDate>
-      <sparkle:version>1.0.2</sparkle:version>
-      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+      <title>PromeFTP 1.0.3</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.3</link>
+      <pubDate>Tue, 10 Nov 2026 06:17:00 +0000</pubDate>
+      <sparkle:version>1.0.3</sparkle:version>
+      <sparkle:shortVersionString>1.0.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;A brighter dark mode and more terminal fonts&lt;/h2&gt;
-&lt;p&gt;This update brings build details, update controls, and license notices together in Preferences.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Find build and update details&lt;/strong&gt;&lt;br&gt;Open Preferences → About to see the running version and build, macOS version, last update check, automatic installation settings, and license notices.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Choose a font installed on your Mac&lt;/strong&gt;&lt;br&gt;In Preferences → Terminal, pick System Monospace, select an installed font family, or enter a custom family. Save to apply the font to open terminals.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Use a brighter dark appearance&lt;/strong&gt;&lt;br&gt;Preferences, the sidebar, and terminals use lighter dark backgrounds. The initial General tab no longer gets a forced focus ring.&lt;/li&gt;&lt;/ul&gt;
-&lt;p class="notice"&gt;Close active SSH, SFTP, and local shell sessions before installing. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.2"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Terminal triggers and editable snippets&lt;/h2&gt;
+&lt;p&gt;Create a trigger from selected terminal output and manage how SSH connections use Keychain.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Create a trigger from selected text&lt;/strong&gt;&lt;br&gt;Select terminal text, then right-click and choose Create Trigger from Selection. PromeFTP prepares an editable RE2 pattern and records matches as new output arrives.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Edit an existing snippet&lt;/strong&gt;&lt;br&gt;Press ⌘P and use the pencil button to change a snippet’s name, command, or scope.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Control Keychain access&lt;/strong&gt;&lt;br&gt;Open Preferences → Authentication → Keychain. OpenSSH Keychain access is off by default. Loading saved PAM answers is a separate option.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Improve hover alignment&lt;/strong&gt;&lt;br&gt;Connection options, PAM controls, and SFTP labels have more consistent alignment.&lt;/li&gt;&lt;/ul&gt;
+&lt;p class="notice"&gt;Close active sessions before updating. Triggers record matches in the terminal pane. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.3"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.2/PromeFTP-1.0.2-macos-arm64.zip" length="140038289" type="application/octet-stream" sparkle:edSignature="Q25dyGODhigLrsF/jRjbpEj2wJGUbIDHIm/HbnELOVO0ODhsnpEfTj989I0BxZ6COv8fskcD/pBFFTFst14bBA=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.3/PromeFTP-1.0.3-macos-arm64.zip" length="140042884" type="application/octet-stream" sparkle:edSignature="mUcbhmj7w0gYBxzv4SeHXCSiH3Zai8mdjMVyCGtgav8rZ9klGvR8U3OW97A9nNXw+IgErroXl8GpEJwru+h4CA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: RSKOKyFlL/sKbv385XoOzRl2wQU6I01BXoSmz35rr8ExMMBgVh7ObK/LI2Uy7XPiBrTJiCYih9bpZHXtmZKdDw==
-length: 2872
+edSignature: wU25uP+uXxpUC6kjj2T+F1mp6iTr1E0rCqoxjS+/JWZeMtq+5nWFWlbpGgTjXdyJT5P2SsxwVzVyrUEsN0sLDA==
+length: 2989
 -->
