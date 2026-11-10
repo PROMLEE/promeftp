@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>PromeFTP</title>
+    <item>
+      <title>PromeFTP 1.0.0</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.0</link>
+      <pubDate>Tue, 10 Nov 2026 05:29:44 +0000</pubDate>
+      <sparkle:version>1.0.0</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
+      <description>PromeFTP for macOS. See the release notes for changes and installation instructions.</description>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.0/PromeFTP-1.0.0-macos-arm64.zip" length="140018919" type="application/octet-stream" sparkle:edSignature="19uuFF7adA0/4xcZB4tmyCo7YFz+eBVS0uiQHAEnT9ekCf4VAanoPkZM8yzYPgJW3FfhB/ZJwpFX1ULKY7QGDQ=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: Says3RIyhUsg/+16ASkHEYaQCimNIPvhnLRnBDdQ6q0zfhoRHV3B4xbwB06PIb/LZ7fPElD1GuRHHHFDQnL6AA==
+length: 1227
+-->
