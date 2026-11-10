@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.0.1</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.1</link>
-      <pubDate>Tue, 10 Nov 2026 05:49:12 +0000</pubDate>
-      <sparkle:version>1.0.1</sparkle:version>
-      <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+      <title>PromeFTP 1.0.2</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.2</link>
+      <pubDate>Tue, 10 Nov 2026 06:03:19 +0000</pubDate>
+      <sparkle:version>1.0.2</sparkle:version>
+      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;A dedicated Preferences window&lt;/h2&gt;
-&lt;p&gt;Manage PromeFTP settings in a separate macOS window, with four interface languages.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Open Preferences with ⌘,&lt;/strong&gt;&lt;br&gt;Use the General, Terminal, Authentication, Shortcuts, and About tabs without covering your workspace.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Choose an interface language&lt;/strong&gt;&lt;br&gt;In General → Language, choose English, Korean, Japanese, Simplified Chinese, or follow macOS. Save to apply the language while your sessions stay open.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Manage PAM and shortcuts&lt;/strong&gt;&lt;br&gt;Review saved answers and global rules under Authentication. Find keyboard commands under Shortcuts.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Keep your terminal preferences&lt;/strong&gt;&lt;br&gt;Existing font and scrollback choices carry forward and apply to open terminals when you save.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;A brighter dark mode and more terminal fonts&lt;/h2&gt;
+&lt;p&gt;This update brings build details, update controls, and license notices together in Preferences.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Find build and update details&lt;/strong&gt;&lt;br&gt;Open Preferences → About to see the running version and build, macOS version, last update check, automatic installation settings, and license notices.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Choose a font installed on your Mac&lt;/strong&gt;&lt;br&gt;In Preferences → Terminal, pick System Monospace, select an installed font family, or enter a custom family. Save to apply the font to open terminals.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Use a brighter dark appearance&lt;/strong&gt;&lt;br&gt;Preferences, the sidebar, and terminals use lighter dark backgrounds. The initial General tab no longer gets a forced focus ring.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active SSH, SFTP, and local shell sessions before installing. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.1"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.2"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.1/PromeFTP-1.0.1-macos-arm64.zip" length="140033726" type="application/octet-stream" sparkle:edSignature="kIIsr9+JWpHoh9n5gzaNnH+iV1sGjEeO8gouKrOaaAiox/P714hn6YwvMC0taxyMoMN3ITIBbn9NuOfHnj3VBg=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.2/PromeFTP-1.0.2-macos-arm64.zip" length="140038289" type="application/octet-stream" sparkle:edSignature="Q25dyGODhigLrsF/jRjbpEj2wJGUbIDHIm/HbnELOVO0ODhsnpEfTj989I0BxZ6COv8fskcD/pBFFTFst14bBA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: yBeOD1ezXkVgAQRiC1Hd8DqCRfP0CILq64WYVCqGMZgGWrbzbJ+1cSHq8ibg4tyRGvI1/waw/gWZfgfAag1iCg==
-length: 2933
+edSignature: RSKOKyFlL/sKbv385XoOzRl2wQU6I01BXoSmz35rr8ExMMBgVh7ObK/LI2Uy7XPiBrTJiCYih9bpZHXtmZKdDw==
+length: 2872
 -->
