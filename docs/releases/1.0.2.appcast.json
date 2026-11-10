@@ -1,0 +1,10 @@
+{
+  "heading": "A brighter dark mode and more terminal fonts",
+  "summary": "This update brings build details, update controls, and license notices together in Preferences.",
+  "changes": [
+    ["Find build and update details", "Open Preferences → About to see the running version and build, macOS version, last update check, automatic installation settings, and license notices."],
+    ["Choose a font installed on your Mac", "In Preferences → Terminal, pick System Monospace, select an installed font family, or enter a custom family. Save to apply the font to open terminals."],
+    ["Use a brighter dark appearance", "Preferences, the sidebar, and terminals use lighter dark backgrounds. The initial General tab no longer gets a forced focus ring."]
+  ],
+  "notice": "Close active SSH, SFTP, and local shell sessions before installing. Requires macOS 13 or later on Apple Silicon."
+}

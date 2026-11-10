@@ -1,19 +1,19 @@
-# PromeFTP 1.0.1 documentation
+# PromeFTP 1.0.2 documentation
 
 # Install and update PromeFTP
 
-PromeFTP 1.0.1 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.1)
+PromeFTP 1.0.2 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.2)
 
 ## Install
 
-1. Download `PromeFTP-1.0.1-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
+1. Download `PromeFTP-1.0.2-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
 2. Open the DMG and drag **PromeFTP** into **Applications**. Eject the disk image.
 3. Launch PromeFTP from Applications.
 
 To verify the download, put the DMG and its checksum file in the same folder and run the following from that folder.
 
 ```sh
-shasum -a 256 -c PromeFTP-1.0.1-macos-arm64.dmg.sha256
+shasum -a 256 -c PromeFTP-1.0.2-macos-arm64.dmg.sha256
 ```
 
 ## First launch on macOS
@@ -30,9 +30,9 @@ If the button is missing, launch PromeFTP from Applications again and return to 
 
 SFTP can trigger normal macOS prompts when you browse protected local folders. If you save PAM answers, macOS may ask for access to **PromeFTP Safe Storage**. On a verified official build, **Always Allow** lets future requests from the trusted app use that entry. SSH private keys remain under OpenSSH management.
 
-Open **PromeFTP → Check for Updates…** or **Preferences → General** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
+Open **PromeFTP → Check for Updates…** or **Preferences → About** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
 
-Version 0.0.9 can upgrade to 1.0.1 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
+Version 0.0.9 can upgrade to 1.0.2 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
 
 For update behavior and signature details, see [PromeFTP updates](https://github.com/PROMLEE/promeftp/blob/main/docs/UPDATES.md). If launch or download still fails, see [Troubleshooting](https://github.com/PROMLEE/promeftp/blob/main/docs/TROUBLESHOOTING.md#macos-blocks-launch-or-the-update-does-not-appear).
 
@@ -60,7 +60,7 @@ When a gateway login contains multiple `@` characters, **Split address** separat
 
 Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and server-side configuration. A Zsh account loads its own Oh My Zsh configuration when installed and configured. Install a compatible font on your Mac to render its prompt glyphs.
 
-Open **Preferences → Terminal** to choose an installed fixed-width font or enter a font family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
+Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
 **⌘P** opens Snippets. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
 
@@ -89,7 +89,7 @@ Global rules use exact questions or RE2 regular expressions. For example, `^Pass
 
 ## Preferences and About
 
-Open **PromeFTP → Preferences…** or press **⌘,**. General contains language, appearance, SSH config, and updates. Terminal contains font and buffer options. Authentication manages PAM answers and Shortcuts lists key bindings. About displays the running version and build with links to the guide, release notes, and issue tracker.
+Open **PromeFTP → Preferences…** or press **⌘,**. General contains language, appearance, and SSH config. Terminal contains font and buffer options. Authentication manages PAM answers and Shortcuts lists key bindings. Open **About** for the version, build, update controls and last check, and license notices.
 
 Use **Preferences → General → Language** to select English, Korean, Japanese, Simplified Chinese, or the macOS language. Click **Save** to apply the language while your connections stay open. Server output and prompts remain in their original language.
 
@@ -97,7 +97,7 @@ Use **Preferences → General → Language** to select English, Korean, Japanese
 
 # Features and limits
 
-| Area | Supported in 1.0.1 | Practical limits |
+| Area | Supported in 1.0.2 | Practical limits |
 | --- | --- | --- |
 | Platform | macOS 13 and later on Apple Silicon | Distribution is arm64. Preferences and major interface controls support English, Korean, Japanese, and Simplified Chinese. |
 | SSH and local shell | System OpenSSH, interactive terminal, search, resize, split panes, prompt navigation, and output export | Port forwarding is disabled. Prompt navigation needs OSC 133 markers. iTerm2 profile import and tmux integration mode are outside scope. |
@@ -118,8 +118,8 @@ Use **Preferences → General → Language** to select English, Korean, Japanese
 
 | Starting point | Update path |
 | --- | --- |
-| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.0.1. |
-| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → General**. This build reads the stable feed. |
+| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.0.2. |
+| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → About**. This build reads the stable feed. |
 | Fresh or manual install | Download the Apple Silicon DMG, verify its checksum, and replace PromeFTP in Applications after quitting. |
 
 ## Manual and automatic updates
@@ -128,7 +128,7 @@ Close active SSH, SFTP, and local shell sessions before checking manually. Enabl
 
 ## How the release is verified
 
-Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](https://github.com/PROMLEE/promeftp/blob/main/docs/INSTALL.md) · [1.0.1 release notes](https://github.com/PROMLEE/promeftp/blob/main/docs/releases/1.0.1.md)
+Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](https://github.com/PROMLEE/promeftp/blob/main/docs/INSTALL.md) · [1.0.2 release notes](https://github.com/PROMLEE/promeftp/blob/main/docs/releases/1.0.2.md)
 
 ---
 
@@ -162,7 +162,7 @@ Install the font required by your shell theme on the Mac running PromeFTP. In **
 
 ## macOS blocks launch, or the update does not appear
 
-Check the architecture, verify the official DMG, and follow the [first-launch instructions](https://github.com/PROMLEE/promeftp/blob/main/docs/INSTALL.md#first-launch-on-macos). For updates, close all sessions and retry from **Preferences → General**. If the signed update cannot download, use the official DMG. [Update guide](https://github.com/PROMLEE/promeftp/blob/main/docs/UPDATES.md)
+Check the architecture, verify the official DMG, and follow the [first-launch instructions](https://github.com/PROMLEE/promeftp/blob/main/docs/INSTALL.md#first-launch-on-macos). For updates, close all sessions and retry from **Preferences → About**. If the signed update cannot download, use the official DMG. [Update guide](https://github.com/PROMLEE/promeftp/blob/main/docs/UPDATES.md)
 
 ## Report a bug
 
@@ -188,14 +188,14 @@ For an ordinary bug, use [GitHub Issues](https://github.com/PROMLEE/promeftp/iss
 
 ---
 
-# PromeFTP 1.0.1
+# PromeFTP 1.0.2
 
-PromeFTP now opens Preferences in a separate macOS window. Press **⌘,** to open General, Terminal, Authentication, Shortcuts, or About while keeping your workspace visible.
+This release makes dark mode brighter and expands terminal font selection to the families installed on your Mac.
 
-- **General → Language** offers English, Korean, Japanese, Simplified Chinese, and the macOS language. Click **Save** to apply your choice to Preferences and the main interface. Server prompts and terminal output remain in their original language.
-- **Authentication** brings together saved PAM answers, global rules, and automatic replies. **Shortcuts** lists keyboard commands in the same window.
-- Existing terminal settings carry forward. Saving font and scrollback changes applies them to open terminals.
+- **Preferences → About** shows the running version and build, macOS version, last update check, automatic installation settings, and license notices. Open release notes, the user guide, or GitHub from the same tab.
+- **Preferences → Terminal** offers System Monospace, installed font families, and a custom family field. Preview your choice and click **Save** to apply it to open terminals.
+- Preferences, the sidebar, and terminals use lighter dark backgrounds. Opening Preferences no longer forces keyboard focus onto the General tab.
 
-Close active sessions and choose **PromeFTP → Check for Updates…**. For a new installation, download the Apple Silicon DMG and follow the installation guide.
+Close active sessions and choose **PromeFTP → Check for Updates…**. For a new installation, download the Apple Silicon DMG and follow the install guide. The release requires macOS 13 or later.
 
 [Installation guide](https://github.com/PROMLEE/promeftp/blob/main/docs/INSTALL.md) · [User guide](https://github.com/PROMLEE/promeftp/blob/main/docs/USAGE.md)

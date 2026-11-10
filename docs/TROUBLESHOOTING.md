@@ -28,7 +28,7 @@ Install the font required by your shell theme on the Mac running PromeFTP. In **
 
 ## macOS blocks launch, or the update does not appear
 
-Check the architecture, verify the official DMG, and follow the [first-launch instructions](INSTALL.md#first-launch-on-macos). For updates, close all sessions and retry from **Preferences → General**. If the signed update cannot download, use the official DMG. [Update guide](UPDATES.md)
+Check the architecture, verify the official DMG, and follow the [first-launch instructions](INSTALL.md#first-launch-on-macos). For updates, close all sessions and retry from **Preferences → About**. If the signed update cannot download, use the official DMG. [Update guide](UPDATES.md)
 
 ## Report a bug
 

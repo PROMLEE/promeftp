@@ -20,7 +20,7 @@ When a gateway login contains multiple `@` characters, **Split address** separat
 
 Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and server-side configuration. A Zsh account loads its own Oh My Zsh configuration when installed and configured. Install a compatible font on your Mac to render its prompt glyphs.
 
-Open **Preferences → Terminal** to choose an installed fixed-width font or enter a font family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
+Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
 **⌘P** opens Snippets. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
 
@@ -50,6 +50,6 @@ Global rules use exact questions or RE2 regular expressions. For example, `^Pass
 
 ## Preferences and About
 
-Open **PromeFTP → Preferences…** or press **⌘,**. General contains language, appearance, SSH config, and updates. Terminal contains font and buffer options. Authentication manages PAM answers and Shortcuts lists key bindings. About displays the running version and build with links to the guide, release notes, and issue tracker.
+Open **PromeFTP → Preferences…** or press **⌘,**. General contains language, appearance, and SSH config. Terminal contains font and buffer options. Authentication manages PAM answers and Shortcuts lists key bindings. Open **About** for the version, build, update controls and last check, and license notices.
 
 Use **Preferences → General → Language** to select English, Korean, Japanese, Simplified Chinese, or the macOS language. Click **Save** to apply the language while your connections stay open. Server output and prompts remain in their original language.

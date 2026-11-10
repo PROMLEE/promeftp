@@ -1,6 +1,6 @@
 # Features and limits
 
-| Area | Supported in 1.0.1 | Practical limits |
+| Area | Supported in 1.0.2 | Practical limits |
 | --- | --- | --- |
 | Platform | macOS 13 and later on Apple Silicon | Distribution is arm64. Preferences and major interface controls support English, Korean, Japanese, and Simplified Chinese. |
 | SSH and local shell | System OpenSSH, interactive terminal, search, resize, split panes, prompt navigation, and output export | Port forwarding is disabled. Prompt navigation needs OSC 133 markers. iTerm2 profile import and tmux integration mode are outside scope. |

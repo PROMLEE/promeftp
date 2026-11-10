@@ -2,8 +2,8 @@
 
 | Starting point | Update path |
 | --- | --- |
-| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.0.1. |
-| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → General**. This build reads the stable feed. |
+| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.0.2. |
+| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → About**. This build reads the stable feed. |
 | Fresh or manual install | Download the Apple Silicon DMG, verify its checksum, and replace PromeFTP in Applications after quitting. |
 
 ## Manual and automatic updates
@@ -12,4 +12,4 @@ Close active SSH, SFTP, and local shell sessions before checking manually. Enabl
 
 ## How the release is verified
 
-Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](INSTALL.md) · [1.0.1 release notes](releases/1.0.1.md)
+Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](INSTALL.md) · [1.0.2 release notes](releases/1.0.2.md)
