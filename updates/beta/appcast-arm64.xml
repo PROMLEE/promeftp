@@ -4,17 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 0.0.7 Beta</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v0.0.7</link>
-      <pubDate>Tue, 10 Nov 2026 01:36:00 +0000</pubDate>
-      <sparkle:version>0.0.7</sparkle:version>
-      <sparkle:shortVersionString>0.0.7</sparkle:shortVersionString>
+      <title>PromeFTP 0.0.8 Beta</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v0.0.8</link>
+      <pubDate>Tue, 10 Nov 2026 04:50:00 +0000</pubDate>
+      <sparkle:version>0.0.8</sparkle:version>
+      <sparkle:shortVersionString>0.0.8</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description>PromeFTP beta with verified updates and a persistent signing identity.</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v0.0.7/PromeFTP-0.0.7-macos-arm64.zip" length="140011049" type="application/octet-stream" sparkle:edSignature="5yvenhMtR8rXcZ4cIK7ti2WRjaTOSH9EEN7g4nMV3gxSErAq/FbMQLrOp8TPog019MoYb7bSS50TG5mw11CQDg=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v0.0.8/PromeFTP-0.0.8-macos-arm64.zip" length="140013486" type="application/octet-stream" sparkle:edSignature="5nrSbRNOqgLTtIXvSK3qzrz1HIxlG38icbZ32Kv0f0URyRR8aZ9Nd+lP4r98zbpK7F231udghw8weWlcxluuCw=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: o2mZC83Uvs3/N829+6pvdTinaFDW8grjbq8lHhUPlx42YhDcWjNSNA2knunYM3FkKCgPC9Tz896NuYGRVbPADg==
+edSignature: BEWZoAyVbO8RVl2j+sHBxzeCglCO9wTHfkW87q+yTArrLVJkcrXTHp7ij5WJ3Jgd7W8LeVeq5G3tSs1wcC5oCQ==
 length: 1218
 -->
