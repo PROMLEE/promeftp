@@ -1,5 +1,13 @@
 # PromeFTP user guide
 
+[Install](INSTALL.md) · [Features and limits](FEATURES.md) · [Troubleshooting](TROUBLESHOOTING.md)
+
+## Start with one host
+
+1. Press **⌘N** and set a hostname, username, and port if your server uses a nondefault port.
+2. Choose **SSH** to open a terminal. Choose **SFTP** to open a local and a remote browser.
+3. Use the bookmark button if you will return to this host. An authenticated connection also appears in **History**.
+
 ## Connect and organize hosts
 
 Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. The bookmark button saves the connection. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
@@ -17,6 +25,8 @@ Open **Preferences → Terminal** to choose an installed fixed-width font or ent
 **⌘P** opens Snippets. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → General → Keyboard Shortcuts** lists the available bindings.
 
 ## SFTP
+
+![Local and remote SFTP file browsers with sample files](assets/sftp.png)
 
 The left panel opens your local home directory. The remote panel opens the server’s initial directory after authentication. Click a breadcrumb or the blank part of the path bar to navigate. Use the clock for recent paths, the tree button for folder navigation, and **..** for the parent folder. Shift selects a range and ⌘ adds or removes individual selections.
 
@@ -40,4 +50,8 @@ Global rules use exact questions or RE2 regular expressions. For example, `^Pass
 
 ## Preferences and About
 
+![Terminal Preferences showing a font preview and unlimited scrollback](assets/terminal-preferences.png)
+
 Open **PromeFTP → Preferences…** or press **⌘,**. General contains appearance, keyboard shortcuts, authentication, SSH config, and updates. Terminal contains font and buffer options. About displays the running version and build with links to the guide, release notes, and issue tracker.
+
+![About shows PromeFTP version and build](assets/about.png)

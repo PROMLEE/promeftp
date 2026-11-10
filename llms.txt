@@ -11,3 +11,11 @@ Current stable release: 1.0.0. SSH and SFTP use system OpenSSH. The app supports
 - [Official release assets](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.0): DMG, ZIP, and SHA-256 checksum files.
 
 Workspace restores open fresh connections and preserve running tabs. Unlimited scrollback is session-scoped and consumes memory. Releases are signed but lack Apple notarization. Global PAM rules should only contain reusable answers appropriate across connections.
+
+## Reference
+
+- [Feature matrix](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/FEATURES.md): Platform support and behavioral limits for SSH, SFTP, workspaces, and scrollback.
+- [Troubleshooting](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/TROUBLESHOOTING.md): Config, authentication, transfers, fonts, and update diagnostics.
+- [Update guide](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/UPDATES.md): Beta migration and stable feed behavior.
+- [Privacy and security](https://raw.githubusercontent.com/PROMLEE/promeftp/main/SECURITY.md): Local storage, network activity, and reporting.
+- [Consolidated English reference](https://raw.githubusercontent.com/PROMLEE/promeftp/main/llms-full.txt): All English guides in one plain-text file.

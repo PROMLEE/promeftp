@@ -31,3 +31,5 @@ SFTP can trigger normal macOS prompts when you browse protected local folders. I
 Open **PromeFTP → Check for Updates…** or **Preferences → General** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
 
 Version 0.0.9 can upgrade to 1.0.0 through its existing feed. Version 1.0.0 reads the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
+
+For update behavior and signature details, see [PromeFTP updates](UPDATES.md). If launch or download still fails, see [Troubleshooting](TROUBLESHOOTING.md#macos-blocks-launch-or-the-update-does-not-appear).

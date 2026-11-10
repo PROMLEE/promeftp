@@ -1,20 +1,53 @@
-# PromeFTP
+<div align="center">
+  <h1>PromeFTP</h1>
+  <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
+  <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
+  <p>macOS 13 or later · Apple Silicon · Version 1.0.0</p>
+</div>
 
-**A macOS workspace for SSH and SFTP.** Open terminals, move files, and save the layout of the connections you use together. PromeFTP follows PromePaste’s local desktop approach.
+![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
 
-[Download 1.0.0](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.0) · [Install guide](docs/INSTALL.md) · [User guide](docs/USAGE.md) · [Release notes](docs/releases/1.0.0.md) · [Documentation index for assistants](llm.txt) · [한국어](README.ko.md)
+*PromeFTP 1.0.0 connected to a test server with sample files.*
 
-Requires macOS 13 or later on Apple Silicon.
+## What you can do
 
-| Area | What you can do |
+| Task | How PromeFTP handles it |
 | --- | --- |
-| SSH | Open local or remote shells, split terminals horizontally or vertically, search output, and paste global or connection-specific snippets. |
-| SFTP | Browse local and remote files side by side. Drag files between panels, or copy between remote panels in the same tab. |
-| Connections | Connect directly, reuse OpenSSH aliases, or organize bookmarks in folders. Successful connections appear in History. |
-| Workspaces | Save selected tabs with their groups, colors, split layout, and SFTP paths. Open the saved tabs alongside running sessions. |
-| Authentication | Verify SSH host keys and respond to keyboard-interactive questions. Manage saved replies and global PAM rules locally. |
-| Preferences | Choose appearance, an installed monospace font, font size, scrollback, Option as Meta, and update behavior. Open with ⌘,. |
+| Work across hosts | Keep SSH sessions in tabs, split right or down, and drag live panes into another layout. |
+| Transfer files | Drag from Local to Remote or back. Split the remote area to copy between servers through your Mac. |
+| Reuse OpenSSH settings | Search aliases and see the resolved destination, user, and port. Override individual values for a connection. |
+| Organize repeat work | Keep bookmarks in folders, reopen recent hosts from History, and save selected tabs and pane layouts as a workspace. |
+| Handle interactive login | Verify host fingerprints, respond to keyboard-interactive prompts, and manage encrypted saved answers or global PAM rules. |
+| Make the terminal yours | Pick a font, preview it, set scrollback, and open connection-specific snippets with ⌘P. |
 
-Install the DMG by dragging PromeFTP to Applications. The app uses a persistent signing identity and signed Sparkle updates. If macOS blocks the first launch, follow the Open Anyway steps in the install guide. [Installation and updates](docs/INSTALL.md)
+## Install and connect
 
-Bookmarks, workspaces, and authentication settings live on this Mac. PromeFTP uses system OpenSSH for SSH configuration, host trust, and private keys. Saved PAM replies are encrypted with a key protected by the macOS Keychain. [Authentication guide](docs/USAGE.md#host-keys-and-pam)
+1. Download the **DMG** from [Releases](https://github.com/PROMLEE/promeftp/releases/latest), open it, and drag PromeFTP to **Applications**.
+2. Launch the app. If macOS blocks the first launch, verify the download and follow [Open Anyway](docs/INSTALL.md#first-launch-on-macos). The app uses the persistent PromeFTP signing certificate and has no Apple notarization.
+3. Press **⌘N**, enter a host, and choose **SSH** or **SFTP**. If you already have an alias in `~/.ssh/config`, use **OpenSSH Config** in the sidebar.
+
+Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing active connections. The signed update preserves local settings. [Update guide](docs/UPDATES.md)
+
+## Documentation
+
+| Guide | Where to look |
+| --- | --- |
+| [Install](docs/INSTALL.md) | Verify downloads, install the app, approve first launch, and understand macOS prompts. |
+| [Use PromeFTP](docs/USAGE.md) | Connect to a host, transfer files, split terminals, save layouts, and configure PAM and Preferences. |
+| [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
+| [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
+| [Release notes](docs/releases/1.0.0.md) | Review the 1.0.0 changes and beta upgrade path. |
+| [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
+
+## Keyboard shortcuts
+
+| Keys | Action |
+| --- | --- |
+| ⌘N / ⌘T | New host / local login shell |
+| ⌘D / ⌘⇧D | Split terminal right / down |
+| ⌘P / ⌘F | Open snippets / find terminal output |
+| ⌘K | Clear the buffer and keep the cursor line |
+| ⌘, | Open Preferences |
+
+See **Preferences → General → Keyboard Shortcuts** for the complete list. Report ordinary bugs through [GitHub Issues](https://github.com/PROMLEE/promeftp/issues).
