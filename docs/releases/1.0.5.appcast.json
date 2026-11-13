@@ -1,0 +1,11 @@
+{
+  "heading": "Faster connections and file navigation",
+  "summary": "Expand OpenSSH aliases to direct addresses, revisit SFTP paths with mouse buttons, and move remote file panels within a tab.",
+  "changes": [
+    ["Use an alias as a direct address", "Choose Use address to expand the effective hostname, user, port, and identity from OpenSSH configuration into the connection form."],
+    ["Navigate recent SFTP paths", "Use the mouse Back and Forward buttons over a file panel. Right-click a file or folder to copy its full path."],
+    ["Rearrange remote panels", "Drag a remote panel by its grip to move it within the current SFTP tab. Click unused list space to clear the selection."],
+    ["Recover visible terminal panes", "Returning to a tab refreshes its visible terminal dimensions and display."]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
