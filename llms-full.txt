@@ -1,4 +1,4 @@
-# PromeFTP 1.0.7 documentation
+# PromeFTP 1.0.8 documentation
 
 --- README.md ---
 
@@ -6,7 +6,7 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · Version 1.0.7</p>
+  <p>macOS 13 or later · Apple Silicon · Version 1.0.8</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
@@ -22,7 +22,7 @@
 | Reuse OpenSSH settings | Search aliases and see the resolved destination, user, and port. Override individual values for a connection. |
 | Organize repeat work | Keep bookmarks in folders, reopen recent hosts from History, and save selected tabs and pane layouts as a workspace. |
 | Handle interactive login | Verify host fingerprints, respond to keyboard-interactive prompts, and manage saved answers or global PAM rules. |
-| Make the terminal yours | Pick a font, preview it, set scrollback, edit connection-specific snippets with ⌘P, and create RE2 triggers from selected output. |
+| Make the terminal yours | Pick a font, preview it, set scrollback, manage snippets from the sidebar, and open terminal triggers with ⌘P. |
 
 ## Install and connect
 
@@ -41,7 +41,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
 | [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
-| [Release notes](docs/releases/1.0.7.md) | Review the 1.0.7 changes and update instructions. |
+| [Release notes](docs/releases/1.0.8.md) | Review the 1.0.8 changes and update instructions. |
 | [Release runbook](docs/RELEASE.md) | Build, sign, publish, and verify a macOS release. |
 | [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
 
@@ -51,7 +51,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | --- | --- |
 | ⌘N / ⌘T | New host / local login shell |
 | ⌘D / ⌘⇧D | Split terminal right / down |
-| ⌘P / ⌘F | Open snippets / find terminal output |
+| ⌘P / ⌘F | Open terminal triggers / find terminal output |
 | ⌘K | Clear the buffer and keep the cursor line |
 | ⌘, | Open Preferences |
 
@@ -61,23 +61,22 @@ See **Preferences → Shortcuts** for the complete list. Report ordinary bugs th
 
 See [TODO.md](TODO.md) for planned work.
 
-
 --- docs/INSTALL.md ---
 
 # Install and update PromeFTP
 
-PromeFTP 1.0.7 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.7)
+PromeFTP 1.0.8 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)
 
 ## Install
 
-1. Download `PromeFTP-1.0.7-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
+1. Download `PromeFTP-1.0.8-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
 2. Open the DMG and drag **PromeFTP** into **Applications**. Eject the disk image.
 3. Launch PromeFTP from Applications.
 
 To verify the download, put the DMG and its checksum file in the same folder and run the following from that folder.
 
 ```sh
-shasum -a 256 -c PromeFTP-1.0.7-macos-arm64.dmg.sha256
+shasum -a 256 -c PromeFTP-1.0.8-macos-arm64.dmg.sha256
 ```
 
 ## First launch on macOS
@@ -96,10 +95,27 @@ SFTP can trigger normal macOS prompts when you browse protected local folders. N
 
 Open **PromeFTP → Check for Updates…** or **Preferences → About** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
 
-Version 0.0.9 can upgrade to 1.0.7 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
+Version 0.0.9 can upgrade to 1.0.8 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
 
 For update behavior and signature details, see [PromeFTP updates](UPDATES.md). If launch or download still fails, see [Troubleshooting](TROUBLESHOOTING.md#macos-blocks-launch-or-the-update-does-not-appear).
 
+--- docs/UPDATES.md ---
+
+# PromeFTP updates
+
+| Starting point | Update path |
+| --- | --- |
+| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.0.8. |
+| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → About**. Stable feed offers 1.0.8. |
+| Fresh or manual install | Download the Apple Silicon DMG, verify its checksum, and replace PromeFTP in Applications after quitting. |
+
+## Manual and automatic updates
+
+Close active SSH, SFTP, and local shell sessions before checking manually. Enable **Install updates automatically** in Preferences if you want Sparkle to check and download on your behalf. It is off by default on a fresh install. Installation is deferred when sessions or pending writes would be interrupted. A ready update can install when the app quits.
+
+## How the release is verified
+
+Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](INSTALL.md) · [1.0.8 release notes](releases/1.0.8.md)
 
 --- docs/USAGE.md ---
 
@@ -113,15 +129,20 @@ For update behavior and signature details, see [PromeFTP updates](UPDATES.md). I
 2. Choose **SSH** to open a terminal. Choose **SFTP** to open a local and a remote browser.
 3. Use the bookmark button if you will return to this host. An authenticated connection also appears in **History**.
 
-For a command such as `ssh -p 2222 user@host`, enter `2222` in the connection's **Port** field (or use the local terminal with the full command). Enter an account password in the connection form before choosing **SSH** or **SFTP**. Select **Remember password** to save it after authentication succeeds. The password is stored as plain text in the local profile file, protected only by macOS user file permissions. It is kept separately from bookmarks and workspaces. Leave the field empty to use a saved password; use **Forget saved** to remove it. PAM or keyboard-interactive questions appear in PromeFTP's authentication prompt.
+For a command such as `ssh -p 2222 user@host`, enter `2222` in the connection's **Port** field (or use the local terminal with the full command). Enter an account password in the connection form before choosing **SSH** or **SFTP**. Select **Remember password** to save it after authentication succeeds. The entered value stays in the form, and the status reports whether it was saved. If SSH asks for the password again, the original entry is kept in the form but won't be saved. To save a corrected password, enter it in the connection form and connect again. The password is stored as plain text in the local profile file, protected only by macOS user file permissions. It is kept separately from bookmarks and workspaces. Leave the field empty to use a saved password, or use **Forget saved** to remove it. PAM or keyboard-interactive questions appear in PromeFTP's authentication prompt.
+The same account password can answer up to three identical OpenSSH password prompts during one connection. A different PAM question still needs its own response.
 
 If an SSH or SFTP connection drops, choose **Reconnect** in that pane's status line. PromeFTP reuses the pane and connection settings; authentication may be requested again. A local shell that exits is not a remote session and cannot be reconnected.
 
 ## Connect and organize hosts
 
-Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. The bookmark button saves the connection. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
+Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. **Save Changes** updates the selected bookmark; **Save as New Bookmark** always creates a separate bookmark. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, duplicate, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
 
-Open **OpenSSH Config** from the sidebar or Preferences. Search aliases, move with the arrow keys, and press Return. You can register other config files, open them in your text editor, or remove them from the list. Selecting an alias fills **Name** with the alias and **Hostname / IP**, **User**, **Port**, and **Key** with resolved values in editable fields while retaining the alias for OpenSSH rules. Edit any value directly if needed. Choose **Use address** to move the resolved address into the connection field. Clear a value to use the OpenSSH setting again. PromeFTP follows OpenSSH’s settings for keys, known hosts, jump hosts, and proxy commands. The app disables port forwarding.
+Open **OpenSSH Config** from the sidebar or Preferences. Search aliases, move with the arrow keys, and press Return. Register another config file, then use **Edit directives** to add, change, or remove global settings, `Host` sections, and their directives in the app. `Match` sections and comments are preserved. Selecting an alias fills **Name** with the alias and **Hostname / IP**, **User**, **Port**, and **Key** with resolved values in editable fields while retaining the alias for OpenSSH rules. Edit any value directly if needed. Choose **Use address** to move the resolved address into the connection field. Clear a value to use the OpenSSH setting again. PromeFTP follows OpenSSH’s settings for keys, known hosts, jump hosts, and proxy commands. The app disables port forwarding.
+
+If a server reports `no matching key exchange method found`, PromeFTP offers **Configure SSH**. The editor opens a matching `Host` section. **Add KEX compatibility** adds the offered SHA-1 algorithm only to that host; save the config and reconnect. The algorithm is appended to OpenSSH’s defaults where possible, so stronger algorithms remain preferred. Legacy SHA-1 algorithms are weaker and should be enabled only for servers that require them.
+
+Only a configured identity file that exists on this Mac is copied into the **Key** field. If OpenSSH reports a missing default key such as `~/.ssh/id_rsa`, the field stays empty and OpenSSH can continue with its configured identities or agent. Correct the path in SSH config if that file is meant to be used.
 
 When a gateway login contains multiple `@` characters, **Split address** separates the destination at the last `@` and preserves the rest as the username. Use the format your gateway administrator provides.
 
@@ -131,13 +152,13 @@ Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and 
 
 Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, adjust terminal opacity, and configure Option as Meta. Lower opacity reveals the desktop wallpaper through the active terminal. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
-**⌘P** opens Snippets. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
+Open **Snippets** from the sidebar to manage saved commands. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **⌘P** opens Terminal Triggers. **Preferences → Shortcuts** lists the available bindings.
 
 ## Terminal triggers
 
 Select text in a local or SSH terminal, then right-click and choose **Create Trigger from Selection…**. PromeFTP turns the selection into an RE2 pattern by escaping punctuation and representing line breaks with `\n`. Edit the pattern if you want to match a variable part of the output. Use **This connection** to apply the rule to terminals opened with the same connection, or **All sessions** to share it across terminals.
 
-Triggers watch new output after authentication, including prompts without a final newline. For each trigger, choose **Notify only**, **Ask me for input**, or **Send saved response**. Ask mode shows an input field in the matching terminal pane; submitting sends one line to the session. Send mode transmits the saved one-line response followed by Return when the pattern matches. Choose **This connection** or **All sessions** as the scope. A match appears in the pane's **Triggers** activity. Right-click the terminal and use the single trigger menu item to open the manager; if text is selected, it pre-fills the pattern. Rules are stored locally. Recent matches belong to the open pane.
+Triggers watch new output after authentication, including prompts without a final newline. For each trigger, choose **Notify only**, **Ask me for input**, or **Send saved response**. Ask mode shows a single-line input field in the matching terminal pane. Send mode accepts multiple lines and sends Return after each line when the pattern matches. Use the trigger toggle in the manager popup to pause or resume a rule. Choose **This connection** or **All sessions** as the scope. A match appears in the pane's **Triggers** activity. Open the manager with the trigger button next to Snippets or from the terminal context menu; selected text pre-fills the pattern. Rules are stored locally. Recent matches belong to the open pane.
 
 ## SFTP
 
@@ -173,27 +194,25 @@ Open **PromeFTP → Preferences…** or press **⌘,**. General contains languag
 
 Use **Preferences → General → Language** to select English, Korean, Japanese, Simplified Chinese, or the macOS language. Click **Save** to apply the language while your connections stay open. Server output and prompts remain in their original language.
 
-
 --- docs/FEATURES.md ---
 
 # Features and limits
 
-| Area | Supported in 1.0.3 | Practical limits |
+| Area | Supported in current source | Practical limits |
 | --- | --- | --- |
 | Platform | macOS 13 and later on Apple Silicon | Distribution is arm64. Preferences and major interface controls support English, Korean, Japanese, and Simplified Chinese. |
 | SSH and local shell | System OpenSSH, interactive terminal, search, resize, split panes, prompt navigation, and output export | Port forwarding is disabled. Prompt navigation needs OSC 133 markers. iTerm2 profile import and tmux integration mode are outside scope. |
-| OpenSSH config | Concrete aliases from `Host` and `Include`, effective settings, alternate config files, hostname/user/port overrides | Enter wildcard-matched aliases manually. PromeFTP opens files in the system editor and does not write config directives. |
+| OpenSSH config | Concrete aliases from `Host` and `Include`, effective settings, alternate config files, structured editing of global and `Host` directives, and a per-host legacy KEX shortcut | `Match` sections are preserved as read-only text. Add only legacy algorithms a server requires; SHA-1 KEX is weaker than modern defaults. |
 | SFTP | Shared local browser with one or more remote panes in a tab, folder trees, recent paths, drag and drop, and selection with Shift and ⌘ | SFTP must be enabled on the server. Transfer permissions depend on both the local filesystem and the remote account. |
 | Remote-to-remote | Copy between remote panes in the same tab | The copy stages on your Mac, uses local disk space, and keeps the source. A failure can leave completed items at the destination. |
 | Conflicts | Skip or replace an existing remote file on upload | Existing download targets and same-name folders are protected. Folder copies skip symlinks. Remote folder deletion requires an empty directory. |
 | Layouts | Tab names, colors, groups, splits, and selected-tab workspace snapshots | Restoring a layout appends tabs and opens fresh connections. It does not resume remote processes or restore terminal output. To change a saved snapshot, delete and recreate it. |
 | Authentication | Interactive prompts, saved replies, exact or RE2 global rules, and authentication activity | New connections can prompt again. RE2 rules match a prompt and send a fixed single-line answer. Jump-host prompts are answered manually. |
-| Terminal triggers | Selection-to-RE2, connection or global scope, ask for input, send a saved response, and match history per pane | Auto-send transmits the configured single line followed by Return. |
+| Terminal triggers | Selection-to-RE2, connection or global scope, ask for input, multiline saved responses, per-rule enable/disable, and match history per pane | Auto-send transmits each configured line followed by Return. |
 | Scrollback | Finite setting or optional unlimited mode in session memory | Long output uses memory. The terminal library has a buffer ceiling. Session log export uses a separate, bounded capture. |
 | Updates | Signed arm64 archive and feed, manual checks, and opt-in automatic installation | First launch can require approval because the release is not Apple notarized. |
 
 [User guide](USAGE.md) · [Troubleshooting](TROUBLESHOOTING.md)
-
 
 --- docs/TROUBLESHOOTING.md ---
 
@@ -209,6 +228,14 @@ ssh -G example-host | awk '/^(hostname|user|port) / { print }'
 
 For an alternate config, add `-F /path/to/config` before the alias. Clear any explicit hostname, user, or port overrides in PromeFTP to use the resolved values again. Redact internal addresses and usernames before sharing output.
 
+## No matching key exchange method
+
+When a server offers only legacy SHA-1 KEX, choose **Configure SSH** in the session status. In the matching `Host` section, add the offered KEX and save. PromeFTP appends it to the host's configured/default algorithms so a stronger shared method remains preferred. SHA-1 KEX is weak; use it only for that server and ask its administrator to upgrade the SSH service.
+
+## SSH reports that `id_rsa` is not accessible
+
+Check that the configured `IdentityFile` exists on this Mac. PromeFTP only fills the **Key** field with a local identity file it can find; when that field is empty, OpenSSH can still use the identities and agent configured for the alias. If the config points to an old path, update `IdentityFile` in the config file.
+
 ## Authentication asks me to reply again
 
 In **Preferences → Authentication**, check **Send saved answers automatically**. A stored reply can only be reused after matching the connection and prompt, and automatic replies are limited to one attempt for a matching question per connection. If the server repeats the prompt, answer manually and check **Authentication Activity**. A jump-host prompt requires a manual answer. If a Global rule does not match, compare the full prompt and use a fixed answer for testing. Use `\n` for a line break within a single prompt.
@@ -218,6 +245,7 @@ In **Preferences → Authentication**, check **Send saved answers automatically*
 New PromeFTP-saved passwords and PAM answers no longer use **PromeFTP Safe Storage**. If this is the first time you use a value saved by an older version, macOS may ask once while PromeFTP migrates it to the local profile format. OpenSSH identities, agents, or jump-host configurations may still request Keychain access independently.
 
 For an account password, enter it in the connection form. Select **Remember password** to store it in PromeFTP's local profile file after successful authentication. The value is plain text protected only by macOS user file permissions. Leave the field empty to use the saved password, or choose **Forget saved** to remove it.
+When OpenSSH repeats the same password prompt during one connection, PromeFTP reuses the supplied password up to three times. Different PAM or OTP questions remain separate prompts.
 
 ## I see a host-key warning
 
@@ -239,7 +267,6 @@ Check the architecture, verify the official DMG, and follow the [first-launch in
 
 Include your PromeFTP version and build from **Preferences → About**, macOS version, and reproducible steps using sample data. For SSH or SFTP issues, mention whether the connection uses an alias, a jump host, or keyboard-interactive authentication. Remove private hostnames, usernames, fingerprints, passwords, OTPs, keys, terminal output, and config details before posting. [GitHub Issues](https://github.com/PROMLEE/promeftp/issues)
 
-
 --- SECURITY.md ---
 
 # Privacy and security
@@ -258,15 +285,15 @@ The app connects to the hosts you choose and requests the signed update feed whe
 
 For an ordinary bug, use [GitHub Issues](https://github.com/PROMLEE/promeftp/issues) with sample data. For a suspected vulnerability, use [GitHub’s private reporting form](https://github.com/PROMLEE/promeftp/security/advisories/new) if enabled. If private reporting is unavailable, ask for a private contact method without including sensitive details in the issue.
 
+--- docs/releases/1.0.8.md ---
 
---- docs/releases/1.0.7.md ---
+# PromeFTP 1.0.8
 
-# PromeFTP 1.0.7
+This release makes terminal trigger rules easier to manage and separates bookmark updates from creating new bookmarks.
 
-This release makes OpenSSH alias setup clearer and easier to edit.
+- **Open Terminal Triggers with ⌘P.** The shortcut opens the trigger list from an SSH session. Snippets remain available from the sidebar and terminal toolbar.
+- **Edit triggers in a dedicated dialog.** Add and edit each rule in a separate popup with a required name, match pattern, action, and scope. Trigger matches remain in the activity list without adding a banner to the terminal toolbar.
+- **Keep bookmark saves explicit.** **Save Changes** updates the selected bookmark. **Save as New Bookmark** creates a separate entry, and the bookmark context menu can duplicate an entry by name.
+- **Improve workspace readability.** Workspace names and tab counts are separated, and a single tab is labeled correctly.
 
-- **Put the connection name first.** The Name field now appears above the destination. Selecting an OpenSSH alias uses the alias as the default display name.
-- **Fill resolved settings as editable values.** Hostname or IP, user, port, and identity file from OpenSSH config are placed directly in their fields instead of appearing as gray placeholders. You can edit them, and clearing an override returns to the config value. The alias remains active so alias-specific OpenSSH rules continue to apply.
-- **Keep direct address conversion.** Choose **Use address** when you want to replace the alias destination with the resolved address.
-
-Close active sessions and choose **PromeFTP → Check for Updates…**. For a new installation, download the Apple Silicon DMG. Requires macOS 13 or later.
+Close active sessions before updating. For a fresh installation, download the Apple Silicon DMG. Requires macOS 13 or later.

@@ -8,7 +8,7 @@ Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수
 
 ## 설치와 첫 실행
 
-1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.7)의 **Assets**에서 `PromeFTP-1.0.7-macos-arm64.dmg`를 받습니다.
+1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)의 **Assets**에서 `PromeFTP-1.0.8-macos-arm64.dmg`를 받습니다.
 2. DMG를 열고 **PromeFTP**를 **Applications** 폴더로 드래그합니다.
 3. Finder의 **응용 프로그램**에서 **PromeFTP**를 실행합니다.
 
@@ -29,14 +29,14 @@ Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수
 
 | 기능 | 사용 방법 |
 | --- | --- |
-| SSH | 탭을 열고 좌우 또는 상하로 분할합니다. ⌘P로 연결별 스니펫을 엽니다. |
+| SSH | 탭을 열고 좌우 또는 상하로 분할합니다. ⌘P로 터미널 트리거를 관리합니다. |
 | SFTP | 왼쪽 로컬과 오른쪽 원격 사이에 파일을 끌어 놓습니다. 같은 탭에 원격 패널을 추가해 서버 간 복사도 할 수 있습니다. |
 | 호스트 | 직접 접속하거나 OpenSSH 별칭을 고릅니다. 별칭과 실제 목적지, 사용자, 포트를 따로 확인합니다. |
 | 워크스페이스 | 포함할 탭을 골라 저장합니다. 저장한 레이아웃을 열어도 기존 연결은 유지됩니다. |
 | 인증 | 호스트 키 지문을 확인하고 연결별 저장 응답이나 전역 PAM 규칙을 관리합니다. |
 | 설정 | ⌘,로 열어 테마, 글꼴, 무제한 스크롤백, 업데이트, 버전을 확인합니다. |
 
-자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.0.7 릴리스 노트](docs/releases/1.0.7.ko.md)
+자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.0.8 릴리스 노트](docs/releases/1.0.8.ko.md)
 
 ## 로드맵
 

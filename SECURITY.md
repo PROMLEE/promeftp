@@ -4,7 +4,7 @@
 
 PromeFTP stores bookmarks, connection history, workspace layouts, snippets, preferences, and saved authentication settings on your Mac. SSH private keys and standard known-hosts handling are managed by system OpenSSH. Workspace snapshots contain connection and layout details, including SFTP paths. Terminal output is held in memory during the session and is written to a file when you explicitly export a log.
 
-Saved PAM answers and global rule values are encrypted locally. macOS Keychain protects the wrapping key through Electron Safe Storage. Successful authentication is required before an answer saved from an authentication prompt is retained. An answer stored in a global rule may be sent to any matching trusted connection, so reserve global rules for replies intended for those hosts.
+Saved SSH passwords, PAM answers, and global rule values are stored as plain text in the local profiles file, protected only by the current user's macOS file permissions. Anyone with access to that user account or a copy of the file can read them. PromeFTP does not use Keychain to protect these saved values. Existing encrypted values from older builds are decrypted when first used and converted locally. Successful authentication is required before an answer saved from an authentication prompt is retained. A global rule may send its value to any matching connection, so reserve global rules for replies intended for those hosts.
 
 ## Network and files
 

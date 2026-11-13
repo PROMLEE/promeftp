@@ -15,7 +15,7 @@ If an SSH or SFTP connection drops, choose **Reconnect** in that pane's status l
 
 ## Connect and organize hosts
 
-Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. The bookmark button saves the connection. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
+Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. **Save Changes** updates the selected bookmark; **Save as New Bookmark** always creates a separate bookmark. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, duplicate, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
 
 Open **OpenSSH Config** from the sidebar or Preferences. Search aliases, move with the arrow keys, and press Return. Register another config file, then use **Edit directives** to add, change, or remove global settings, `Host` sections, and their directives in the app. `Match` sections and comments are preserved. Selecting an alias fills **Name** with the alias and **Hostname / IP**, **User**, **Port**, and **Key** with resolved values in editable fields while retaining the alias for OpenSSH rules. Edit any value directly if needed. Choose **Use address** to move the resolved address into the connection field. Clear a value to use the OpenSSH setting again. PromeFTP follows OpenSSH’s settings for keys, known hosts, jump hosts, and proxy commands. The app disables port forwarding.
 
@@ -31,7 +31,7 @@ Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and 
 
 Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, adjust terminal opacity, and configure Option as Meta. Lower opacity reveals the desktop wallpaper through the active terminal. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
-**⌘P** opens Snippets. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
+Open **Snippets** from the sidebar to manage saved commands. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **⌘P** opens Terminal Triggers. **Preferences → Shortcuts** lists the available bindings.
 
 ## Terminal triggers
 

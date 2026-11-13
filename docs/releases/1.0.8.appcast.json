@@ -1,0 +1,10 @@
+{
+  "heading": "Clearer triggers and safer bookmark editing",
+  "summary": "Open terminal triggers with ⌘P, edit each rule in its own dialog, and choose clearly whether to update a bookmark or create another one.",
+  "changes": [
+    ["Manage terminal triggers with ⌘P", "The shortcut opens the trigger list. Add and edit rules in a dedicated dialog, and review recent matches without a toolbar banner."],
+    ["Avoid accidental bookmark replacement", "Save Changes updates the selected bookmark. Save as New Bookmark creates a separate entry, and the context menu can duplicate a bookmark with a chosen name."],
+    ["Read workspace details at a glance", "Workspace names and tab counts have clear spacing, with singular tab counts displayed correctly."]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}

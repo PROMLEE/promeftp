@@ -1,17 +1,17 @@
 # Install and update PromeFTP
 
-PromeFTP 1.0.7 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.7)
+PromeFTP 1.0.8 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)
 
 ## Install
 
-1. Download `PromeFTP-1.0.7-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
+1. Download `PromeFTP-1.0.8-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
 2. Open the DMG and drag **PromeFTP** into **Applications**. Eject the disk image.
 3. Launch PromeFTP from Applications.
 
 To verify the download, put the DMG and its checksum file in the same folder and run the following from that folder.
 
 ```sh
-shasum -a 256 -c PromeFTP-1.0.7-macos-arm64.dmg.sha256
+shasum -a 256 -c PromeFTP-1.0.8-macos-arm64.dmg.sha256
 ```
 
 ## First launch on macOS
@@ -30,6 +30,6 @@ SFTP can trigger normal macOS prompts when you browse protected local folders. N
 
 Open **PromeFTP → Check for Updates…** or **Preferences → About** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
 
-Version 0.0.9 can upgrade to 1.0.7 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
+Version 0.0.9 can upgrade to 1.0.8 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
 
 For update behavior and signature details, see [PromeFTP updates](UPDATES.md). If launch or download still fails, see [Troubleshooting](TROUBLESHOOTING.md#macos-blocks-launch-or-the-update-does-not-appear).

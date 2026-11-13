@@ -10,13 +10,24 @@ ssh -G example-host | awk '/^(hostname|user|port) / { print }'
 
 For an alternate config, add `-F /path/to/config` before the alias. Clear any explicit hostname, user, or port overrides in PromeFTP to use the resolved values again. Redact internal addresses and usernames before sharing output.
 
+## No matching key exchange method
+
+When a server offers only legacy SHA-1 KEX, choose **Configure SSH** in the session status. In the matching `Host` section, add the offered KEX and save. PromeFTP appends it to the host's configured/default algorithms so a stronger shared method remains preferred. SHA-1 KEX is weak; use it only for that server and ask its administrator to upgrade the SSH service.
+
+## SSH reports that `id_rsa` is not accessible
+
+Check that the configured `IdentityFile` exists on this Mac. PromeFTP only fills the **Key** field with a local identity file it can find; when that field is empty, OpenSSH can still use the identities and agent configured for the alias. If the config points to an old path, update `IdentityFile` in the config file.
+
 ## Authentication asks me to reply again
 
 In **Preferences → Authentication**, check **Send saved answers automatically**. A stored reply can only be reused after matching the connection and prompt, and automatic replies are limited to one attempt for a matching question per connection. If the server repeats the prompt, answer manually and check **Authentication Activity**. A jump-host prompt requires a manual answer. If a Global rule does not match, compare the full prompt and use a fixed answer for testing. Use `\n` for a line break within a single prompt.
 
 ## macOS asks for a Keychain password when I connect
 
-Under **Preferences → Authentication → Keychain**, check whether OpenSSH Keychain access is enabled or PromeFTP is set to load stored PAM answers. Turn off each option you do not use. Saving or revealing a PAM answer still uses Keychain. A key passphrase or a prompt from an external SSH agent or jump-host configuration may have its own authentication requirements.
+New PromeFTP-saved passwords and PAM answers no longer use **PromeFTP Safe Storage**. If this is the first time you use a value saved by an older version, macOS may ask once while PromeFTP migrates it to the local profile format. OpenSSH identities, agents, or jump-host configurations may still request Keychain access independently.
+
+For an account password, enter it in the connection form. Select **Remember password** to store it in PromeFTP's local profile file after successful authentication. The value is plain text protected only by macOS user file permissions. Leave the field empty to use the saved password, or choose **Forget saved** to remove it.
+When OpenSSH repeats the same password prompt during one connection, PromeFTP reuses the supplied password up to three times. Different PAM or OTP questions remain separate prompts.
 
 ## I see a host-key warning
 
