@@ -1,0 +1,12 @@
+{
+  "heading": "More reliable terminal triggers and passwords",
+  "summary": "Send multiline trigger replies, see accurate password save status, and keep your workspace navigation after restarting.",
+  "changes": [
+    ["Send multiline trigger replies", "Each line is sent with Return. A trailing newline does not add an empty command."],
+    ["Enable or pause trigger rules", "Manage triggers beside Snippets and keep each rule's enabled state across restarts."],
+    ["Know whether a password was saved", "The connection form keeps the entered value and reports success, rejection, a server that did not request it, or a storage failure."],
+    ["Keep sidebar selection and history order", "The selected sidebar tab returns after restart, and connection history remains newest first."],
+    ["Open workspaces without losing sessions", "Restoring a saved workspace keeps currently running sessions open."]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
