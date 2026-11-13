@@ -2,13 +2,13 @@
 
 > A local SSH and SFTP desktop client for Apple Silicon Macs running macOS 13 or later.
 
-Current stable release: 1.0.5. SSH and SFTP use system OpenSSH. The app supports direct connections, OpenSSH aliases and overrides, keyboard-interactive authentication, split SSH terminals, dual-pane SFTP, bookmarks, and saved workspace layouts. Preferences has a dedicated window and supports English, Korean, Japanese, and Simplified Chinese. Terminal options include installed fonts and optional session-memory scrollback. Terminal triggers match fresh output with RE2 and can notify, ask for input, or send a saved response. New saved passwords and PAM replies are stored as plain text in the local profile file with macOS account permissions. Older encrypted values migrate when used. OpenSSH Keychain access is off by default. No account, cloud sync, or team service is required.
+Current stable release: 1.0.6. SSH and SFTP use system OpenSSH. The app supports direct connections, OpenSSH aliases and overrides, keyboard-interactive authentication, split SSH terminals, dual-pane SFTP, bookmarks, and saved workspace layouts. Preferences has a dedicated window and supports English, Korean, Japanese, and Simplified Chinese. Terminal options include installed fonts and optional session-memory scrollback. Terminal triggers match fresh output with RE2 and can notify, ask for input, or send a saved response. New saved passwords and PAM replies are stored as plain text in the local profile file with macOS account permissions. Older encrypted values migrate when used. OpenSSH Keychain access is off by default. No account, cloud sync, or team service is required.
 
 - [English overview](https://raw.githubusercontent.com/PROMLEE/promeftp/main/README.md): System requirements and feature overview.
 - [Installation and updates](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/INSTALL.md): DMG, checksums, Gatekeeper, permissions, and signed updates.
 - [User guide](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/USAGE.md): SSH, SFTP, workspaces, terminal settings, and PAM.
-- [1.0.5 release notes](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/releases/1.0.5.md): Stable release changes and upgrade instructions.
-- [Official release assets](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.5): DMG, ZIP, and SHA-256 checksum files.
+- [1.0.6 release notes](https://raw.githubusercontent.com/PROMLEE/promeftp/main/docs/releases/1.0.6.md): Stable release changes and upgrade instructions.
+- [Official release assets](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.6): DMG, ZIP, and SHA-256 checksum files.
 
 Workspace restores open fresh connections and preserve running tabs. Unlimited scrollback is session-scoped and consumes memory. Releases are signed but lack Apple notarization. Global PAM rules should only contain reusable answers appropriate across connections.
 

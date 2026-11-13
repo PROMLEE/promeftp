@@ -1,0 +1,10 @@
+{
+  "heading": "Clearer OpenSSH connection setup",
+  "summary": "See the alias name and resolved connection values directly in the form, with each value ready to edit.",
+  "changes": [
+    ["Name connections at the top", "The connection name appears above the destination and defaults to the selected OpenSSH alias."],
+    ["Edit resolved OpenSSH values", "Hostname or IP, user, port, and identity are filled into their fields instead of gray placeholders. The alias remains active for alias-specific SSH rules."],
+    ["Switch to a direct address", "Choose Use address to replace the alias destination with its resolved hostname or IP."]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}

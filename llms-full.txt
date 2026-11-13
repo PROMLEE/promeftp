@@ -1,4 +1,4 @@
-# PromeFTP 1.0.5 documentation
+# PromeFTP 1.0.6 documentation
 
 --- README.md ---
 
@@ -6,7 +6,7 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · Version 1.0.5</p>
+  <p>macOS 13 or later · Apple Silicon · Version 1.0.6</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
@@ -41,7 +41,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
 | [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
-| [Release notes](docs/releases/1.0.5.md) | Review the 1.0.5 changes and update instructions. |
+| [Release notes](docs/releases/1.0.6.md) | Review the 1.0.6 changes and update instructions. |
 | [Release runbook](docs/RELEASE.md) | Build, sign, publish, and verify a macOS release. |
 | [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
 
@@ -66,18 +66,18 @@ See [TODO.md](TODO.md) for planned work.
 
 # Install and update PromeFTP
 
-PromeFTP 1.0.5 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.5)
+PromeFTP 1.0.6 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.6)
 
 ## Install
 
-1. Download `PromeFTP-1.0.5-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
+1. Download `PromeFTP-1.0.6-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
 2. Open the DMG and drag **PromeFTP** into **Applications**. Eject the disk image.
 3. Launch PromeFTP from Applications.
 
 To verify the download, put the DMG and its checksum file in the same folder and run the following from that folder.
 
 ```sh
-shasum -a 256 -c PromeFTP-1.0.5-macos-arm64.dmg.sha256
+shasum -a 256 -c PromeFTP-1.0.6-macos-arm64.dmg.sha256
 ```
 
 ## First launch on macOS
@@ -96,7 +96,7 @@ SFTP can trigger normal macOS prompts when you browse protected local folders. N
 
 Open **PromeFTP → Check for Updates…** or **Preferences → About** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
 
-Version 0.0.9 can upgrade to 1.0.5 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
+Version 0.0.9 can upgrade to 1.0.6 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
 
 For update behavior and signature details, see [PromeFTP updates](UPDATES.md). If launch or download still fails, see [Troubleshooting](TROUBLESHOOTING.md#macos-blocks-launch-or-the-update-does-not-appear).
 
@@ -121,7 +121,7 @@ If an SSH or SFTP connection drops, choose **Reconnect** in that pane's status l
 
 Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. The bookmark button saves the connection. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
 
-Open **OpenSSH Config** from the sidebar or Preferences. Search aliases, move with the arrow keys, and press Return. You can register other config files, open them in your text editor, or remove them from the list. Alias and destination appear separately. Choose **Use address** to replace an alias with its resolved hostname or IP and copy the effective user, port, and identity into empty fields. You can then edit the direct destination. Clear an override to use the OpenSSH value again. PromeFTP follows OpenSSH’s settings for keys, known hosts, jump hosts, and proxy commands. The app disables port forwarding.
+Open **OpenSSH Config** from the sidebar or Preferences. Search aliases, move with the arrow keys, and press Return. You can register other config files, open them in your text editor, or remove them from the list. Selecting an alias fills **Name** with the alias and **Hostname / IP**, **User**, **Port**, and **Key** with resolved values in editable fields while retaining the alias for OpenSSH rules. Edit any value directly if needed. Choose **Use address** to move the resolved address into the connection field. Clear a value to use the OpenSSH setting again. PromeFTP follows OpenSSH’s settings for keys, known hosts, jump hosts, and proxy commands. The app disables port forwarding.
 
 When a gateway login contains multiple `@` characters, **Split address** separates the destination at the last `@` and preserves the rest as the username. Use the format your gateway administrator provides.
 
@@ -259,17 +259,14 @@ The app connects to the hosts you choose and requests the signed update feed whe
 For an ordinary bug, use [GitHub Issues](https://github.com/PROMLEE/promeftp/issues) with sample data. For a suspected vulnerability, use [GitHub’s private reporting form](https://github.com/PROMLEE/promeftp/security/advisories/new) if enabled. If private reporting is unavailable, ask for a private contact method without including sensitive details in the issue.
 
 
---- docs/releases/1.0.5.md ---
+--- docs/releases/1.0.6.md ---
 
-# PromeFTP 1.0.5
+# PromeFTP 1.0.6
 
-This release improves connection setup and SFTP navigation.
+This release makes OpenSSH alias setup clearer and easier to edit.
 
-- **Expand an OpenSSH alias to its address.** In the connection form, choose **Use address** to replace the selected alias with its resolved hostname or IP. PromeFTP also fills an empty user, port, and identity field from the effective OpenSSH configuration. You can then edit the destination directly.
-- **Navigate SFTP paths with mouse buttons.** Use the mouse Back and Forward buttons over either file panel to revisit paths in that panel. The history is independent for local and remote browsing.
-- **Copy full file paths.** Right-click a local or remote file or folder and choose **Copy Path**.
-- **Clear file selection quickly.** Click unused space in a file list to clear its current selection.
-- **Move remote SFTP panels.** Drag a panel by its grip to rearrange remote panes in the same tab. The local browser remains shared.
-- **Refresh visible terminal panes when returning to a tab.** This fixes blank terminal panes after switching between tabs and connections.
+- **Put the connection name first.** The Name field now appears above the destination. Selecting an OpenSSH alias uses the alias as the default display name.
+- **Fill resolved settings as editable values.** Hostname or IP, user, port, and identity file from OpenSSH config are placed directly in their fields instead of appearing as gray placeholders. You can edit them, and clearing an override returns to the config value. The alias remains active so alias-specific OpenSSH rules continue to apply.
+- **Keep direct address conversion.** Choose **Use address** when you want to replace the alias destination with the resolved address.
 
 Close active sessions and choose **PromeFTP → Check for Updates…**. For a new installation, download the Apple Silicon DMG. Requires macOS 13 or later.
