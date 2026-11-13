@@ -8,6 +8,10 @@
 2. Choose **SSH** to open a terminal. Choose **SFTP** to open a local and a remote browser.
 3. Use the bookmark button if you will return to this host. An authenticated connection also appears in **History**.
 
+For a command such as `ssh -p 2222 user@host`, enter `2222` in the connection's **Port** field (or use the local terminal with the full command). Enter an account password in the connection form before choosing **SSH** or **SFTP**. Select **Remember password** to save it after authentication succeeds. The password is encrypted on this Mac and kept separately from bookmarks and workspaces. Leave the field empty to use a saved password; use **Forget saved** to remove it. PAM or keyboard-interactive questions appear in PromeFTP's authentication prompt.
+
+If an SSH or SFTP connection drops, choose **Reconnect** in that pane's status line. PromeFTP reuses the pane and connection settings; authentication may be requested again. A local shell that exits is not a remote session and cannot be reconnected.
+
 ## Connect and organize hosts
 
 Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. The bookmark button saves the connection. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
@@ -20,7 +24,7 @@ When a gateway login contains multiple `@` characters, **Split address** separat
 
 Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and server-side configuration. A Zsh account loads its own Oh My Zsh configuration when installed and configured. Install a compatible font on your Mac to render its prompt glyphs.
 
-Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
+Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, adjust background opacity, and configure Option as Meta. Lower opacity shows the app background through the terminal. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
 **⌘P** opens Snippets. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
 
@@ -34,7 +38,9 @@ Triggers watch new output after authentication, including prompts without a fina
 
 ![Local and remote SFTP file browsers with sample files](assets/sftp.png)
 
-The left panel opens your local home directory. The remote panel opens the server’s initial directory after authentication. Click a breadcrumb or the blank part of the path bar to navigate. Use the clock for recent paths, the tree button for folder navigation, and **..** for the parent folder. Shift selects a range and ⌘ adds or removes individual selections.
+The left panel opens your local home directory. The remote panel opens the server’s initial directory after authentication. Click a breadcrumb or the blank part of the path bar to navigate. Use the clock for recent paths, the tree button for folder navigation, and **..** for the parent folder. Hidden files show by default. Add folders from either local or remote toolbar; use **Refresh** or a folder’s context menu to refresh it. Shift selects a range and ⌘ adds or removes individual selections.
+
+Each panel can show size, modification time, and file type beside each item. Use the column chooser or right-click a heading to show or hide optional columns. Select a column heading to sort by it; select the same heading again to reverse the order. Folders stay grouped before files. Right-click a file for actions: local files can be opened, edited in the default text editor, revealed in Finder, copied, renamed, moved to Trash, or inspected. Remote files can be downloaded, edited in the default text editor and uploaded back after you save in the editor and choose **Upload**, renamed, deleted, or inspected. Right-click an item to copy its path where applicable.
 
 Drag a selection to another panel or use the transfer arrows. Split the remote area to open more remote connections with one shared local browser. Drag between remote panels in the same tab to copy through a temporary directory on your Mac. The source stays in place. File operations reuse the authenticated SFTP connection. A new connection or reconnect can require authentication again.
 
@@ -42,9 +48,9 @@ When uploading to an existing remote file, choose **Skip** or **Replace**. Repla
 
 ## Tabs, splits, and workspaces
 
-Use the tab menu to name, color, or group a tab. Return saves an edited name and Escape cancels. Drag tabs to reorder or group them. Drop a terminal on an edge to split it. Use the pane handle to move a live pane, or use **⌘D** and **⌘⇧D** to open a new connection to the right or below. The split picker starts with **New Connection**, followed by searchable saved hosts and aliases.
+Use the tab menu to name, color, or group a tab. Right-click a group label to rename it or ungroup its tabs. Use the compact group selector at the right of the tab bar to show all tabs, ungrouped tabs, or only one named group. Return saves an edited name and Escape cancels. Drag tabs to reorder or group them. Drop a terminal on an edge to split it. Use the pane handle to move a live pane, or use **⌘D** and **⌘⇧D** to open a new connection to the right or below. The split picker starts with **New Connection**, followed by searchable saved hosts and aliases.
 
-Choose **Workspaces** and select the tabs to include before saving. A workspace stores tab names, groups, colors, order, pane sizes and directions, connection settings, and SFTP paths. **Open Tabs** appends the saved layout while your current connections continue running. Restored connections authenticate again. Terminal output and running processes are outside the saved layout. To replace a saved layout, delete it and save a new one.
+Choose **Workspaces** in the sidebar to filter and open saved layouts. Select the **+** button there (or the Workspaces button in the title bar) and select tabs or an entire tab group before saving. A workspace stores tab names, groups, colors, order, pane sizes and directions, connection settings, and SFTP paths. Opening a saved workspace appends its layout while your current connections continue running. Restored connections authenticate again. Terminal output and running processes are outside the saved layout. To replace a saved layout, delete it and save a new one. Right-click a tab and select **Duplicate Tab** to reopen its pane layout and connections.
 
 ## Host keys and PAM
 

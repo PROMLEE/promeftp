@@ -8,7 +8,7 @@ Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수
 
 ## 설치와 첫 실행
 
-1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.3)의 **Assets**에서 `PromeFTP-1.0.3-macos-arm64.dmg`를 받습니다.
+1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.4)의 **Assets**에서 `PromeFTP-1.0.4-macos-arm64.dmg`를 받습니다.
 2. DMG를 열고 **PromeFTP**를 **Applications** 폴더로 드래그합니다.
 3. Finder의 **응용 프로그램**에서 **PromeFTP**를 실행합니다.
 
@@ -36,7 +36,7 @@ Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수
 | 인증 | 호스트 키 지문을 확인하고 연결별 저장 응답이나 전역 PAM 규칙을 관리합니다. |
 | 설정 | ⌘,로 열어 테마, 글꼴, 무제한 스크롤백, 업데이트, 버전을 확인합니다. |
 
-자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.0.3 릴리스 노트](docs/releases/1.0.3.md)
+자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.0.4 릴리스 노트](docs/releases/1.0.4.md)
 
 ## 로드맵
 

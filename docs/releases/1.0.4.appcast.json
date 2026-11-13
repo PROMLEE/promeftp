@@ -1,0 +1,11 @@
+{
+  "heading": "Safer file operations and clearer tab groups",
+  "summary": "This update protects local files during rename, adds a recoverable remote editing flow, and keeps new tabs visible under group filters.",
+  "changes": [
+    ["Protect local files during rename", "If the destination name already exists, PromeFTP stops and preserves both files."],
+    ["Edit remote files", "Open a remote file in your text editor, choose whether to upload it, and keep a local copy if upload is skipped or fails."],
+    ["Keep new tabs visible", "New connections join the selected tab group while a group filter is active."],
+    ["Refresh the app icon", "The PromeFTP mark combines a letter P with a file corner and transfer arrow."]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}

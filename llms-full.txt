@@ -2,18 +2,18 @@
 
 # Install and update PromeFTP
 
-PromeFTP 1.0.3 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.3)
+PromeFTP 1.0.3 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.4)
 
 ## Install
 
-1. Download `PromeFTP-1.0.3-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
+1. Download `PromeFTP-1.0.4-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
 2. Open the DMG and drag **PromeFTP** into **Applications**. Eject the disk image.
 3. Launch PromeFTP from Applications.
 
 To verify the download, put the DMG and its checksum file in the same folder and run the following from that folder.
 
 ```sh
-shasum -a 256 -c PromeFTP-1.0.3-macos-arm64.dmg.sha256
+shasum -a 256 -c PromeFTP-1.0.4-macos-arm64.dmg.sha256
 ```
 
 ## First launch on macOS
@@ -49,6 +49,8 @@ For update behavior and signature details, see [PromeFTP updates](https://github
 3. Use the bookmark button if you will return to this host. An authenticated connection also appears in **History**.
 
 ## Connect and organize hosts
+For `ssh -p 2222 user@host`, enter `2222` in the connection Port field. Enter the account password in the connection form and select Remember password to encrypt it on this Mac after successful authentication. Saved passwords are separate from profiles and workspaces; leave the field blank to use one or choose Forget saved to remove it. PAM or keyboard-interactive questions use the authentication prompt. If SSH or SFTP disconnects, choose Reconnect in the pane status line. The pane and connection settings are reused, and authentication may be requested again.
+
 
 Choose a bookmark or use **+** to create a connection. Set a display name, hostname or IP, and optional user, port, or identity file. Choose **SSH** or **SFTP**. The bookmark button saves the connection. Use the sidebar’s **Bookmarks** tab to create folders, drag bookmarks into folders, or open, move, and delete them from the context menu. **History** records successful connections and keeps the latest entry per alias within each config file.
 
@@ -60,7 +62,7 @@ When a gateway login contains multiple `@` characters, **Split address** separat
 
 Use **⌘T** for a local login shell. Remote SSH uses the account’s shell and server-side configuration. A Zsh account loads its own Oh My Zsh configuration when installed and configured. Install a compatible font on your Mac to render its prompt glyphs.
 
-Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, and configure Option as Meta. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
+Open **Preferences → Terminal** to choose System Monospace, select an installed macOS font family, or enter a custom family, preview it, set size, adjust terminal background opacity, and configure Option as Meta. Lower opacity shows the app background through the terminal. Scrollback defaults to 20,000 lines. **Unlimited scrollback** keeps output in memory for the current session without a configured line limit. Long sessions can use substantial memory, and xterm.js imposes its own buffer ceiling. Enabling it cannot restore already discarded output. **Clear Buffer** keeps the current cursor line. Use **⌘F** to search output and **⌘+**, **⌘−**, or **⌘0** to change text size.
 
 **⌘P** opens Snippets. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **Preferences → Shortcuts** lists the available bindings.
 
@@ -73,7 +75,7 @@ Triggers watch new output after authentication, including prompts without a fina
 ## SFTP
 
 
-The left panel opens your local home directory. The remote panel opens the server’s initial directory after authentication. Click a breadcrumb or the blank part of the path bar to navigate. Use the clock for recent paths, the tree button for folder navigation, and **..** for the parent folder. Shift selects a range and ⌘ adds or removes individual selections.
+The left panel opens your local home directory. The remote panel opens the server’s initial directory after authentication. Click a breadcrumb or the blank part of the path bar to navigate. Use the clock for recent paths, the tree button for folder navigation, and **..** for the parent folder. Hidden files show by default. Add local or remote folders from the panel toolbar. Use **Refresh** or a folder context menu to refresh. Each panel can show size, modification time, and file type; use the column chooser or right-click a heading to customize these columns. Select a heading to sort and select it again to reverse the order. Right-click a local or remote item for open/edit, transfer, rename, delete/trash, path copy, Finder reveal, or properties actions as appropriate. Shift selects a range and ⌘ adds or removes individual selections.
 
 Drag a selection to another panel or use the transfer arrows. Split the remote area to open more remote connections with one shared local browser. Drag between remote panels in the same tab to copy through a temporary directory on your Mac. The source stays in place. File operations reuse the authenticated SFTP connection. A new connection or reconnect can require authentication again.
 
@@ -81,9 +83,9 @@ When uploading to an existing remote file, choose **Skip** or **Replace**. Repla
 
 ## Tabs, splits, and workspaces
 
-Use the tab menu to name, color, or group a tab. Return saves an edited name and Escape cancels. Drag tabs to reorder or group them. Drop a terminal on an edge to split it. Use the pane handle to move a live pane, or use **⌘D** and **⌘⇧D** to open a new connection to the right or below. The split picker starts with **New Connection**, followed by searchable saved hosts and aliases.
+Use the tab menu to name, color, or group a tab. Right-click a group label to rename it or ungroup its tabs. Use the compact group selector at the right of the tab bar to show all tabs, ungrouped tabs, or only one named group. Return saves an edited name and Escape cancels. Drag tabs to reorder or group them. Drop a terminal on an edge to split it. Use the pane handle to move a live pane, or use **⌘D** and **⌘⇧D** to open a new connection to the right or below. The split picker starts with **New Connection**, followed by searchable saved hosts and aliases.
 
-Choose **Workspaces** and select the tabs to include before saving. A workspace stores tab names, groups, colors, order, pane sizes and directions, connection settings, and SFTP paths. **Open Tabs** appends the saved layout while your current connections continue running. Restored connections authenticate again. Terminal output and running processes are outside the saved layout. To replace a saved layout, delete it and save a new one.
+Choose **Workspaces** in the sidebar to filter and open saved layouts. Select the **+** button and choose tabs or an entire tab group before saving. A workspace stores tab names, groups, colors, order, pane sizes and directions, connection settings, and SFTP paths. Opening a saved workspace appends the layout while your current connections continue running. Restored connections authenticate again. Terminal output and running processes are outside the saved layout. To replace a saved layout, delete it and save a new one. Right-click a tab and choose **Duplicate Tab** to reopen its pane layout and connections.
 
 ## Host keys and PAM
 
@@ -189,7 +191,7 @@ Include your PromeFTP version and build from **Preferences → About**, macOS ve
 
 PromeFTP stores bookmarks, connection history, workspace layouts, snippets, preferences, and saved authentication settings on your Mac. SSH private keys and standard known-hosts handling are managed by system OpenSSH. Workspace snapshots contain connection and layout details, including SFTP paths. Terminal output is held in memory during the session and is written to a file when you explicitly export a log.
 
-Saved PAM answers and global rule values are encrypted locally. macOS Keychain protects the wrapping key through Electron Safe Storage. Successful authentication is required before an answer saved from an authentication prompt is retained. An answer stored in a global rule may be sent to any matching trusted connection, so reserve global rules for replies intended for those hosts.
+Saved SSH passwords, PAM answers, and global rule values are encrypted locally. macOS Keychain protects the wrapping key through Electron Safe Storage. Passwords are saved only when Remember password is selected and authentication succeeds. An answer stored in a global rule may be sent to any matching trusted connection, so reserve global rules for replies intended for those hosts.
 
 ## Network and files
 
