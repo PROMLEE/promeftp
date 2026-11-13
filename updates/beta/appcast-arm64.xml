@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.0.5</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.5</link>
-      <pubDate>Fri, 13 Nov 2026 03:06:18 +0000</pubDate>
-      <sparkle:version>1.0.5</sparkle:version>
-      <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+      <title>PromeFTP 1.0.6</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.6</link>
+      <pubDate>Fri, 13 Nov 2026 04:07:28 +0000</pubDate>
+      <sparkle:version>1.0.6</sparkle:version>
+      <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Faster connections and file navigation&lt;/h2&gt;
-&lt;p&gt;Expand OpenSSH aliases to direct addresses, revisit SFTP paths with mouse buttons, and move remote file panels within a tab.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Use an alias as a direct address&lt;/strong&gt;&lt;br&gt;Choose Use address to expand the effective hostname, user, port, and identity from OpenSSH configuration into the connection form.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Navigate recent SFTP paths&lt;/strong&gt;&lt;br&gt;Use the mouse Back and Forward buttons over a file panel. Right-click a file or folder to copy its full path.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Rearrange remote panels&lt;/strong&gt;&lt;br&gt;Drag a remote panel by its grip to move it within the current SFTP tab. Click unused list space to clear the selection.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Recover visible terminal panes&lt;/strong&gt;&lt;br&gt;Returning to a tab refreshes its visible terminal dimensions and display.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Clearer OpenSSH connection setup&lt;/h2&gt;
+&lt;p&gt;See the alias name and resolved connection values directly in the form, with each value ready to edit.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Name connections at the top&lt;/strong&gt;&lt;br&gt;The connection name appears above the destination and defaults to the selected OpenSSH alias.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Edit resolved OpenSSH values&lt;/strong&gt;&lt;br&gt;Hostname or IP, user, port, and identity are filled into their fields instead of gray placeholders. The alias remains active for alias-specific SSH rules.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Switch to a direct address&lt;/strong&gt;&lt;br&gt;Choose Use address to replace the alias destination with its resolved hostname or IP.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.5"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.6"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.5/PromeFTP-1.0.5-macos-arm64.zip" length="140923603" type="application/octet-stream" sparkle:edSignature="L7BPoGzCF13DytUSwk3iYgRYSjsMcz6fPnxsmz/xBQuzWHwoYLlQnDlQhABhBnMzhmRg6tab8sOWI4IdMytuDg=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.6/PromeFTP-1.0.6-macos-arm64.zip" length="140923671" type="application/octet-stream" sparkle:edSignature="JlRy0mXKEg/gjx07CyZgoQFLugiwjdGRxsIaLhap/SUO6xUusTwDUdzivaDeLFtylaLdPXjoteOack90WkltDA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: krspa0Z+NIX1L8gdP4OW6X2JQrG5K+0XFkk7Yje/ZaOg468/9Fu0YlRjqqTvSGOj6LNwV7iMKgN37iKt3slsBA==
-length: 2941
+edSignature: qaobhR3oPQi5nYSaQOJUOPwMng5DPUwtr/17jFa6dsNS8yhpbD40deAg5vIgaw9Q4YRR5JuSVV8c3tEReGTTAA==
+length: 2724
 -->
