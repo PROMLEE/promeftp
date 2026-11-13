@@ -237,3 +237,10 @@ curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$TAG"
 - 최초 API 요청은 401을 반환했고, 브라우저에서 다섯 파일을 한꺼번에 올리자 DMG 업로드가 실패했다.
 - 기존 초안에서 실패한 첨부를 제거하고 appcast와 DMG를 각각 업로드했다. 저장소 API 재조회가 HTTP 200과 `permissions.push=true`를 반환한 뒤 같은 초안에 ZIP과 체크섬을 올렸다.
 - [GitHub v1.0.7](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.7)을 공개하고 첨부 다섯 개의 SHA-256과 DMG·ZIP 다운로드를 확인했다. 커밋 `9ee5a53`에서 게시한 안정판·베타 appcast는 로컬 서명본과 일치했다.
+
+## 1.0.8 배포 기록
+
+- 앱 소스는 Git 체크아웃이 아니어서 공개 저장소를 `work/release-stage-1.0.8/public`에 새로 복제했다. 저장소 쓰기 권한을 GitHub API에서 확인했고, `gh`가 설치되지 않아 문서화된 REST API 복구 절차로 초안과 첨부를 관리했다. 인증은 Git credential helper에서 프로세스 내부로 읽어 토큰을 출력하지 않았다.
+- 공개 문서·릴리스 노트 커밋은 `b805aff`, 업데이트 피드 커밋은 `edc95cb`다. [GitHub v1.0.8](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)은 정식 릴리스로 공개됐으며 첨부 5개 모두 업로드 완료 상태다.
+- 기존 PromeFTP 서명 키를 사용했다. 앱 코드 서명 검증, DMG 검증, DMG·ZIP 체크섬 검증을 통과했다. 공개 DMG·ZIP 전체를 내려받아 로컬 SHA-256과 비교했고, stable·beta appcast가 서명된 로컬 appcast와 바이트 단위로 일치하는 것도 확인했다.
+- 로컬 다운로드 산출물은 `outputs/PromeFTP-1.0.8-macos-arm64.dmg`와 해당 체크섬이다. 실제 앱의 Sparkle 자동 설치는 별도 확인하지 않았다.
