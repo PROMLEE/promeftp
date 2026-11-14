@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.0.8</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8</link>
-      <pubDate>Fri, 13 Nov 2026 07:10:14 +0000</pubDate>
-      <sparkle:version>1.0.8</sparkle:version>
-      <sparkle:shortVersionString>1.0.8</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.0</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.0</link>
+      <pubDate>Sat, 14 Nov 2026 10:59:23 +0000</pubDate>
+      <sparkle:version>1.1.0</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Clearer triggers and safer bookmark editing&lt;/h2&gt;
-&lt;p&gt;Open terminal triggers with ⌘P, edit each rule in its own dialog, and choose clearly whether to update a bookmark or create another one.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Manage terminal triggers with ⌘P&lt;/strong&gt;&lt;br&gt;The shortcut opens the trigger list. Add and edit rules in a dedicated dialog, and review recent matches without a toolbar banner.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Avoid accidental bookmark replacement&lt;/strong&gt;&lt;br&gt;Save Changes updates the selected bookmark. Save as New Bookmark creates a separate entry, and the context menu can duplicate a bookmark with a chosen name.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Read workspace details at a glance&lt;/strong&gt;&lt;br&gt;Workspace names and tab counts have clear spacing, with singular tab counts displayed correctly.&lt;/li&gt;&lt;/ul&gt;
-&lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Local AI agent support for PromeFTP&lt;/h2&gt;
+&lt;p&gt;Let compatible agents use explicitly authorized SSH and SFTP bookmarks through a local CLI, with command approvals, scoped access, activity history, and installable skills.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Grant agent access per client and bookmark&lt;/strong&gt;&lt;br&gt;Register local clients, choose saved connections, and separately grant SFTP browsing and downloads, SSH tasks, PAM answers, or terminal trigger events.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Review SSH command requests&lt;/strong&gt;&lt;br&gt;Expose fixed SSH tasks or approve the exact command for a single request before it runs with the remote account&amp;#x27;s permissions.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Keep a local activity history&lt;/strong&gt;&lt;br&gt;Review request IDs, authorization decisions, sessions, and outcomes. Credentials, terminal output, and arbitrary command text are excluded.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Install skills for popular coding agents&lt;/strong&gt;&lt;br&gt;Install and update the PromeFTP skill for Codex, Claude Code, Cursor, Gemini CLI, and GitHub Copilot CLI at user or project scope.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Publish the application under MIT&lt;/strong&gt;&lt;br&gt;The PromeFTP app source is available in the public repository, with third-party license notices.&lt;/li&gt;&lt;/ul&gt;
+&lt;p class="notice"&gt;Agent access is off by default. The app must be open, and agent sessions currently support direct saved bookmarks with explicit usernames. SSH command permissions depend on the remote account. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.0"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.0.8/PromeFTP-1.0.8-macos-arm64.zip" length="140931365" type="application/octet-stream" sparkle:edSignature="6aZwHNqhUFLjO6lMfzfhbA6PL8x0WF+uBgQ6O6Kr+I3zeXgqy9aqhyII44XGDsDLbf3+gjAOwbvUzOLyw5g5Ag=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.0/PromeFTP-1.1.0-macos-arm64.zip" length="140981659" type="application/octet-stream" sparkle:edSignature="PwQlDTYS4zGi0JgIRBBxfvClrIPR0ktuTV35nr0F1tKE1rdIqP89V/8OmPHA2cx2OnI0kAgwcpilGWFFWG9oBg=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: UPnak5JqLssaWIbEoLkF7Z/iVRsd9/y53xJ1dhOPMEgTQ6MxaHQ3nc9eHIV7Vypjfntp8vOYPen4I+V4zbhMCA==
-length: 2845
+edSignature: ACgM6xd7/Y4DDdjt/Ii8LeMTBI3U80l7j0AakbUFIPwhfsp58sKg3LF+KWZ/zNCR4WL/3xYptuzvKpo03IUDCQ==
+length: 3480
 -->
