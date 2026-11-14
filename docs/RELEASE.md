@@ -251,5 +251,7 @@ curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$TAG"
 ## 1.1.0 release record
 
 - Version 1.1.0 ships the local AI agent CLI/API, scoped bookmark grants, SSH command approvals, read-only SFTP operations, agent skill installation, and local activity history.
-- Publish the versioned skill from the signed output to `skills/promeftp/SKILL.md` before creating the release tag. Publish the signed `agent-skills.json` manifest after the tag is available.
-- Record the documentation/source commit, release URL, DMG and ZIP SHA-256 values, and byte-for-byte checks of stable and beta feeds here after deployment. Do not record any signing material or credentials.
+- Source, English and Korean guides, release notes, and the versioned skill were published in source commit `76e7af17c46f0a7c6f837cef18b0f6245194249e`; tag `v1.1.0` points to this commit. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.0)
+- Published DMG SHA-256: `4c82ca670c0fac4e7556539de7fd3497bc1f52af27effc83bee5bd74e01da9b6`; ZIP SHA-256: `592b57365bef83e4c0451dd5b4fed859aa511122fef3c0771afd545640d5dc1c`.
+- Stable and beta feeds and the signed agent skill manifest were published in commit `967ac7482963310bc31e63e10fb59a4ecc833ebc`. Both public feeds were fetched and compared byte-for-byte with the signed appcast. The versioned skill and both release downloads were fetched; the downloaded DMG and ZIP checksums matched.
+- The Sparkle archive and appcast signatures, app code signature, DMG verification, asset names, and uploaded sizes were checked. The app's automatic update installation was not exercised.
