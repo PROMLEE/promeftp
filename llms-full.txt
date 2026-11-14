@@ -297,3 +297,11 @@ This release makes terminal trigger rules easier to manage and separates bookmar
 - **Improve workspace readability.** Workspace names and tab counts are separated, and a single tab is labeled correctly.
 
 Close active sessions before updating. For a fresh installation, download the Apple Silicon DMG. Requires macOS 13 or later.
+
+
+--- LICENSE ---
+
+PromeFTP is distributed under the MIT License. Copyright (c) 2026 Promlee. The license permits personal and commercial use, modification, and redistribution subject to its notice requirements. Third-party components have separate terms. This repository publishes documentation and release materials, not the app source code.
+
+- Full MIT License: https://raw.githubusercontent.com/PROMLEE/promeftp/main/LICENSE
+- Third-party notices: https://raw.githubusercontent.com/PROMLEE/promeftp/main/THIRD-PARTY-NOTICES.md
