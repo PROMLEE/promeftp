@@ -1,6 +1,6 @@
 # PromeFTP
 
-Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수 있습니다.
+Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수 있습니다. MIT License
 
 [다운로드](https://github.com/PROMLEE/promeftp/releases/latest) · [설치 가이드](docs/INSTALL.ko.md) · [사용 가이드](docs/USAGE.ko.md) · [English](README.md)
 
@@ -41,3 +41,9 @@ Apple Silicon Mac용 SSH·SFTP 앱입니다. macOS 13 이상에서 사용할 수
 ## 로드맵
 
 예정된 작업은 [TODO.md](TODO.md)에서 확인할 수 있습니다.
+
+## 라이선스
+
+PromeFTP는 [MIT 라이선스](LICENSE)로 배포합니다. Copyright (c) 2026 Promlee. 저작권과 허가 고지를 복사본 또는 소프트웨어의 상당 부분에 포함하면 개인·상업적 사용, 수정, 재배포가 허용됩니다. 외부 구성요소에는 각각 별도의 조건이 적용됩니다. [제3자 라이선스 고지](THIRD-PARTY-NOTICES.md)를 참고하세요.
+
+이 저장소에는 PromeFTP 문서와 배포 자료가 있으며 앱 소스 코드는 포함되어 있지 않습니다.

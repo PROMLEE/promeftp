@@ -41,7 +41,7 @@ git -C "$PUBLIC" ls-remote --tags origin "refs/tags/$TAG"
 1. `SRC`에서 `npm version "$VERSION" --no-git-tag-version`으로 `package.json`과 `package-lock.json`을 함께 갱신한다. 이미 두 파일의 버전이 맞으면 생략한다.
 2. `docs/releases/$VERSION.md`에 영어 릴리스 노트를 작성한다. 사용자에게 보이는 변경, 사용 위치, 필요한 업데이트 조치를 적는다.
 3. 같은 폴더에 `$VERSION.appcast.json`을 작성한다. `heading`, `summary`, `changes`(제목과 설명의 쌍 배열), `notice`를 채운다. 서명 스크립트가 이 파일을 Sparkle 업데이트 창의 HTML로 변환한다. `1.0.4.appcast.json`을 형식 예시로 사용한다.
-4. 공개 체크아웃에는 릴리스 노트 두 파일, README와 설치·사용·업데이트 가이드, `llm.txt`, `llms.txt`, `llms-full.txt`의 관련 변경만 반영한다. 앱 소스 트리 전체를 공개 저장소로 복사하지 않는다.
+4. 공개 체크아웃에는 릴리스 노트 두 파일, README와 설치·사용·업데이트 가이드, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `llm.txt`, `llms.txt`, `llms-full.txt`의 관련 변경을 반영한다. GitHub 릴리스 설명에도 MIT 조건과 라이선스 링크를 넣는다. 앱 소스 트리 전체를 공개 저장소로 복사하지 않는다. 앱 소스 코드를 공개하지 않는 동안에는 PromeFTP를 오픈 소스라고 표시하지 않는다.
 
 ## 3. Sparkle 준비와 앱 빌드
 
