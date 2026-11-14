@@ -1,5 +1,7 @@
 # PromeFTP
 
+PromeFTP is distributed under the MIT License. Copyright (c) 2026 Promlee. The license permits commercial use subject to its notice requirements. This repository does not publish the app source code. See [LICENSE](https://raw.githubusercontent.com/PROMLEE/promeftp/main/LICENSE) and [third-party notices](https://raw.githubusercontent.com/PROMLEE/promeftp/main/THIRD-PARTY-NOTICES.md).
+
 > A local SSH and SFTP desktop client for Apple Silicon Macs running macOS 13 or later.
 
 Current stable release: 1.0.8. SSH and SFTP use system OpenSSH. The app supports direct connections, OpenSSH aliases and overrides, keyboard-interactive authentication, split SSH terminals, dual-pane SFTP, bookmarks, and saved workspace layouts. Preferences has a dedicated window and supports English, Korean, Japanese, and Simplified Chinese. Terminal options include installed fonts and optional session-memory scrollback. Terminal triggers open from ⌘P, use a separately named rule editor, and keep recent matches in the trigger list. New saved passwords and PAM replies are stored as plain text in the local profile file with macOS account permissions. Older encrypted values migrate when used. OpenSSH Keychain access is off by default. No account, cloud sync, or team service is required.
