@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+<title>PromeFTP</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="localization.js"></script>
+<script defer src="ui-controls.js"></script>
+<script defer src="preferences.js"></script>
+<script defer src="agent-preferences.js"></script>
+</head>
+<body class="preferences-body">
+<main id="preferences-window">
+  <nav class="settings-nav" role="tablist" aria-label="Preferences">
+    <button type="button" id="settings-tab-general" role="tab" data-settings-page="general" aria-controls="settings-general" aria-selected="true">General</button>
+    <button type="button" id="settings-tab-terminal" role="tab" data-settings-page="terminal" aria-controls="settings-terminal" aria-selected="false" tabindex="-1">Terminal</button>
+    <button type="button" id="settings-tab-authentication" role="tab" data-settings-page="authentication" aria-controls="settings-authentication" aria-selected="false" tabindex="-1">Authentication</button>
+    <button type="button" id="settings-tab-shortcuts" role="tab" data-settings-page="shortcuts" aria-controls="settings-shortcuts" aria-selected="false" tabindex="-1">Shortcuts</button>
+    <button type="button" id="settings-tab-agent" role="tab" data-settings-page="agent" aria-controls="settings-agent" aria-selected="false" tabindex="-1">Agents</button>
+    <button type="button" id="settings-tab-about" role="tab" data-settings-page="about" aria-controls="settings-about" aria-selected="false" tabindex="-1">About</button>
+  </nav>
+  <div id="settings-content">
+    <form id="terminal-form" novalidate>
+      <section id="settings-general" role="tabpanel" aria-labelledby="settings-tab-general" data-settings-panel="general">
+        <h3>Language and appearance</h3>
+        <label class="settings-row">Language<select id="preferences-language" name="language">
+          <option value="system">System</option>
+          <option value="en">English</option>
+          <option value="ko">한국어</option>
+          <option value="ja">日本語</option>
+          <option value="zh-Hans">简体中文</option>
+        </select></label>
+        <label class="settings-row">Theme<select name="appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <h3>Connections</h3>
+        <div class="settings-row"><span>SSH configuration files</span><button id="preferences-config" type="button">OpenSSH Config…</button></div>
+      </section>
+      <section id="settings-terminal" role="tabpanel" aria-labelledby="settings-tab-terminal" data-settings-panel="terminal" hidden>
+        <h3>Text</h3>
+        <label class="settings-row">Font family<select id="terminal-fonts"></select></label>
+        <label class="settings-row" id="custom-font-row" hidden>Custom font<input name="font" placeholder="Menlo" maxlength="80" autocomplete="off"></label>
+        <label class="settings-row">Font size<input name="size" type="number" min="9" max="30" required></label>
+        <samp id="terminal-font-preview">Aa 0O 1l │ ~ % ls -la</samp>
+        <h3>Background</h3>
+        <label class="settings-row">Terminal opacity <span class="range-value"><input name="opacity" type="range" min="55" max="100" step="5"><output id="opacity-value">100%</output></span></label>
+        <p class="settings-note">Lower values reveal your desktop wallpaper through the terminal.</p>
+        <h3>Scrollback</h3>
+        <label class="settings-check"><input name="unlimited" type="checkbox" aria-describedby="scrollback-help">Unlimited scrollback</label>
+        <label class="settings-row">Line limit<input name="scrollback" type="number" min="100" max="100000" step="100" required></label>
+        <p class="settings-note" id="scrollback-help">Keeps output in memory for the current session. Long sessions can use more memory.</p>
+        <h3>Keyboard</h3>
+        <label class="settings-check"><input name="optionMeta" type="checkbox">Use Option as Meta</label>
+      </section>
+    </form>
+    <section id="settings-authentication" role="tabpanel" aria-labelledby="settings-tab-authentication" data-settings-panel="authentication" hidden>
+      <h3>Authentication Storage</h3>
+      <label class="settings-check"><input id="openssh-keychain" type="checkbox">Allow OpenSSH to use Keychain</label>
+      <label class="settings-check"><input id="pam-keychain" type="checkbox">Load saved PAM answers on connect</label>
+      <p class="settings-note">Saved passwords and answers are stored unencrypted in your local profile file. macOS account permissions restrict access.</p>
+      <div id="pam-controls">
+        <div class="global-auth-heading"><h3>Global PAM Rules</h3><button type="button" id="add-global-auth">Add Rule</button></div>
+        <p class="settings-note">Rules apply to all SSH and SFTP connections.</p>
+        <details class="pam-regex-help">
+          <summary>Regex examples</summary>
+          <p><code>^Password:$</code> matches the whole question. <code>\n</code> matches a line break in one question. <code>(?i)</code> ignores case.</p>
+        </details>
+        <div id="global-auth-list"></div>
+        <h3>Saved Answers</h3>
+        <label class="settings-check"><input id="saved-auto" type="checkbox">Send saved answers automatically</label>
+        <div id="saved-auth-list"></div>
+        <p id="saved-auth-message" role="status"></p>
+      </div>
+    </section>
+    <section id="settings-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" data-settings-panel="shortcuts" tabindex="0" hidden>
+      <div id="shortcuts-list"></div>
+    </section>
+    <section id="settings-agent" role="tabpanel" aria-labelledby="settings-tab-agent" data-settings-panel="agent" hidden>
+      <div class="agent-section">
+        <label class="settings-check"><input id="agent-enabled" type="checkbox">Enable local agent access</label>
+        <p class="settings-note" id="agent-cli-path"></p>
+        <p id="agent-message" class="settings-note" role="status"></p>
+      </div>
+      <section class="agent-section">
+        <h3>Authentication requests</h3>
+        <div id="agent-prompts"></div>
+      </section>
+      <section class="agent-section">
+        <h3>Agent clients</h3>
+        <div class="agent-controls"><input id="agent-client-name" placeholder="Client name" aria-label="Client name" maxlength="80"><button id="agent-register" type="button">Register Client</button></div>
+        <div class="agent-controls"><select id="agent-client" aria-label="Agent client"></select><button id="agent-revoke" type="button">Revoke Client</button></div>
+        <p class="settings-note">Supply the copied token through PROMEFTP_AGENT_TOKEN. Keep it out of chat and shell history.</p>
+      </section>
+      <section class="agent-section">
+        <h3>Bookmark access</h3>
+        <select id="agent-profile" aria-label="Bookmark"></select>
+        <p class="settings-note" id="agent-endpoint"></p>
+        <fieldset id="agent-grant-fields">
+          <label class="settings-check"><input id="agent-sftp" type="checkbox" checked>Allow SFTP browsing</label>
+          <label>Remote directory<input id="agent-root" placeholder="/srv/releases"></label>
+          <label class="settings-check"><input id="agent-download" type="checkbox">Allow downloads</label>
+          <label class="settings-check"><input id="agent-saved-auth" type="checkbox">Use saved authentication</label>
+          <label class="settings-check"><input id="agent-approve-commands" type="checkbox">Allow SSH commands with approval</label>
+          <label>Optional task name<input id="agent-task" placeholder="service-status" maxlength="64"></label>
+          <label>Fixed SSH command<input id="agent-task-command" maxlength="1024"></label>
+          <label>PAM rules<select id="agent-pam" multiple size="2"></select></label>
+          <label>Notification triggers<select id="agent-triggers" multiple size="2"></select></label>
+        </fieldset>
+        <div class="agent-controls"><button id="agent-save-grant" type="button" class="primary">Save Access</button><button id="agent-remove-grant" type="button">Remove Access</button></div>
+      </section>
+      <section class="agent-section">
+        <h3>Install a skill</h3>
+        <div class="agent-controls"><select id="agent-skill-engine" aria-label="Agent"></select><select id="agent-skill-scope" aria-label="Scope"><option value="user">User</option><option value="project">Project</option></select></div>
+        <label class="settings-check"><input id="agent-skill-auto" type="checkbox">Update this skill automatically</label>
+        <div class="agent-controls"><button id="agent-install" type="button">Install or Update</button><button id="agent-remove-skill" type="button">Remove Skill</button></div>
+        <ul id="agent-installed-skills"></ul>
+      </section>
+      <section class="agent-section">
+        <h3>Activity history</h3>
+        <div class="agent-controls"><label>Retention (days)<input id="agent-days" type="number" min="1" max="90"></label><button id="agent-save-days" type="button">Save Retention</button></div>
+        <div class="agent-filters">
+          <label>Client<select id="agent-filter-client"></select></label>
+          <label>Bookmark<select id="agent-filter-profile"></select></label>
+          <label>From<input type="date" id="agent-filter-since"></label>
+          <label>Result<select id="agent-filter-result"><option value="">All</option><option>allowed</option><option>denied</option><option>success</option><option>failed</option><option>unknown</option><option>waiting_for_user</option><option>closed</option></select></label>
+          <label>Operation<input id="agent-filter-operation" placeholder="sftp.list"></label>
+          <label>Request ID<input id="agent-filter-request"></label>
+          <label>Session ID<input id="agent-filter-session"></label>
+        </div>
+        <div class="agent-controls"><button id="agent-refresh-history" type="button">Refresh History</button><button id="agent-export" type="button">Export JSON</button><label class="settings-check"><input id="agent-export-paths" type="checkbox">Include paths</label></div>
+        <div id="agent-history"></div>
+      </section>
+    </section>
+    <section id="settings-about" role="tabpanel" aria-labelledby="settings-tab-about" data-settings-panel="about" hidden>
+      <div class="about-identity">
+        <img src="application-icon.png" width="54" height="54" alt="">
+        <div><h3>PromeFTP</h3><p class="settings-note">SSH and SFTP for macOS, by Promlee.</p></div>
+      </div>
+      <p class="settings-note" id="preferences-version"></p>
+      <p class="settings-note" id="preferences-platform"></p>
+      <div id="preferences-updates">
+        <h3>Software Updates</h3>
+        <label class="settings-check"><input id="preferences-automatic" type="checkbox">Install updates automatically</label>
+        <p class="settings-note">Installation waits for active sessions and pending writes.</p>
+        <p class="settings-note" id="preferences-last-check" aria-live="polite"></p>
+      </div>
+      <div class="about-links">
+        <button id="preferences-check" type="button">Check for Updates…</button>
+        <button type="button" data-about-link="releases">Release Notes</button>
+        <button type="button" data-about-link="blob/main/docs/USAGE.md">User Guide</button>
+        <button type="button" data-about-link="">GitHub</button>
+        <button id="preferences-sponsors" type="button">Support Development…</button>
+      </div>
+      <h3>Licenses</h3>
+      <p class="settings-note">MIT · © 2026 Promlee · Electron (MIT) · xterm.js (MIT)</p>
+      <button id="preferences-project-license" type="button">PromeFTP License…</button>
+      <button id="preferences-license-notices" type="button">Third-party licenses…</button>
+    </section>
+  </div>
+  <footer class="settings-footer">
+    <div class="actions" id="settings-actions"><button type="submit" form="terminal-form" name="settings-action" value="apply">Apply</button><button class="primary" type="submit" form="terminal-form" name="settings-action" value="save">Save</button></div>
+  </footer>
+  <p id="preferences-error" role="status" hidden></p>
+</main>
+</body>
+</html>

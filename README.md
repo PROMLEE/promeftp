@@ -2,7 +2,7 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · MIT License · Version 1.0.8</p>
+  <p>macOS 13 or later · Apple Silicon · MIT open source · Version 1.0.8</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
@@ -59,6 +59,4 @@ See [TODO.md](TODO.md) for planned work.
 
 ## License
 
-PromeFTP is distributed under the [MIT License](LICENSE). Copyright (c) 2026 Promlee. The license permits personal and commercial use, modification, and redistribution, provided the copyright and permission notice remain with copies or substantial portions of the software. Third-party components have their own terms; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-
-This repository publishes PromeFTP documentation and release materials; it does not contain the application source code.
+PromeFTP is open-source software under the [MIT License](LICENSE). Copyright © 2026 Promlee. The application source code is published in this repository. MIT permits personal and commercial use, modification, and redistribution when its copyright and permission notice are included. Third-party components have separate terms; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

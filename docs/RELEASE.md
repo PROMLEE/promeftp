@@ -12,6 +12,8 @@ Apple Silicon용 설치 DMG, Sparkle 업데이트 ZIP, 두 파일의 SHA-256 체
 
 Apple Silicon Mac, Xcode Command Line Tools, Node.js와 npm, Python 3.11 이상, Git, GitHub 저장소 쓰기 권한이 필요하다. Node.js 개발 헤더에 `node_api.h`가 있어야 한다. 1.0.4는 기존 Sparkle 2.10.1과 앱의 잠금 파일에 있는 Electron 45.2.3으로 빌드했다. 다음 버전에서도 의도적으로 변경한 경우에만 의존성 버전을 바꾼다.
 
+`build-macos.sh`는 PromeFTP MIT `LICENSE`와 `THIRD-PARTY-NOTICES.md`를 앱 리소스에 넣고, 앱의 `NSHumanReadableCopyright`를 설정한다. 릴리스 검증 시 `PromeFTP.app/Contents/Resources/app/LICENSE`와 `THIRD-PARTY-NOTICES.md`, Electron의 `LICENSE`·`LICENSES.chromium.html`, Sparkle 사용 빌드의 `Sparkle-LICENSE`가 들어 있는지 확인한다. npm 의존성의 원본 라이선스 파일은 번들 `node_modules`에 유지한다.
+
 아래는 Bash에서 이 작업 공간의 최상위 폴더를 열고 실행하는 예시다. 같은 셸에서 순서대로 실행한다.
 
 ```bash
@@ -41,7 +43,7 @@ git -C "$PUBLIC" ls-remote --tags origin "refs/tags/$TAG"
 1. `SRC`에서 `npm version "$VERSION" --no-git-tag-version`으로 `package.json`과 `package-lock.json`을 함께 갱신한다. 이미 두 파일의 버전이 맞으면 생략한다.
 2. `docs/releases/$VERSION.md`에 영어 릴리스 노트를 작성한다. 사용자에게 보이는 변경, 사용 위치, 필요한 업데이트 조치를 적는다.
 3. 같은 폴더에 `$VERSION.appcast.json`을 작성한다. `heading`, `summary`, `changes`(제목과 설명의 쌍 배열), `notice`를 채운다. 서명 스크립트가 이 파일을 Sparkle 업데이트 창의 HTML로 변환한다. `1.0.4.appcast.json`을 형식 예시로 사용한다.
-4. 공개 체크아웃에는 릴리스 노트 두 파일, README와 설치·사용·업데이트 가이드, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `llm.txt`, `llms.txt`, `llms-full.txt`의 관련 변경을 반영한다. GitHub 릴리스 설명에도 MIT 조건과 라이선스 링크를 넣는다. 앱 소스 트리 전체를 공개 저장소로 복사하지 않는다. 앱 소스 코드를 공개하지 않는 동안에는 PromeFTP를 오픈 소스라고 표시하지 않는다.
+4. 앱 소스와 문서를 공개 체크아웃에 함께 반영한다. `node_modules/`, `work/`, `outputs/`, `dist/`, Python 캐시, `.env`, 앱 서명·Sparkle 개인 키와 산출물은 제외한다. 루트 `.gitignore`와 비밀정보 검색 결과를 확인한 뒤 커밋한다. README, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `llm.txt`, `llms.txt`, `llms-full.txt`도 최신 상태로 유지하고 GitHub 릴리스 설명에 MIT 조건과 소스 링크를 넣는다.
 
 ## 3. Sparkle 준비와 앱 빌드
 

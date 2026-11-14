@@ -1,6 +1,6 @@
 # PromeFTP
 
-PromeFTP is distributed under the MIT License. Copyright (c) 2026 Promlee. The license permits commercial use subject to its notice requirements. This repository does not publish the app source code. See [LICENSE](https://raw.githubusercontent.com/PROMLEE/promeftp/main/LICENSE) and [third-party notices](https://raw.githubusercontent.com/PROMLEE/promeftp/main/THIRD-PARTY-NOTICES.md).
+PromeFTP is open-source software under the MIT License. Copyright (c) 2026 Promlee. The app source is published in this repository, and commercial use is permitted subject to the license notice requirements. See LICENSE and THIRD-PARTY-NOTICES.md.
 
 > A local SSH and SFTP desktop client for Apple Silicon Macs running macOS 13 or later.
 

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'">
+<title>PromeFTP</title>
+<link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="style.css">
+<script defer src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script defer src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script defer src="node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+<script defer src="node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+<script defer src="node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
+<script defer src="localization.js"></script>
+<script defer src="ui-controls.js"></script>
+<script defer src="renderer.js"></script>
+</head>
+<body>
+<div class="window-bar">
+  <button id="toggle-sidebar" data-icon="sidebar" title="Toggle sidebar" aria-label="Toggle sidebar" aria-expanded="true"></button>
+  <div class="window-title">PromeFTP</div>
+  <div class="window-actions">
+    <button id="rail-local" data-icon="terminal" title="Local shell (⌘T)" aria-label="Local shell"></button>
+    <button id="rail-sftp" data-icon="transfer" title="New SFTP connection" aria-label="New SFTP connection"></button>
+    <button id="rail-workspaces" data-icon="workspaces" title="Workspaces" aria-label="Workspaces"></button>
+  </div>
+</div>
+<aside id="sidebar" aria-label="Connections">
+  <div class="sidebar-tabs" role="tablist" aria-label="Connections">
+    <button type="button" id="sidebar-bookmarks" role="tab" aria-selected="true" aria-controls="bookmark-panel">Bookmarks</button>
+    <button type="button" id="sidebar-history" role="tab" aria-selected="false" aria-controls="history-panel" tabindex="-1">History</button>
+    <button type="button" id="sidebar-workspaces" role="tab" aria-selected="false" aria-controls="sidebar-workspace-panel" tabindex="-1">Workspaces</button>
+  </div>
+  <div id="bookmark-panel" class="sidebar-panel" role="tabpanel" aria-labelledby="sidebar-bookmarks">
+    <div class="sidebar-heading">
+      <div class="sidebar-search"><input id="search" type="search" placeholder="Filter" aria-label="Filter bookmarks"></div>
+      <button id="add-bookmark-folder" data-icon="folderPlus" title="New folder" aria-label="New bookmark folder"></button>
+      <button id="new-host" data-icon="plus" title="New host (⌘N)" aria-label="New host"></button>
+    </div>
+    <div id="hosts" class="sidebar-list"></div>
+    <p id="host-empty" class="empty-hosts">No bookmarks</p>
+  </div>
+  <div id="history-panel" class="sidebar-panel" role="tabpanel" aria-labelledby="sidebar-history" hidden>
+    <div class="sidebar-search"><input id="history-search" type="search" placeholder="Filter" aria-label="Filter connection history"></div>
+    <div id="history-list" class="sidebar-list"></div>
+    <p id="history-message" role="status"></p>
+  </div>
+  <div id="sidebar-workspace-panel" class="sidebar-panel" role="tabpanel" aria-labelledby="sidebar-workspaces" hidden>
+    <div class="sidebar-heading">
+      <div class="sidebar-search"><input id="workspace-search" type="search" placeholder="Filter workspaces" aria-label="Filter workspaces"></div>
+      <button id="save-workspace-shortcut" data-icon="plus" title="Save workspace layout" aria-label="Save workspace layout"></button>
+    </div>
+    <div id="sidebar-workspace-list" class="sidebar-list"></div>
+  </div>
+  <div class="sidebar-footer">
+    <button id="rail-pam" type="button" title="PAM authentication settings" aria-label="PAM authentication settings">PAM</button>
+    <button id="rail-snippets" data-icon="code" title="Snippets" aria-label="Snippets"></button>
+    <button id="rail-config" data-icon="sshConfig" title="OpenSSH config" aria-label="OpenSSH config"></button>
+    <button id="rail-guide" data-icon="help" title="Guide" aria-label="Guide"></button>
+    <button id="terminal-preferences" data-icon="settings" title="Preferences (⌘,)" aria-label="Preferences"></button>
+  </div>
+  <button id="sidebar-resize" type="button" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="164" aria-valuemax="360"></button>
+</aside>
+<main>
+  <nav id="tabs" aria-label="Sessions"></nav>
+  <section id="workspace">
+    <form id="editor">
+      <h1 id="editor-title">Connect</h1>
+      <label class="connection-name-field">Name<input name="label" placeholder="Optional"></label>
+      <label id="alias-field-label" for="connection-host" hidden>SSH alias</label>
+      <div class="connection-line">
+        <input id="connection-host" name="host" placeholder="Hostname or IP" aria-label="Hostname or IP" required>
+        <input name="port" type="number" min="1" max="65535" placeholder="Port" aria-label="Port">
+      </div>
+      <label id="alias-endpoint" hidden>Hostname / IP
+        <span class="key"><input id="alias-hostname" name="hostname" placeholder="From SSH config" title="Leave blank to use SSH config" disabled>
+          <button type="button" id="resolve-alias" class="quiet-button">Use address</button></span>
+      </label>
+      <div id="destination-preview" class="destination-preview" hidden>
+        <dl>
+          <dt>SSH host</dt><dd id="destination-host"></dd>
+          <dt>Login string</dt><dd id="destination-user"></dd>
+        </dl>
+        <button id="split-destination" type="button" title="Split at the last @">Split address</button>
+        <p id="destination-conflict" hidden>Clear the User field to use this login string.</p>
+      </div>
+      <div class="grid">
+        <label>User<input name="username" placeholder="Default" autocomplete="username"></label>
+        <label>Key<span class="key"><input name="keyPath" placeholder="Default"><button type="button" id="choose-key" data-icon="folder" title="Choose private key" aria-label="Choose private key"></button></span></label>
+      </div>
+      <div class="grid connection-password-row">
+        <label>Password<span id="password-control"><input name="password" type="password" autocomplete="current-password" placeholder="Leave blank to use saved password" aria-label="Password"></span></label>
+        <div class="password-save-control"><label class="check"><input name="rememberPassword" type="checkbox"> Remember password</label></div>
+      </div>
+      <details id="advanced">
+        <summary>Options</summary>
+        <div class="grid">
+          <label>Folder<input name="group" placeholder="Optional" list="bookmark-folder-names" maxlength="80"></label>
+          <datalist id="bookmark-folder-names"></datalist>
+          <label class="ssh-config-field">SSH config<span class="key"><input name="configPath" placeholder="~/.ssh/config"><button type="button" id="choose-config" data-icon="folder" title="Choose SSH config" aria-label="Choose SSH config"></button></span></label>
+        </div>
+        <div class="connection-auth-option">
+          <label class="check"><input name="pam" type="checkbox" aria-describedby="interactive-help"> Enable keyboard-interactive</label>
+          <small id="interactive-help">Enable SSH prompts for passwords, OTP, or PAM challenges. When off, use the SSH config setting.</small>
+        </div>
+        <div class="actions">
+          <button name="mode" value="effective">Effective config</button>
+          <button type="button" id="close-effective" data-icon="close" title="Close effective config" aria-label="Close effective config" hidden></button>
+          <button type="button" id="add-rule">PAM rule</button>
+        </div>
+        <div id="auth-rules"></div>
+        <pre id="effective" hidden></pre>
+      </details>
+      <div class="actions connection-actions">
+        <button id="cancel-split-connect" type="button" hidden>Cancel Split</button>
+        <button class="primary" name="mode" value="ssh">SSH</button>
+        <button name="mode" value="sftp">SFTP</button>
+        <span class="spacer"></span>
+        <button id="update-bookmark" name="mode" value="update-bookmark" title="Save changes to the selected bookmark" disabled>Save Changes</button>
+        <button id="save-bookmark-copy" name="mode" value="save-bookmark-copy" title="Create a separate bookmark from these details">Save as New Bookmark</button>
+      </div>
+      <p id="message" role="status"></p>
+    </form>
+  </section>
+</main>
+<dialog id="config-dialog">
+  <div class="dialog-heading"><h2>SSH config</h2><button id="close-config" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <div class="config-files">
+    <select id="config-files" aria-label="Config file"></select>
+    <button id="add-config-file" data-icon="plus" title="Add config file" aria-label="Add config file"></button>
+    <button id="edit-config-file" data-icon="edit" title="Edit config directives" aria-label="Edit config directives"></button>
+    <button id="remove-config-file" data-icon="trash" title="Remove from list" aria-label="Remove from list"></button>
+    <button id="reload-aliases" data-icon="refresh" title="Refresh aliases" aria-label="Refresh aliases"></button>
+  </div>
+  <p id="config-message" role="status"></p>
+  <input id="alias-search" type="search" placeholder="Find alias" aria-label="Find alias">
+  <div id="aliases"></div>
+</dialog>
+<dialog id="ssh-config-editor" class="ssh-config-editor">
+  <div class="dialog-heading"><h2 id="ssh-config-editor-title">OpenSSH config</h2><button type="button" id="close-ssh-config-editor" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <p class="ssh-config-editor-path" id="ssh-config-editor-path"></p>
+  <div id="ssh-config-sections"></div>
+  <p id="ssh-config-editor-message" role="status"></p>
+  <div class="actions"><button type="button" id="add-ssh-host">Add Host</button><span class="spacer"></span><button type="button" id="cancel-ssh-config">Cancel</button><button type="button" class="primary" id="save-ssh-config">Save</button></div>
+</dialog>
+<dialog id="split-host-dialog">
+  <div class="dialog-heading"><h2>Split Connection</h2><button type="button" id="close-split-host" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <input id="split-host-search" type="search" placeholder="Find a host" aria-label="Find a split host">
+  <div id="split-host-list"></div>
+</dialog>
+<dialog id="workspaces-dialog">
+  <div class="dialog-heading"><h2>Workspaces</h2><button type="button" id="close-workspaces" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <div id="workspace-list"></div>
+  <form id="workspace-form">
+    <input name="name" placeholder="Workspace name" aria-label="Workspace name" maxlength="80" required>
+    <fieldset><legend>Tabs to include</legend><div id="workspace-tabs"></div></fieldset>
+    <div class="actions"><button id="save-workspace-layout" class="primary" type="submit">Save Layout</button></div>
+    <p id="workspace-message" role="status"></p>
+  </form>
+</dialog>
+<dialog id="snippets-dialog">
+  <div class="dialog-heading"><h2>Snippets</h2><button type="button" id="close-snippets" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <input id="snippet-search" type="search" placeholder="Find a snippet" aria-label="Find a snippet">
+  <div id="snippet-list"></div>
+  <form id="snippet-form">
+    <input name="name" placeholder="Name" aria-label="Name" required>
+    <textarea name="command" rows="3" placeholder="Command" aria-label="Command" required></textarea>
+    <label>Scope<select name="scope"><option value="global">All sessions</option><option value="session">This connection</option></select></label>
+    <p id="snippet-hint"></p>
+    <p id="snippet-error" role="status" class="error"></p>
+    <div class="actions"><button id="cancel-snippet-edit" type="button" hidden>Cancel Edit</button><button id="save-snippet" class="primary">Save</button></div>
+  </form>
+</dialog>
+<dialog id="terminal-trigger-dialog">
+  <div class="dialog-heading"><h2>Terminal Triggers</h2><button type="button" id="close-trigger-dialog" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <p class="trigger-note">Match terminal output and choose an action.</p>
+  <div class="trigger-list-actions"><button id="new-terminal-trigger" class="primary" type="button">Add Trigger</button></div>
+  <div id="terminal-trigger-rules"></div>
+  <p id="terminal-trigger-message" role="status"></p>
+  <h3>Recent Matches</h3>
+  <ol id="terminal-trigger-activity"></ol>
+</dialog>
+<dialog id="terminal-trigger-editor">
+  <div class="dialog-heading"><h2 id="terminal-trigger-editor-title">Add Trigger</h2><button type="button" id="close-trigger-editor" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <form id="terminal-trigger-form">
+    <label>Trigger name<input name="name" placeholder="e.g. Password prompt" required maxlength="80"></label>
+    <label>Match text or regular expression<textarea name="pattern" required maxlength="512" rows="2" spellcheck="false" placeholder="Use a regular expression"></textarea></label>
+    <label>Action<select name="action"><option value="notify">Notify only</option><option value="ask">Ask me for input</option><option value="send">Send saved response</option></select></label>
+    <label id="trigger-response-field" hidden>Response to send<textarea name="response" maxlength="1023" rows="3" autocomplete="off" spellcheck="false"></textarea></label>
+    <label>Apply to<select name="scope"><option value="session">This connection</option><option value="global">All sessions</option></select></label>
+    <p id="trigger-editor-message" role="status"></p>
+    <div class="actions"><button id="cancel-trigger-editor" type="button">Cancel</button><button class="primary">Save Trigger</button></div>
+  </form>
+</dialog>
+<dialog id="auth-activity-dialog">
+  <div class="dialog-heading"><h2>Authentication Activity</h2><button id="close-auth-activity" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <ol id="auth-activity-list"></ol>
+</dialog>
+<dialog id="guide-dialog">
+  <div class="dialog-heading"><h2>Quick Guide</h2><button id="close-guide" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <input id="guide-search" type="search" placeholder="Search guide" aria-label="Search guide">
+  <div id="guide-sections" class="guide-sections"></div>
+</dialog>
+<dialog id="name-dialog">
+  <form method="dialog">
+    <label><span id="name-label">Name</span><input id="entry-name" required></label>
+    <div class="actions"><button id="cancel-name" type="button">Cancel</button><button type="submit" value="ok" class="primary">Done</button></div>
+  </form>
+</dialog>
+</body>
+</html>

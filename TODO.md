@@ -1,3 +1,4 @@
 # PromeFTP TODO
 
-- [ ] Add a CLI for AI agents. Start with listing saved connection aliases and opening a user-selected SSH or SFTP session in PromeFTP. Document the commands, structured output, and exit codes.
+- [x] Add a local AI agent CLI, bookmark grants, SSH command execution, read-only SFTP, skill installation, and activity history. See [Agent setup](docs/AGENTS.md).
+- [ ] Add a server-enforced agent policy for managed deployments, verified jump hosts, and approved file changes.
