@@ -11,6 +11,7 @@
 | Layouts | Tab names, colors, groups, splits, and selected-tab workspace snapshots | Restoring a layout appends tabs and opens fresh connections. It does not resume remote processes or restore terminal output. To change a saved snapshot, delete and recreate it. |
 | Authentication | Interactive prompts, saved replies, exact or RE2 global rules, and authentication activity | New connections can prompt again. RE2 rules match a prompt and send a fixed single-line answer. Jump-host prompts are answered manually. |
 | Terminal triggers | Selection-to-RE2, connection or global scope, ask for input, multiline saved responses, per-rule enable/disable, and match history per pane | Auto-send transmits each configured line followed by Return. |
+| AI agent CLI | Per-client and per-bookmark grants, fixed SSH tasks, one-time approval for arbitrary commands, read-only SFTP listing/stat, optional downloads, selected PAM/trigger access, activity history, and installable skills for five agents | Disabled by default. PromeFTP must be open. Direct bookmarks with explicit usernames only; no aliases, custom SSH config, proxy, or jump hosts. SSH commands run with remote account permissions. |
 | Scrollback | Finite setting or optional unlimited mode in session memory | Long output uses memory. The terminal library has a buffer ceiling. Session log export uses a separate, bounded capture. |
 | Updates | Signed arm64 archive and feed, manual checks, and opt-in automatic installation | First launch can require approval because the release is not Apple notarized. |
 

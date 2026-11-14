@@ -33,6 +33,8 @@ Open **Preferences → Terminal** to choose System Monospace, select an installe
 
 Open **Snippets** from the sidebar to manage saved commands. Use the pencil button to edit a saved snippet and **Save Changes** to replace it. Save a command for all terminals or **This connection**, then search and press Return to paste it. Review the command in the terminal before running it. **⌘P** opens Terminal Triggers. **Preferences → Shortcuts** lists the available bindings.
 
+See [Agent setup](AGENTS.md) to give a local AI agent access to selected bookmarks. Agent access is off by default. SFTP listing and downloads are separate grants; SSH commands run with the remote account's permissions.
+
 ## Terminal triggers
 
 Select text in a local or SSH terminal, then right-click and choose **Create Trigger from Selection…**. PromeFTP turns the selection into an RE2 pattern by escaping punctuation and representing line breaks with `\n`. Edit the pattern if you want to match a variable part of the output. Use **This connection** to apply the rule to terminals opened with the same connection, or **All sessions** to share it across terminals.

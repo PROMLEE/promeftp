@@ -1,0 +1,12 @@
+{
+  "heading": "Local AI agent support for PromeFTP",
+  "summary": "Let compatible agents use explicitly authorized SSH and SFTP bookmarks through a local CLI, with command approvals, scoped access, activity history, and installable skills.",
+  "changes": [
+    ["Grant agent access per client and bookmark", "Register local clients, choose saved connections, and separately grant SFTP browsing and downloads, SSH tasks, PAM answers, or terminal trigger events."],
+    ["Review SSH command requests", "Expose fixed SSH tasks or approve the exact command for a single request before it runs with the remote account's permissions."],
+    ["Keep a local activity history", "Review request IDs, authorization decisions, sessions, and outcomes. Credentials, terminal output, and arbitrary command text are excluded."],
+    ["Install skills for popular coding agents", "Install and update the PromeFTP skill for Codex, Claude Code, Cursor, Gemini CLI, and GitHub Copilot CLI at user or project scope."],
+    ["Publish the application under MIT", "The PromeFTP app source is available in the public repository, with third-party license notices."]
+  ],
+  "notice": "Agent access is off by default. The app must be open, and agent sessions currently support direct saved bookmarks with explicit usernames. SSH command permissions depend on the remote account. Requires macOS 13 or later on Apple Silicon."
+}

@@ -2,7 +2,7 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · MIT-licensed open source · Version 1.0.8</p>
+  <p>macOS 13 or later · Apple Silicon · MIT-licensed open source · Version 1.1.0</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
@@ -19,6 +19,7 @@
 | Organize repeat work | Keep bookmarks in folders, reopen recent hosts from History, and save selected tabs and pane layouts as a workspace. |
 | Handle interactive login | Verify host fingerprints, respond to keyboard-interactive prompts, and manage saved answers or global PAM rules. |
 | Make the terminal yours | Pick a font, preview it, set scrollback, manage snippets from the sidebar, and open terminal triggers with ⌘P. |
+| Work with AI agents | Grant local CLI access per client and bookmark, run approved SSH commands, browse authorized SFTP paths, and review activity history. |
 
 ## Install and connect
 
@@ -37,7 +38,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
 | [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
-| [Release notes](docs/releases/1.0.8.md) | Review the 1.0.8 changes and update instructions. |
+| [Release notes](docs/releases/1.1.0.md) | Review the 1.1.0 changes and update instructions. |
 | [Release runbook](docs/RELEASE.md) | Build, sign, publish, and verify a macOS release. |
 | [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
 

@@ -75,8 +75,8 @@ operation may be recorded as an unknown result.
 
 Build the app with `build-macos.sh`; the CLI is part of the app bundle.
 The bundle must include the project `LICENSE` and `THIRD-PARTY-NOTICES.md`.
-Publish those two files in the public documentation repository with the
-README so the app and release page show the same license terms.
+Publish those two files in the public source repository with the README so
+the app and release page show the same license terms.
 The production signing script also generates `skills/promeftp/SKILL.md` and
 `agent-skills.json`. Copy the versioned skill to the public source and
 documentation commit **before** tagging it. Publish the signed manifest as

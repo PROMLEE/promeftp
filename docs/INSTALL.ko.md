@@ -1,10 +1,10 @@
 # PromeFTP 설치 가이드
 
-PromeFTP 1.0.8은 macOS 13 이상 Apple Silicon Mac용입니다.
+PromeFTP 1.1.0은 macOS 13 이상 Apple Silicon Mac용입니다.
 
 ## DMG로 설치
 
-1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)의 **Assets**에서 `PromeFTP-1.0.8-macos-arm64.dmg`를 받습니다.
+1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.0)의 **Assets**에서 `PromeFTP-1.1.0-macos-arm64.dmg`를 받습니다.
 2. DMG를 열고 **PromeFTP**를 **Applications** 폴더로 드래그합니다.
 3. Finder의 **응용 프로그램**에서 **PromeFTP**를 실행합니다.
 

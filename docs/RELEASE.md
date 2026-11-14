@@ -7,7 +7,7 @@ Apple Silicon용 설치 DMG, Sparkle 업데이트 ZIP, 두 파일의 SHA-256 체
 | 항목 | 역할 |
 | --- | --- |
 | `work/promeftp` | 로컬 앱 소스. `package.json`, `build-macos.sh`, `native/update.mm`, `scripts/`, `updates/public-key.txt`가 있어야 한다. Git 체크아웃이 아닐 수 있다. |
-| `work/publish-104` | 1.0.4에서 사용한 공개 저장소 체크아웃. `PROMLEE/promeftp`의 `main`에는 공개 문서와 업데이트 피드가 있다. 다음 배포에는 최신 `main`을 새로 체크아웃한다. |
+| `work/promeftp-open-source` | 1.0.4에서 사용한 공개 저장소 체크아웃. `PROMLEE/promeftp`의 `main`에는 공개 문서와 업데이트 피드가 있다. 다음 배포에는 최신 `main`을 새로 체크아웃한다. |
 | `outputs` | 사용자에게 전달하는 산출물. 빌드 중간 파일과 Sparkle 도구는 `work` 아래에 둔다. |
 
 Apple Silicon Mac, Xcode Command Line Tools, Node.js와 npm, Python 3.11 이상, Git, GitHub 저장소 쓰기 권한이 필요하다. Node.js 개발 헤더에 `node_api.h`가 있어야 한다. 1.0.4는 기존 Sparkle 2.10.1과 앱의 잠금 파일에 있는 Electron 45.2.3으로 빌드했다. 다음 버전에서도 의도적으로 변경한 경우에만 의존성 버전을 바꾼다.
@@ -246,3 +246,10 @@ curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$TAG"
 - 공개 문서·릴리스 노트 커밋은 `b805aff`, 업데이트 피드 커밋은 `edc95cb`다. [GitHub v1.0.8](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)은 정식 릴리스로 공개됐으며 첨부 5개 모두 업로드 완료 상태다.
 - 기존 PromeFTP 서명 키를 사용했다. 앱 코드 서명 검증, DMG 검증, DMG·ZIP 체크섬 검증을 통과했다. 공개 DMG·ZIP 전체를 내려받아 로컬 SHA-256과 비교했고, stable·beta appcast가 서명된 로컬 appcast와 바이트 단위로 일치하는 것도 확인했다.
 - 로컬 다운로드 산출물은 `outputs/PromeFTP-1.0.8-macos-arm64.dmg`와 해당 체크섬이다. 실제 앱의 Sparkle 자동 설치는 별도 확인하지 않았다.
+
+
+## 1.1.0 release record
+
+- Version 1.1.0 ships the local AI agent CLI/API, scoped bookmark grants, SSH command approvals, read-only SFTP operations, agent skill installation, and local activity history.
+- Publish the versioned skill from the signed output to `skills/promeftp/SKILL.md` before creating the release tag. Publish the signed `agent-skills.json` manifest after the tag is available.
+- Record the documentation/source commit, release URL, DMG and ZIP SHA-256 values, and byte-for-byte checks of stable and beta feeds here after deployment. Do not record any signing material or credentials.

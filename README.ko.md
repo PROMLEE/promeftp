@@ -8,7 +8,7 @@ MIT 라이선스 기반 오픈 소스 SSH·SFTP 앱입니다. macOS 13 이상에
 
 ## 설치와 첫 실행
 
-1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)의 **Assets**에서 `PromeFTP-1.0.8-macos-arm64.dmg`를 받습니다.
+1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.0)의 **Assets**에서 `PromeFTP-1.1.0-macos-arm64.dmg`를 받습니다.
 2. DMG를 열고 **PromeFTP**를 **Applications** 폴더로 드래그합니다.
 3. Finder의 **응용 프로그램**에서 **PromeFTP**를 실행합니다.
 
@@ -35,8 +35,9 @@ MIT 라이선스 기반 오픈 소스 SSH·SFTP 앱입니다. macOS 13 이상에
 | 워크스페이스 | 포함할 탭을 골라 저장합니다. 저장한 레이아웃을 열어도 기존 연결은 유지됩니다. |
 | 인증 | 호스트 키 지문을 확인하고 연결별 저장 응답이나 전역 PAM 규칙을 관리합니다. |
 | 설정 | ⌘,로 열어 테마, 글꼴, 무제한 스크롤백, 업데이트, 버전을 확인합니다. |
+| AI 에이전트 | 클라이언트·북마크별 권한을 부여해 SSH 명령, SFTP 조회, PAM·트리거, 활동 이력을 로컬 CLI에서 사용합니다. |
 
-자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.0.8 릴리스 노트](docs/releases/1.0.8.ko.md)
+자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.1.0 릴리스 노트](docs/releases/1.1.0.ko.md)
 
 ## 로드맵
 

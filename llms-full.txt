@@ -1,4 +1,4 @@
-# PromeFTP 1.0.8 documentation
+# PromeFTP 1.1.0 documentation
 
 --- README.md ---
 
@@ -6,7 +6,7 @@
   <h1>PromeFTP</h1>
   <p><strong>SSH terminals and SFTP file transfers in one macOS workspace.</strong></p>
   <p><a href="https://github.com/PROMLEE/promeftp/releases/latest">Download for Apple Silicon</a> · <a href="docs/INSTALL.md">Install</a> · <a href="docs/USAGE.md">User guide</a> · <a href="README.ko.md">한국어</a></p>
-  <p>macOS 13 or later · Apple Silicon · Version 1.0.8</p>
+  <p>macOS 13 or later · Apple Silicon · Version 1.1.0</p>
 </div>
 
 ![PromeFTP SFTP workspace showing sample local files on the left and a staging server on the right](docs/assets/sftp.png)
@@ -41,7 +41,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | [Features and limits](docs/FEATURES.md) | Check transfer behavior, workspace persistence, terminal support, and what requires a new login. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Diagnose config, login, upload, font, and update issues. |
 | [Privacy and security](SECURITY.md) | See what is stored locally, when the app contacts a service, and how to report a problem. |
-| [Release notes](docs/releases/1.0.8.md) | Review the 1.0.8 changes and update instructions. |
+| [Release notes](docs/releases/1.1.0.md) | Review the 1.1.0 changes and update instructions. |
 | [Release runbook](docs/RELEASE.md) | Build, sign, publish, and verify a macOS release. |
 | [Documentation index](llm.txt) | Find canonical plain-text and Markdown sources for assistants. |
 
@@ -65,18 +65,18 @@ See [TODO.md](TODO.md) for planned work.
 
 # Install and update PromeFTP
 
-PromeFTP 1.0.8 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.0.8)
+PromeFTP 1.1.0 requires macOS 13 or later on an Apple Silicon Mac. [GitHub release](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.0)
 
 ## Install
 
-1. Download `PromeFTP-1.0.8-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
+1. Download `PromeFTP-1.1.0-macos-arm64.dmg` from Assets. The matching `.sha256` file is available on the same release.
 2. Open the DMG and drag **PromeFTP** into **Applications**. Eject the disk image.
 3. Launch PromeFTP from Applications.
 
 To verify the download, put the DMG and its checksum file in the same folder and run the following from that folder.
 
 ```sh
-shasum -a 256 -c PromeFTP-1.0.8-macos-arm64.dmg.sha256
+shasum -a 256 -c PromeFTP-1.1.0-macos-arm64.dmg.sha256
 ```
 
 ## First launch on macOS
@@ -95,7 +95,7 @@ SFTP can trigger normal macOS prompts when you browse protected local folders. N
 
 Open **PromeFTP → Check for Updates…** or **Preferences → About** to check manually. Automatic updates are optional and off by default on a fresh install. Close active SSH, SFTP, and local shell sessions before a manual update. Automatic installation waits for active sessions and pending writes. Sparkle verifies both the feed and the update archive before installing.
 
-Version 0.0.9 can upgrade to 1.0.8 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
+Version 0.0.9 can upgrade to 1.1.0 through its existing feed. Versions 1.0.0 and later read the stable feed. You can also quit the old app and replace it in Applications with the official DMG. The app continues using the same local settings and signing identity.
 
 For update behavior and signature details, see [PromeFTP updates](UPDATES.md). If launch or download still fails, see [Troubleshooting](TROUBLESHOOTING.md#macos-blocks-launch-or-the-update-does-not-appear).
 
@@ -105,8 +105,8 @@ For update behavior and signature details, see [PromeFTP updates](UPDATES.md). I
 
 | Starting point | Update path |
 | --- | --- |
-| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.0.8. |
-| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → About**. Stable feed offers 1.0.8. |
+| 0.0.9 beta | Use **PromeFTP → Check for Updates…**. Its beta feed offers 1.1.0. |
+| 1.0.0 or later (stable) | Use **PromeFTP → Check for Updates…** or **Preferences → About**. Stable feed offers 1.1.0. |
 | Fresh or manual install | Download the Apple Silicon DMG, verify its checksum, and replace PromeFTP in Applications after quitting. |
 
 ## Manual and automatic updates
@@ -115,7 +115,7 @@ Close active SSH, SFTP, and local shell sessions before checking manually. Enabl
 
 ## How the release is verified
 
-Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](INSTALL.md) · [1.0.8 release notes](releases/1.0.8.md)
+Sparkle validates the signed appcast and the ZIP archive with the PromeFTP update key. The bundle uses a separate, persistent macOS signing certificate. The public SHA-256 files let you verify manual downloads. Signing and Apple notarization are separate, so macOS can still require explicit first-launch approval. [Install guide](INSTALL.md) · [1.1.0 release notes](releases/1.1.0.md)
 
 --- docs/USAGE.md ---
 
@@ -284,6 +284,11 @@ The app connects to the hosts you choose and requests the signed update feed whe
 ## Reporting
 
 For an ordinary bug, use [GitHub Issues](https://github.com/PROMLEE/promeftp/issues) with sample data. For a suspected vulnerability, use [GitHub’s private reporting form](https://github.com/PROMLEE/promeftp/security/advisories/new) if enabled. If private reporting is unavailable, ask for a private contact method without including sensitive details in the issue.
+
+
+## Local AI agents
+
+PromeFTP 1.1.0 includes a local CLI and API for compatible agents. Enable access in Settings → Agents, register each client, and grant access per saved bookmark. SSH tasks may expose fixed commands; arbitrary commands require approval for the exact command and run with the remote account's permissions. SFTP access is read-only: directory listing and stat are scoped to an approved path, and downloads require a separate grant. Agents can use explicitly selected saved PAM rules and trigger notifications. The local activity log records request IDs, authorization decisions, session events, and outcomes; credentials, terminal output, and arbitrary command text are excluded. Agent access is off by default and PromeFTP must remain running. The agent session currently requires a direct saved bookmark with an explicit username; SSH aliases, custom config, proxy, and jump hosts are unsupported. Installable skills are available for Codex, Claude Code, Cursor, Gemini CLI, and GitHub Copilot CLI.
 
 --- docs/releases/1.0.8.md ---
 
