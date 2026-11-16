@@ -3,9 +3,10 @@ name: promeftp
 description: Use PromeFTP on this Mac to open authorized SSH and SFTP bookmarks, inspect remote files, and run approved SSH commands.
 ---
 
-Use the `promeftp` CLI with the client credential supplied by your runtime in
-`PROMEFTP_AGENT_TOKEN`. Never print the token or ask the user to paste it into the
-chat. If the CLI is not on PATH, check
+Use the `promeftp` CLI. The user can supply `PROMEFTP_AGENT_TOKEN`, or save a
+client token in PromeFTP → Settings → Agents. When saved, the CLI reads it from
+PromeFTP's permission-restricted local app data file automatically. Never print
+the token or ask the user to paste it into chat. If the CLI is not on PATH, check
 `/Applications/PromeFTP.app/Contents/MacOS/promeftp` or ask for the location shown
 in PromeFTP → Settings → Agents.
 

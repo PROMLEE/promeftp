@@ -615,6 +615,11 @@ body.preferences-body {
 .app-tooltip[hidden] { display: none; }
 
 .agent-section { padding: 0 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.agent-help-row { display: flex; align-items: center; gap: 6px; min-height: 27px; }
+.agent-help-row .settings-note { margin: 0; }
+.agent-help-toggle { width: 20px; height: 20px; min-height: 20px; padding: 0; border-radius: 50%; line-height: 18px; font-size: 12px; }
+.agent-help-detail { margin: 3px 0 8px; line-height: 1.55; overflow-wrap: anywhere; }
+#agent-history-count:empty { display: none; }
 .agent-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-block: 6px; }
 .agent-retention-controls { display: grid; grid-template-columns: minmax(180px, 230px) auto; align-items: end; justify-content: start; gap: 9px; margin: 8px 0 10px; }
 .agent-retention-controls label { display: grid; grid-template-columns: 1fr; gap: 4px; min-width: 0; color: var(--ink); font-size: 12px; }

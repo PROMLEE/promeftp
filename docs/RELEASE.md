@@ -255,3 +255,9 @@ curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$TAG"
 - Published DMG SHA-256: `4c82ca670c0fac4e7556539de7fd3497bc1f52af27effc83bee5bd74e01da9b6`; ZIP SHA-256: `592b57365bef83e4c0451dd5b4fed859aa511122fef3c0771afd545640d5dc1c`.
 - Stable and beta feeds and the signed agent skill manifest were published in commit `967ac7482963310bc31e63e10fb59a4ecc833ebc`. Both public feeds were fetched and compared byte-for-byte with the signed appcast. The versioned skill and both release downloads were fetched; the downloaded DMG and ZIP checksums matched.
 - The Sparkle archive and appcast signatures, app code signature, DMG verification, asset names, and uploaded sizes were checked. The app's automatic update installation was not exercised.
+
+## 1.1.1 배포 기록
+
+- 2026-11-16에 [PromeFTP 1.1.1](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.1)을 정식 공개했다. 소스와 릴리스 노트 커밋은 `757b849`, 업데이트 피드와 에이전트 스킬 매니페스트 게시 커밋은 `bb0b524`이다.
+- 기존 PromeFTP 서명 키를 사용했다. 공개 DMG와 ZIP을 다운로드해 SHA-256을 대조했고, 공개 안정판·베타 피드, 스킬 매니페스트, 버전 태그의 스킬 파일을 로컬 배포본과 비교했다.
+- 서명된 Apple Silicon 앱을 별도 프로필에서 실행해 버전 및 빌드 1.1.1과 Sparkle 로딩을 확인했다. 실제 자동 업데이트 설치는 별도 로컬 테스트 피드에서 검증했다.

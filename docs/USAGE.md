@@ -35,6 +35,8 @@ Open **Snippets** from the sidebar to manage saved commands. Use the pencil butt
 
 See [Agent setup](AGENTS.md) to give a local AI agent access to selected bookmarks. Agent access is off by default. SFTP listing and downloads are separate grants; SSH commands run with the remote account's permissions.
 
+In the one-time token window, choose **Save for installed skills** to store the plain-text credential in a permission-restricted local `0600` file that the PromeFTP CLI reads automatically. The token is never written into skill files. **Forget saved token** removes it, and revoking its client also removes it. Otherwise, choose **Copy Token** and provide it to your agent runtime as `PROMEFTP_AGENT_TOKEN`. PromeFTP cannot show the token after the window closes. The clipboard does not clear on a timer.
+
 ## Terminal triggers
 
 Select text in a local or SSH terminal, then right-click and choose **Create Trigger from Selection…**. PromeFTP turns the selection into an RE2 pattern by escaping punctuation and representing line breaks with `\n`. Edit the pattern if you want to match a variable part of the output. Use **This connection** to apply the rule to terminals opened with the same connection, or **All sessions** to share it across terminals.

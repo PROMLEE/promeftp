@@ -1,11 +1,14 @@
 # Use PromeFTP from an AI agent
 
 Open **Settings → Agents**, enable local agent access, and register a client.
-PromeFTP opens a one-time token window. Use **Copy Token** and put the value in
-your agent runtime's protected environment as `PROMEFTP_AGENT_TOKEN`. Closing
-the window clears the displayed value; PromeFTP cannot show it again. Revoke
-the client and register a new one if the token is lost. The clipboard is not
-cleared on a timer. The app must be running for the CLI to connect.
+In the one-time token window, choose **Save for installed skills** to store it
+as plain text in a `0600` file under PromeFTP's app data. The bundled CLI reads
+that token automatically. **Forget saved token** removes it; revoking that
+client also removes it. The token is never written into skill files. Or choose
+**Copy Token** and provide it through `PROMEFTP_AGENT_TOKEN` in your agent
+runtime. Closing the window clears the displayed value; PromeFTP cannot show it
+again. The clipboard is not cleared on a timer. The app must be running for the
+CLI to connect.
 
 Select the client and a saved bookmark. Agent connections follow that bookmark's
 OpenSSH configuration, including aliases, configured SSH files, `Include`,

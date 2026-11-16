@@ -88,12 +88,15 @@
         <h3>Agent clients</h3>
         <div class="agent-controls"><input id="agent-client-name" placeholder="Client name" aria-label="Client name" maxlength="80"><button id="agent-register" type="button">Register &amp; Copy Token</button></div>
         <div class="agent-controls"><select id="agent-client" aria-label="Agent client"></select><button id="agent-revoke" type="button">Revoke Client</button></div>
-        <p class="settings-note" id="agent-token-help">Registering a client opens a one-time token window. Copy the token before closing; it cannot be shown again. Set it as PROMEFTP_AGENT_TOKEN in your agent runtime. If it is lost, revoke this client and register it again. Do not paste the token into chat or shell history.</p>
+        <div class="agent-help-row"><span class="settings-note">Token is shown once.</span><button class="agent-help-toggle" type="button" aria-label="Token help" aria-expanded="false" aria-controls="agent-token-help">?</button></div>
+        <p class="settings-note agent-help-detail" id="agent-token-help" hidden>Saving stores the plain-text token in a local 0600 file. PromeFTP CLI reads it automatically; the token is never written into skill files.<br>Forget saved token removes the local copy. Revoking its client also removes the saved token.<br>Without saving, copy the token before closing and provide it as <code>PROMEFTP_AGENT_TOKEN</code>. If lost, revoke and register the client again.</p>
+        <div class="agent-controls"><span class="settings-note" id="agent-saved-token-status" hidden>Saved token for installed skills. The CLI reads it automatically.</span><button id="agent-clear-token" type="button" hidden>Forget saved token</button></div>
       </section>
       <section class="agent-section">
         <h3>Bookmark access</h3>
         <select id="agent-profile" aria-label="Bookmark"></select>
-        <p class="settings-note" id="agent-profile-help">Agent connections follow the bookmark's OpenSSH configuration, including aliases, Include, ProxyJump, and ProxyCommand. Target and jump host keys must already be trusted. ProxyCommand can start a local process when the agent opens the connection. Remote actions remain limited by the access grant below.</p>
+        <div class="agent-help-row"><span class="settings-note" id="agent-profile-summary">Uses this bookmark's SSH settings.</span><button class="agent-help-toggle" type="button" aria-label="SSH connection help" aria-expanded="false" aria-controls="agent-profile-help">?</button></div>
+        <p class="settings-note agent-help-detail" id="agent-profile-help" hidden>OpenSSH aliases, Include, ProxyJump, and ProxyCommand are honored.<br>Target and jump host keys must be trusted. ProxyCommand may start a local process.<br>PAM login strings like account@host@account@host are accepted as SSH usernames.</p>
         <p class="settings-note" id="agent-endpoint"></p>
         <fieldset id="agent-grant-fields">
           <label class="settings-check"><input id="agent-sftp" type="checkbox" checked>Allow SFTP browsing</label>
@@ -117,6 +120,7 @@
       </section>
       <section class="agent-section">
         <h3>Activity history</h3>
+        <p class="settings-note" id="agent-history-count" aria-live="polite"></p>
         <div class="agent-retention-controls"><label for="agent-days">Retention (days)<input id="agent-days" type="number" min="1" max="90"></label><button id="agent-save-days" type="button" class="primary">Save Retention</button></div>
         <div class="agent-filters">
           <label>Client<select id="agent-filter-client"></select></label>
@@ -163,10 +167,10 @@
   <dialog id="agent-token-dialog" aria-labelledby="agent-token-title">
     <form method="dialog" id="agent-token-form">
       <h3 id="agent-token-title">Agent token</h3>
-      <p class="settings-note" id="agent-token-once-note">This token is shown only once. Copy it before closing and set it as PROMEFTP_AGENT_TOKEN in your agent runtime. After this window closes, PromeFTP cannot show it again.</p>
+      <p class="settings-note" id="agent-token-once-note">This token is shown only once. Save it for installed skills or copy it before closing. After this window closes, PromeFTP cannot show it again.</p>
       <input id="agent-token-value" type="text" readonly spellcheck="false" autocomplete="off" aria-label="Agent token">
       <p id="agent-token-message" class="settings-note" role="status"></p>
-      <div class="actions"><button id="agent-token-copy" type="button" class="primary">Copy Token</button><button id="agent-token-close" type="submit" value="close">Close</button></div>
+      <div class="actions"><button id="agent-token-save" type="button">Save for installed skills</button><button id="agent-token-copy" type="button" class="primary">Copy Token</button><button id="agent-token-close" type="submit" value="close">Close</button></div>
     </form>
   </dialog>
   <p id="preferences-error" role="status" hidden></p>

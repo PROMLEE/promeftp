@@ -96,7 +96,7 @@ const preferencesMethods = new Set([
   'saved-auth-replies', 'reveal-auth-answer', 'move-auth-reply-to-global', 'saved-auto-setting',
   'set-saved-auto-setting', 'global-auth-rules', 'save-global-auth-rule', 'remove-global-auth-rule',
   'update-auth-reply', 'remove-auth-reply', 'keychain-preferences', 'set-keychain-preferences',
-  'agent-info', 'agent-enable', 'agent-register', 'agent-revoke', 'agent-grant', 'agent-answer',
+  'agent-info', 'agent-enable', 'agent-register', 'agent-revoke', 'agent-save-token', 'agent-clear-token', 'agent-grant', 'agent-answer',
   'agent-history', 'agent-retention', 'agent-export', 'agent-skill',
   'write-clipboard',
 ]);
@@ -1671,6 +1671,7 @@ handle('agent-info', async () => {
     ...(p.eligible && agentTransport.catalog(state.profiles.find(entry => entry.id === p.id))),
   })), targets: await (detectedAgents ??= detectAgents(app.getPath('home'))),
     skills: Object.values(state.agent?.skills || {}),
+    hasSavedToken: await fs.access(agentSkillTokenPath()).then(() => true, () => false),
     cli: process.defaultApp ? null : path.join(path.dirname(process.execPath), 'promeftp') };
 });
 handle('agent-enable', enabled => getAgent().enable(enabled));
@@ -1679,10 +1680,37 @@ handle('agent-register', async name => {
     message: localized('Register an agent client?'), buttons: [localized('Cancel'), localized('Register')], defaultId: 0, cancelId: 0,
   });
   if (response !== 1) return null;
-  const { token } = await getAgent().register(name);
-  return { token };
+  const { id, token } = await getAgent().register(name);
+  return { id, token };
 });
-handle('agent-revoke', id => getAgent().revoke(id));
+const agentSkillTokenPath = () => path.join(app.getPath('userData'), 'agent', 'skill-token.json');
+handle('agent-save-token', async (clientId, token) => {
+  if (typeof clientId !== 'string' || typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw Error('Invalid agent token.');
+  const client = state.agent?.clients?.find(entry => entry.id === clientId);
+  const digest = createHash('sha256').update(token).digest('hex');
+  if (!client || client.digest !== digest) throw Error('This token does not match the selected client.');
+  const directory = path.dirname(agentSkillTokenPath());
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  const directoryInfo = await fs.lstat(directory);
+  if (!directoryInfo.isDirectory() || directoryInfo.uid !== process.getuid()) throw Error('Unsafe agent token directory.');
+  await fs.chmod(directory, 0o700);
+  const target = agentSkillTokenPath();
+  const temp = `${target}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temp, JSON.stringify({ clientId, token }), { flag: 'wx', mode: 0o600 });
+    await fs.chmod(temp, 0o600);
+    await fs.rename(temp, target);
+  } catch (error) { await fs.rm(temp, { force: true }); throw error; }
+  return true;
+});
+handle('agent-clear-token', async () => { await fs.rm(agentSkillTokenPath(), { force: true }); return true; });
+handle('agent-revoke', async id => {
+  await getAgent().revoke(id);
+  try {
+    const saved = JSON.parse(await fs.readFile(agentSkillTokenPath(), 'utf8'));
+    if (saved.clientId === id) await fs.rm(agentSkillTokenPath(), { force: true });
+  } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+});
 handle('agent-grant', (client, profileId, grant) => getAgent().grant(client, profileId, grant));
 handle('agent-answer', (session, id, value) => getAgent().answer(session, id, value));
 handle('agent-history', filter => getAgent().history(filter));

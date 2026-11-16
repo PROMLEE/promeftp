@@ -14,7 +14,9 @@ const digest = value => createHash('sha256').update(JSON.stringify(value)).diges
 
 function eligibilityReason(p) {
   if (!/^[\w][\w.:%-]*$/.test(p.host)) return 'Use a valid SSH host name or alias.';
-  if (p.username && !/^[a-zA-Z0-9_][\w.-]*$/.test(p.username)) return 'Use a valid SSH username.';
+  // PAM gateways commonly encode a route as account@host@account@host.
+  // This value is passed to OpenSSH as an argv value, never through a shell.
+  if (p.username && !/^[\p{L}\p{N}_@.:%+-]+$/u.test(p.username)) return 'Use a valid SSH username.';
   if (p.keyPath && !(path.isAbsolute(p.keyPath) && !/[%\r\n]/.test(p.keyPath))) return 'Use an absolute path for the identity file.';
   return '';
 }

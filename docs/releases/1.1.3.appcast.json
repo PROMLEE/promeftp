@@ -1,0 +1,10 @@
+{
+  "heading": "Automatic credentials for installed agent skills",
+  "summary": "Save an agent token once for the PromeFTP CLI, with a local-only credential file and controls to remove it.",
+  "changes": [
+    ["Save token for skills", "Opt in from the one-time registration window. Installed skills use the PromeFTP CLI, which reads the saved token automatically."],
+    ["Simplify agent settings", "Shorten the agent panel, move details behind help buttons, and show only the five most recent activity entries."],
+    ["Support PAM gateway usernames", "Allow account@host@account@host style login strings in agent SSH profiles."]
+  ],
+  "notice": "Saved tokens are stored as plain text in a user-only 0600 file. They are not written into skill files. Requires macOS 13 or later on Apple Silicon."
+}

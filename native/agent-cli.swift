@@ -18,7 +18,7 @@ func help() -> Never {
     promeftp ssh run --session ID --task TASK
     promeftp ssh command --session ID --command COMMAND
     promeftp events list --session ID [--after CURSOR]
-    All operations emit JSON. Supply PROMEFTP_AGENT_TOKEN via the environment.
+    All operations emit JSON. Set PROMEFTP_AGENT_TOKEN or save a token in PromeFTP → Settings → Agents.
     """)
     exit(0)
 }
@@ -51,9 +51,22 @@ while index < arguments.count {
     index += 2
 }
 guard allowed.filter({ $0 != "after" }).allSatisfy({ params[$0] != nil }) else { report("USAGE", exitCode: 2) }
-guard let token = ProcessInfo.processInfo.environment["PROMEFTP_AGENT_TOKEN"], token.utf8.count == 43 else {
-    report("CREDENTIAL_REQUIRED", exitCode: 3)
+func savedToken() -> String? {
+    let file = NSHomeDirectory() + "/Library/Application Support/PromeFTP/agent/skill-token.json"
+    var metadata = stat()
+    var directoryMetadata = stat()
+    let directory = (file as NSString).deletingLastPathComponent
+    guard lstat(directory, &directoryMetadata) == 0, (directoryMetadata.st_mode & S_IFMT) == S_IFDIR,
+          directoryMetadata.st_uid == getuid(), (directoryMetadata.st_mode & 0o077) == 0 else { return nil }
+    guard lstat(file, &metadata) == 0, (metadata.st_mode & S_IFMT) == S_IFREG,
+          metadata.st_uid == getuid(), (metadata.st_mode & 0o077) == 0,
+          let data = try? Data(contentsOf: URL(fileURLWithPath: file)),
+          let record = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let token = record["token"] as? String, token.utf8.count == 43 else { return nil }
+    return token
 }
+let token = ProcessInfo.processInfo.environment["PROMEFTP_AGENT_TOKEN"] ?? savedToken()
+guard let token, token.utf8.count == 43 else { report("CREDENTIAL_REQUIRED", exitCode: 3) }
 
 let fd = socket(AF_UNIX, SOCK_STREAM, 0)
 guard fd >= 0 else { report("SOCKET_ERROR") }

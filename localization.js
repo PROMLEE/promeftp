@@ -55,6 +55,18 @@ Agents|에이전트|エージェント|智能体
 Enable local agent access|로컬 에이전트 접속 허용|ローカルエージェントのアクセスを許可|允许本地智能体访问
 Authentication requests|인증 요청|認証リクエスト|身份验证请求
 Agent clients|에이전트 클라이언트|エージェントクライアント|智能体客户端
+Token is shown once.|토큰은 한 번만 표시됩니다.|トークンは一度だけ表示されます。|令牌仅显示一次。
+Token help|토큰 도움말|トークンのヘルプ|令牌帮助
+Save for installed skills|설치된 스킬에 저장|インストール済みスキル用に保存|保存供已安装技能使用
+Forget saved token|저장된 토큰 삭제|保存済みトークンを削除|删除已保存的令牌
+Saved token for installed skills. The CLI reads it automatically.|설치된 스킬용 토큰이 저장되어 CLI가 자동으로 사용합니다.|インストール済みスキル用のトークンを保存しました。CLI が自動的に読み込みます。|已保存供已安装技能使用的令牌。CLI 会自动读取。
+Token saved for installed skills.|설치된 스킬용 토큰을 저장했습니다.|インストール済みスキル用のトークンを保存しました。|已保存供已安装技能使用的令牌。
+Token removed.|저장된 토큰을 삭제했습니다.|保存済みトークンを削除しました。|已删除已保存的令牌。
+This token is shown only once. Save it for installed skills or copy it before closing. After this window closes, PromeFTP cannot show it again.|이 토큰은 한 번만 표시됩니다. 설치된 스킬용으로 저장하거나 닫기 전에 복사하세요. 창을 닫으면 PromeFTP에서 다시 볼 수 없습니다.|このトークンは一度だけ表示されます。インストール済みスキル用に保存するか、閉じる前にコピーしてください。ウィンドウを閉じると再表示できません。|此令牌仅显示一次。请保存供已安装技能使用，或在关闭前复制。窗口关闭后 PromeFTP 无法再次显示。
+Saving stores the plain-text token in a local 0600 file. PromeFTP CLI reads it automatically; the token is never written into skill files.|토큰은 권한이 제한된 0600 로컬 파일에 평문으로 저장되고 PromeFTP CLI가 자동으로 읽습니다. 스킬 파일에는 토큰을 기록하지 않습니다.|トークンはアクセス制限された 0600 のローカルファイルに平文で保存され、PromeFTP CLI が自動的に読み込みます。スキルファイルには書き込みません。|令牌以明文保存在权限受限的本地 0600 文件中，PromeFTP CLI 会自动读取；令牌不会写入技能文件。
+Forget saved token removes the local copy. Revoking its client also removes the saved token.|저장된 토큰 삭제로 로컬 사본을 지울 수 있습니다. 해당 클라이언트를 해지해도 토큰이 삭제됩니다.|保存済みトークンを削除するとローカルコピーが消去されます。対応するクライアントを無効化した場合も削除されます。|删除已保存令牌可移除本地副本。撤销其客户端也会删除该令牌。
+Without saving, copy the token before closing and provide it as|저장하지 않으면 창을 닫기 전에 토큰을 복사해 다음 변수로 전달하세요.|保存しない場合は閉じる前にトークンをコピーし、次の環境変数として渡してください。|如果不保存，请在关闭前复制令牌，并将其作为以下变量提供：
+. If lost, revoke and register the client again.|. 토큰을 잃어버리면 클라이언트를 해지한 뒤 다시 등록하세요.|。紛失した場合はクライアントを無効化して再登録してください。|。如果令牌丢失，请撤销客户端并重新注册。
 Client name|클라이언트 이름|クライアント名|客户端名称
 Register & Copy Token|등록하고 토큰 복사|登録してトークンをコピー|注册并复制令牌
 Revoke Client|클라이언트 권한 철회|クライアントを無効化|撤销客户端
@@ -90,7 +102,12 @@ unknown|알 수 없음|不明|未知
 waiting_for_user|사용자 응답 대기|ユーザー応答待ち|等待用户
 closed|종료|終了|已关闭
 Bookmark access|북마크 접근 권한|ブックマークへのアクセス|书签访问权限
-Agent connections follow the bookmark's OpenSSH configuration, including aliases, Include, ProxyJump, and ProxyCommand. Target and jump host keys must already be trusted. ProxyCommand can start a local process when the agent opens the connection. Remote actions remain limited by the access grant below.|에이전트 연결은 북마크의 OpenSSH 설정을 따르며 별칭, Include, ProxyJump, ProxyCommand를 지원합니다. 대상 서버와 점프 호스트의 키를 미리 신뢰해야 합니다. ProxyCommand는 에이전트가 연결할 때 로컬 프로세스를 실행할 수 있습니다. 원격 작업은 아래 접근 권한 설정으로 제한됩니다.|エージェント接続はブックマークの OpenSSH 設定に従い、エイリアス、Include、ProxyJump、ProxyCommand に対応します。接続先と踏み台ホストの鍵は事前に信頼されている必要があります。ProxyCommand はエージェント接続時にローカルプロセスを起動する場合があります。リモート操作は下のアクセス権設定で制限されます。|智能体连接遵循书签的 OpenSSH 配置，包括别名、Include、ProxyJump 和 ProxyCommand。目标主机和跳板主机的密钥必须已受信任。智能体连接时，ProxyCommand 可能会启动本地进程。远程操作仍受下方访问权限限制。
+Uses this bookmark's SSH settings.|이 북마크의 SSH 설정을 사용합니다.|このブックマークの SSH 設定を使用します。|使用此书签的 SSH 设置。
+SSH connection help|SSH 연결 도움말|SSH 接続のヘルプ|SSH 连接帮助
+OpenSSH aliases, Include, ProxyJump, and ProxyCommand are honored.|OpenSSH 별칭, Include, ProxyJump, ProxyCommand 설정을 적용합니다.|OpenSSH のエイリアス、Include、ProxyJump、ProxyCommand を適用します。|支持 OpenSSH 别名、Include、ProxyJump 和 ProxyCommand。
+Target and jump host keys must be trusted. ProxyCommand may start a local process.|대상과 점프 호스트의 키를 미리 신뢰해야 합니다. ProxyCommand는 로컬 프로세스를 실행할 수 있습니다.|接続先と踏み台ホストの鍵を事前に信頼する必要があります。ProxyCommand はローカルプロセスを起動する場合があります。|目标主机和跳板主机的密钥必须已受信任。ProxyCommand 可能会启动本地进程。
+PAM login strings like account@host@account@host are accepted as SSH usernames.|account@host@account@host 형태의 PAM 로그인 문자열을 SSH 사용자명으로 사용할 수 있습니다.|account@host@account@host のような PAM ログイン文字列を SSH ユーザー名として使用できます。|可将 account@host@account@host 格式的 PAM 登录字符串用作 SSH 用户名。
+Showing the 5 most recent activities.|최근 활동 5건을 표시합니다.|最近のアクティビティ 5 件を表示しています。|显示最近 5 条活动记录。
 Use a valid SSH host name or alias.|유효한 SSH 호스트명 또는 별칭을 입력하세요.|有効な SSH ホスト名またはエイリアスを指定してください。|请输入有效的 SSH 主机名或别名。
 Use a valid SSH username.|유효한 SSH 사용자 이름을 입력하세요.|有効な SSH ユーザー名を指定してください。|请输入有效的 SSH 用户名。
 Use an absolute path for the identity file.|개인 키 파일은 절대 경로로 지정하세요.|秘密鍵ファイルには絶対パスを指定してください。|请为身份文件使用绝对路径。
