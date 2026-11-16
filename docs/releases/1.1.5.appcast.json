@@ -1,0 +1,11 @@
+{
+  "heading": "Snippets shortcut fix and documentation corrections",
+  "summary": "Fix ⌘P in the application menu so it opens Snippets, correct the 1.1.4 notes, and improve the Quick Guide.",
+  "changes": [
+    ["Fix ⌘P snippets in the menu", "⌘P opens Snippets from both the application menu and the SSH terminal. Terminal Triggers open from the SSH toolbar and no longer use ⌘P."],
+    ["Correct the documentation", "The README, user guides, and LLM reference files describe the shortcut and the Terminal Triggers entry point accurately."],
+    ["Improve the Quick Guide", "Add a transfer queue and folder compare section and match the reconnect message the app shows."],
+    ["Clarify shortcuts", "Preferences → Shortcuts shows a dash for actions without a keyboard shortcut."]
+  ],
+  "notice": "Requires macOS 13 or later on Apple Silicon. Saved agent tokens remain local and are never written into skill files."
+}

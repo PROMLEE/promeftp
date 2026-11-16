@@ -8,7 +8,7 @@ MIT 라이선스 기반 오픈 소스 SSH·SFTP 앱입니다. macOS 13 이상에
 
 ## 설치와 첫 실행
 
-1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.3)의 **Assets**에서 `PromeFTP-1.1.3-macos-arm64.dmg`를 받습니다.
+1. [공식 GitHub 릴리스](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.5)의 **Assets**에서 `PromeFTP-1.1.5-macos-arm64.dmg`를 받습니다.
 2. DMG를 열고 **PromeFTP**를 **Applications** 폴더로 드래그합니다.
 3. Finder의 **응용 프로그램**에서 **PromeFTP**를 실행합니다.
 
@@ -29,7 +29,7 @@ MIT 라이선스 기반 오픈 소스 SSH·SFTP 앱입니다. macOS 13 이상에
 
 | 기능 | 사용 방법 |
 | --- | --- |
-| SSH | 탭을 열고 좌우 또는 상하로 분할합니다. ⌘P로 터미널 트리거를 관리합니다. |
+| SSH | 탭을 열고 좌우 또는 상하로 분할합니다. ⌘P로 스니펫을 엽니다. 터미널 트리거는 SSH 도구막대에서 관리합니다. |
 | SFTP | 왼쪽 로컬과 오른쪽 원격 사이에 파일을 끌어 놓습니다. 같은 탭에 원격 패널을 추가해 서버 간 복사도 할 수 있습니다. |
 | 호스트 | 직접 접속하거나 OpenSSH 별칭을 고릅니다. 별칭과 실제 목적지, 사용자, 포트를 따로 확인합니다. |
 | 워크스페이스 | 포함할 탭을 골라 저장합니다. 저장한 레이아웃을 열어도 기존 연결은 유지됩니다. |
@@ -37,7 +37,7 @@ MIT 라이선스 기반 오픈 소스 SSH·SFTP 앱입니다. macOS 13 이상에
 | 설정 | ⌘,로 열어 테마, 글꼴, 무제한 스크롤백, 업데이트, 버전을 확인합니다. |
 | AI 에이전트 | 클라이언트·북마크별 권한을 부여해 SSH 명령, SFTP 조회, PAM·트리거, 활동 이력을 로컬 CLI에서 사용합니다. |
 
-자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.1.3 릴리스 노트](docs/releases/1.1.3.md)
+자세한 조작은 [한국어 사용 가이드](docs/USAGE.ko.md)를 참고하세요. [기능 및 제한](docs/FEATURES.md) · [문제 해결](docs/TROUBLESHOOTING.md) · [1.1.5 릴리스 노트](docs/releases/1.1.5.md)
 
 ## 로드맵
 
