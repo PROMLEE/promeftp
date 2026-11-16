@@ -10,9 +10,9 @@ const { SFTP } = require('ssh2/lib/protocol/SFTP.js');
 const ssh = '/usr/bin/ssh';
 const execute = promisify(execFile);
 
-function configArgs(config) {
+function configArgs(config, includeConfigPath = true) {
   const args = [];
-  if (config.configPath) args.push('-F', config.configPath);
+  if (includeConfigPath && config.configPath) args.push('-F', config.configPath);
   if (config.hostname) args.push('-o', 'HostName=' + config.hostname.replaceAll('%', '%%'));
   if (config.username) args.push('-l', config.username);
   if (config.port) args.push('-p', String(config.port));
@@ -55,12 +55,20 @@ async function aliases(configPath) {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
-async function effective(config) {
+async function effectiveOutput(config) {
   const { stdout } = await execute(ssh, [...configArgs(config), '-G', '--', config.host], {
     timeout: 10000, maxBuffer: 256 * 1024,
   });
-  const safe = /^(hostname|user|port|proxyjump|kbdinteractiveauthentication|preferredauthentications|identityfile|identityagent|controlmaster|controlpath|kexalgorithms|stricthostkeychecking|userknownhostsfile) /;
+  return stdout;
+}
+
+function authEndpoint(stdout) {
+  const safe = /^(hostname|user|port|proxyjump|proxycommand|kbdinteractiveauthentication|preferredauthentications|identityfile|identityagent|controlmaster|controlpath|kexalgorithms|stricthostkeychecking|userknownhostsfile) /;
   return stdout.split('\n').filter(line => safe.test(line)).join('\n');
+}
+
+async function effective(config) {
+  return authEndpoint(await effectiveOutput(config));
 }
 
 async function inspectIdentityFile(value) {
@@ -173,10 +181,10 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
     if (rules.size) authOptions.push('-o', 'PreferredAuthentications=publickey,keyboard-interactive');
     const modeOptions = mode === 'ssh' ? ['-tt'] :
       ['-N', '-o', 'RemoteCommand=none', '-o', 'PermitLocalCommand=no'];
-    const restricted = agent ? ['-F', '/dev/null', '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no',
+    const restricted = agent ? [...(config.configPath ? ['-F', config.configPath] : []), '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no',
       '-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none', '-o', 'VerifyHostKeyDNS=no', '-o', 'UpdateHostKeys=no',
       ...(config.knownHosts ? ['-o', 'UserKnownHostsFile=' + config.knownHosts] : [])] : [];
-    terminal = pty.spawn(ssh, [...restricted, ...masterOptions, ...modeOptions, ...authOptions, ...configArgs(config), '--', config.host], {
+    terminal = pty.spawn(ssh, [...restricted, ...masterOptions, ...modeOptions, ...authOptions, ...configArgs(config, !agent), '--', config.host], {
       name: 'xterm-256color', cols: size.cols || 80, rows: size.rows || 24,
       cwd: os.homedir(), env: { ...process.env, ...auth?.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
     });
@@ -227,4 +235,4 @@ function startLocal(size, notify) {
   };
 }
 
-module.exports = { aliases, effective, inspectIdentityFile, start, startLocal };
+module.exports = { aliases, effective, effectiveOutput, authEndpoint, inspectIdentityFile, start, startLocal };

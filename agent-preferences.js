@@ -5,6 +5,26 @@ const agentElement = name => byId('agent-' + name);
 const agentValue = name => agentElement(name).value;
 const agentChecked = name => agentElement(name).checked;
 const agentStatus = message => { agentElement('message').textContent = t(message); };
+const tokenDialog = byId('agent-token-dialog');
+const tokenField = byId('agent-token-value');
+function showOneTimeToken(token) {
+  tokenField.value = token;
+  byId('agent-token-message').textContent = '';
+  tokenDialog.showModal();
+  tokenField.select();
+}
+tokenDialog.addEventListener('close', () => {
+  tokenField.value = '';
+  byId('agent-token-message').textContent = '';
+  agentStatus('Token hidden. Revoke and register a new client if you need another token.');
+});
+byId('agent-token-copy').addEventListener('click', async () => {
+  const message = byId('agent-token-message');
+  try {
+    await api['write-clipboard'](tokenField.value);
+    message.textContent = t('Token copied to clipboard.');
+  } catch (error) { message.textContent = error.message; }
+});
 
 function agentOptions(name, entries, empty) {
   const select = agentElement(name);
@@ -32,8 +52,9 @@ function showAgentGrant() {
   agentElement('save-grant').disabled = !client || !p?.eligible;
   agentElement('remove-grant').disabled = !grant;
   agentElement('revoke').disabled = !client;
-  agentElement('endpoint').textContent = p ? `${p.username}@${p.host}:${p.port}` +
-    (grant?.stale ? ' · ' + t('Save access again after a bookmark change.') : '') : t('Choose a direct bookmark with an explicit username.');
+  agentElement('endpoint').textContent = p ? `${p.username ? p.username + '@' : ''}${p.host}${p.port ? ':' + p.port : ''}` +
+    (grant?.stale ? ' · ' + t('Save access again after a bookmark change.') : '') : '';
+  agentElement('profile-help').textContent = p && !p.eligible ? t(p.reason || 'Use a valid SSH host name or alias.') : t("Agent connections follow the bookmark's OpenSSH configuration, including aliases, Include, ProxyJump, and ProxyCommand. Target and jump host keys must already be trusted. ProxyCommand can start a local process when the agent opens the connection. Remote actions remain limited by the access grant below.");
   agentElement('root').value = grant?.root || '';
   agentElement('sftp').checked = grant?.sftp !== false;
   agentElement('download').checked = grant?.download === true;
@@ -94,7 +115,8 @@ async function refreshAgents(full = true) {
   agentElement('cli-path').textContent = info.cli || t('The installed app provides the CLI.');
   if (info.enabled && !info.online) agentStatus('Agent service is offline.');
   agentOptions('client', info.clients, 'Choose client');
-  agentOptions('profile', info.profiles.map(p => ({ ...p, disabled: !p.eligible, name: p.eligible ? p.name : p.name + ' · ' + t('Direct connection required') })), 'Choose bookmark');
+  agentOptions('profile', info.profiles.map(p => ({ ...p, disabled: !p.eligible,
+    name: p.eligible ? p.name : p.name + ' · ' + t(p.reason || 'Use a valid SSH host name or alias.') })), 'Choose bookmark');
   agentOptions('skill-engine', [...info.targets].sort((a, b) => Number(b.detected) - Number(a.detected))
     .map(target => ({ ...target, name: target.name + (target.detected ? ' · ' + t('Detected') : '') })));
   agentOptions('filter-client', info.clients, 'All');
@@ -163,9 +185,10 @@ agentElement('profile').addEventListener('change', showAgentGrant);
 agentElement('sftp').addEventListener('change', updateAgentSftpFields);
 agentButton('register', async () => {
   if (!agentValue('client-name').trim()) throw Error(t('Enter a client name.'));
-  if (await api['agent-register'](agentValue('client-name').trim())) {
+  const result = await api['agent-register'](agentValue('client-name').trim());
+  if (result?.token) {
     agentElement('client-name').value = '';
-    agentStatus('Token copied. The clipboard clears after 30 seconds.');
+    showOneTimeToken(result.token);
   }
 });
 agentButton('revoke', () => api['agent-revoke'](agentValue('client')));

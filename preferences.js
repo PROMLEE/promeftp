@@ -405,7 +405,7 @@ terminalForm.addEventListener('submit', async event => {
   }
 });
 document.addEventListener('keydown', event => {
-  if (event.key !== 'Escape') return;
+  if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
   event.preventDefault();
   api['close-preferences']().catch(showError);
 });

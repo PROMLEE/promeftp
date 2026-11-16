@@ -1,15 +1,18 @@
 # Use PromeFTP from an AI agent
 
 Open **Settings → Agents**, enable local agent access, and register a client.
-Copy the token into your agent runtime’s protected environment as
-`PROMEFTP_AGENT_TOKEN`. The token is copied once. Revoke and register again to
-replace it. The app must be running for the CLI to connect.
+PromeFTP opens a one-time token window. Use **Copy Token** and put the value in
+your agent runtime's protected environment as `PROMEFTP_AGENT_TOKEN`. Closing
+the window clears the displayed value; PromeFTP cannot show it again. Revoke
+the client and register a new one if the token is lost. The clipboard is not
+cleared on a timer. The app must be running for the CLI to connect.
 
-Select the client and a saved bookmark. First use a direct bookmark with an
-explicit username. SSH aliases, custom SSH configuration files, and proxy or
-jump-host configurations are outside this release's agent connection support.
-The host key must already be trusted by OpenSSH for the destination. Configure
-and verify it through a regular desktop connection first.
+Select the client and a saved bookmark. Agent connections follow that bookmark's
+OpenSSH configuration, including aliases, configured SSH files, `Include`,
+`ProxyJump`, and `ProxyCommand`. `ProxyCommand` can start a local process when
+the agent opens a connection. Confirm aliases and proxy routes resolve to the
+intended server. Destination and jump-host keys must already be trusted by
+OpenSSH; configure and verify them through a regular desktop connection first.
 
 ## Grant a bookmark
 

@@ -1,0 +1,10 @@
+{
+  "heading": "OpenSSH bookmarks for local agents",
+  "summary": "Connect agents through saved SSH aliases and copy new client tokens from a dedicated window.",
+  "changes": [
+    ["Use SSH aliases", "Grant access to bookmarks that use OpenSSH configuration. Save access again after changes to the resolved configuration."],
+    ["Copy a client token", "Copy the token before closing the registration window. PromeFTP displays it once."],
+    ["Read settings in your language", "Agent setup and bookmark actions have updated translations and aligned retention controls."]
+  ],
+  "notice": "Requires macOS 13 or later on Apple Silicon. Agent connections require trusted host keys."
+}

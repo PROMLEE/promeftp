@@ -153,6 +153,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (s.closed) return;
       if (event === 'ready') {
         s.status = 'ready';
+        s.endpoint = typeof value?.endpoint === 'string' ? value.endpoint : '';
         s.prompt = undefined;
         note(s, 'session.ready', 'success');
       }
@@ -438,7 +439,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
           id, name, grants: Object.fromEntries(Object.entries(grants || {}).map(([id, { fingerprint, task, ...g }]) =>
             [id, { ...g, task, stale: !profileFor(id) || fingerprint !== stamp(profileFor(id)) }])),
         })),
-        profiles: profiles().map(p => ({ id: p.id, name: clean(p.label), eligible: transport.eligible(p), host: clean(p.host), username: clean(p.username), port: p.port || 22 })),
+        profiles: profiles().map(p => ({ id: p.id, name: clean(p.label), eligible: transport.eligible(p), host: clean(p.host), username: clean(p.username), port: p.port })),
         prompts: [...sessions.values()].filter(s => s.prompt).map(s => ({ session: s.id, profile: s.profile, client: s.client, expires: s.authDeadline, ...s.prompt })),
       };
     },
@@ -472,11 +473,12 @@ async function createAgentService({ directory, state, save, profiles, transport,
     },
     async grant(clientId, id, grant) {
       const p = profileFor(id);
-      if (!p || !transport.eligible(p)) throw problem('PROFILE_NOT_ELIGIBLE');
+      if (grant && (!p || !transport.eligible(p))) throw problem('PROFILE_NOT_ELIGIBLE');
       const checked = grant && { root: grant.sftp === false ? null : remotePath(grant.root),
-        fingerprint: stamp(p), ...transport.validateGrant(grant, p) };
+        fingerprint: stamp(p), route: (await transport.resolve(p)).route, ...transport.validateGrant(grant, p) };
       audit({ client: clientId, profile: id, operation: grant ? 'grant.set' : 'grant.remove', result: 'allowed' });
       await save(g => {
+        if (checked && (!profileFor(id) || stamp(profileFor(id)) !== checked.fingerprint)) throw problem('ACCESS_DENIED');
         const c = g.clients?.find(c => c.id === clientId);
         if (!c) throw problem('INVALID_REQUEST');
         if (checked) c.grants[id] = checked;

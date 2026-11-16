@@ -86,13 +86,14 @@
       </section>
       <section class="agent-section">
         <h3>Agent clients</h3>
-        <div class="agent-controls"><input id="agent-client-name" placeholder="Client name" aria-label="Client name" maxlength="80"><button id="agent-register" type="button">Register Client</button></div>
+        <div class="agent-controls"><input id="agent-client-name" placeholder="Client name" aria-label="Client name" maxlength="80"><button id="agent-register" type="button">Register &amp; Copy Token</button></div>
         <div class="agent-controls"><select id="agent-client" aria-label="Agent client"></select><button id="agent-revoke" type="button">Revoke Client</button></div>
-        <p class="settings-note">Supply the copied token through PROMEFTP_AGENT_TOKEN. Keep it out of chat and shell history.</p>
+        <p class="settings-note" id="agent-token-help">Registering a client opens a one-time token window. Copy the token before closing; it cannot be shown again. Set it as PROMEFTP_AGENT_TOKEN in your agent runtime. If it is lost, revoke this client and register it again. Do not paste the token into chat or shell history.</p>
       </section>
       <section class="agent-section">
         <h3>Bookmark access</h3>
         <select id="agent-profile" aria-label="Bookmark"></select>
+        <p class="settings-note" id="agent-profile-help">Agent connections follow the bookmark's OpenSSH configuration, including aliases, Include, ProxyJump, and ProxyCommand. Target and jump host keys must already be trusted. ProxyCommand can start a local process when the agent opens the connection. Remote actions remain limited by the access grant below.</p>
         <p class="settings-note" id="agent-endpoint"></p>
         <fieldset id="agent-grant-fields">
           <label class="settings-check"><input id="agent-sftp" type="checkbox" checked>Allow SFTP browsing</label>
@@ -116,7 +117,7 @@
       </section>
       <section class="agent-section">
         <h3>Activity history</h3>
-        <div class="agent-controls"><label>Retention (days)<input id="agent-days" type="number" min="1" max="90"></label><button id="agent-save-days" type="button">Save Retention</button></div>
+        <div class="agent-retention-controls"><label for="agent-days">Retention (days)<input id="agent-days" type="number" min="1" max="90"></label><button id="agent-save-days" type="button" class="primary">Save Retention</button></div>
         <div class="agent-filters">
           <label>Client<select id="agent-filter-client"></select></label>
           <label>Bookmark<select id="agent-filter-profile"></select></label>
@@ -159,6 +160,15 @@
   <footer class="settings-footer">
     <div class="actions" id="settings-actions"><button type="submit" form="terminal-form" name="settings-action" value="apply">Apply</button><button class="primary" type="submit" form="terminal-form" name="settings-action" value="save">Save</button></div>
   </footer>
+  <dialog id="agent-token-dialog" aria-labelledby="agent-token-title">
+    <form method="dialog" id="agent-token-form">
+      <h3 id="agent-token-title">Agent token</h3>
+      <p class="settings-note" id="agent-token-once-note">This token is shown only once. Copy it before closing and set it as PROMEFTP_AGENT_TOKEN in your agent runtime. After this window closes, PromeFTP cannot show it again.</p>
+      <input id="agent-token-value" type="text" readonly spellcheck="false" autocomplete="off" aria-label="Agent token">
+      <p id="agent-token-message" class="settings-note" role="status"></p>
+      <div class="actions"><button id="agent-token-copy" type="button" class="primary">Copy Token</button><button id="agent-token-close" type="submit" value="close">Close</button></div>
+    </form>
+  </dialog>
   <p id="preferences-error" role="status" hidden></p>
 </main>
 </body>

@@ -45,7 +45,6 @@ Dark|다크|ダーク|深色
 Connections|연결|接続|连接
 SSH configuration files|SSH 설정 파일|SSH 設定ファイル|SSH 配置文件
 OpenSSH Config…|OpenSSH 설정…|OpenSSH 設定…|OpenSSH 配置…
-OpenSSH config|OpenSSH 설정|OpenSSH 設定|OpenSSH 配置
 Software Updates|소프트웨어 업데이트|ソフトウェアアップデート|软件更新
 Install updates automatically|업데이트 자동 설치|アップデートを自動でインストール|自动安装更新
 Install Updates Automatically|업데이트 자동 설치|アップデートを自動でインストール|自动安装更新
@@ -57,9 +56,44 @@ Enable local agent access|로컬 에이전트 접속 허용|ローカルエー�
 Authentication requests|인증 요청|認証リクエスト|身份验证请求
 Agent clients|에이전트 클라이언트|エージェントクライアント|智能体客户端
 Client name|클라이언트 이름|クライアント名|客户端名称
-Register Client|클라이언트 등록|クライアントを登録|注册客户端
+Register & Copy Token|등록하고 토큰 복사|登録してトークンをコピー|注册并复制令牌
 Revoke Client|클라이언트 권한 철회|クライアントを無効化|撤销客户端
+Registering a client opens a one-time token window. Copy the token before closing; it cannot be shown again. Set it as PROMEFTP_AGENT_TOKEN in your agent runtime. If it is lost, revoke this client and register it again. Do not paste the token into chat or shell history.|클라이언트를 등록하면 토큰이 한 번 표시되는 창이 열립니다. 창을 닫기 전에 복사하고 에이전트 실행 환경에서 PROMEFTP_AGENT_TOKEN으로 설정하세요. 닫은 뒤에는 다시 볼 수 없습니다. 토큰을 잃어버리면 해당 클라이언트를 해지하고 다시 등록하세요. 채팅이나 셸 명령 기록에 토큰을 붙여 넣지 마세요.|クライアントを登録すると、トークンを一度だけ表示するウィンドウが開きます。閉じる前にコピーし、エージェントの実行環境で PROMEFTP_AGENT_TOKEN に設定してください。閉じた後は再表示できません。紛失した場合はクライアントを無効化して再登録してください。チャットやシェルの履歴に貼り付けないでください。|注册客户端后会打开一次性令牌窗口。请在关闭前复制，并将其设置为智能体运行环境中的 PROMEFTP_AGENT_TOKEN。窗口关闭后无法再次查看。如果令牌丢失，请撤销客户端并重新注册。请勿将令牌粘贴到聊天或 shell 历史记录中。
+This token is shown only once. Copy it before closing and set it as PROMEFTP_AGENT_TOKEN in your agent runtime. After this window closes, PromeFTP cannot show it again.|此令牌只显示一次。请在关闭前复制，并在智能体运行环境中将其设为 PROMEFTP_AGENT_TOKEN。窗口关闭后 PromeFTP 无法再次显示。|このトークンは一度だけ表示されます。閉じる前にコピーし、エージェントの実行環境で PROMEFTP_AGENT_TOKEN に設定してください。ウィンドウを閉じると、PromeFTP では再表示できません。|此令牌仅显示一次。请在关闭前复制，并将其设置为智能体运行环境中的 PROMEFTP_AGENT_TOKEN。窗口关闭后 PromeFTP 无法再次显示。
+Agent token|에이전트 토큰|エージェントトークン|智能体令牌
+Copy Token|토큰 복사|トークンをコピー|复制令牌
+Token copied to clipboard.|토큰을 클립보드에 복사했습니다.|トークンをクリップボードにコピーしました。|令牌已复制到剪贴板。
+Token hidden. Revoke and register a new client if you need another token.|토큰 창을 닫았습니다. 새 토큰이 필요하면 클라이언트를 해지한 뒤 다시 등록하세요.|トークンウィンドウを閉じました。新しいトークンが必要な場合はクライアントを無効化して再登録してください。|令牌窗口已关闭。如需新令牌，请撤销客户端并重新注册。
+Agent service is offline.|에이전트 서비스가 오프라인입니다.|エージェントサービスはオフラインです。|智能体服务已离线。
+Skill installed. Reload skills or start a new agent session.|스킬을 설치했습니다. 에이전트에서 스킬을 새로 고치거나 새 세션을 시작하세요.|スキルをインストールしました。エージェントのスキルを再読み込みするか、新しいセッションを開始してください。|技能已安装。请重新加载智能体技能或开始新的智能体会话。
+The installed app provides the CLI.|설치된 앱에 CLI가 포함되어 있습니다.|インストール済みアプリに CLI が含まれています。|已安装的应用包含 CLI。
+Save access again after a bookmark change.|북마크를 변경한 뒤 접근 권한을 다시 저장하세요.|ブックマークを変更した後、アクセス権を再度保存してください。|书签更改后请重新保存访问权限。
+Enter a client name.|클라이언트 이름을 입력하세요.|クライアント名を入力してください。|请输入客户端名称。
+No matching activity.|일치하는 활동이 없습니다.|一致するアクティビティはありません。|没有匹配的活动。
+Client|클라이언트|クライアント|客户端
+Bookmark|북마크|ブックマーク|书签
+SSH target|SSH 대상|SSH 接続先|SSH 目标
+Jump host|점프 호스트|踏み台ホスト|跳板主机
+Allow this SSH command once?|이 SSH 명령을 한 번 실행하도록 허용할까요?|この SSH コマンドを一度だけ実行しますか？|是否允许执行一次此 SSH 命令？
+Deny|거부|拒否|拒绝
+Run Command|명령 실행|コマンドを実行|运行命令
+Agent client|에이전트 클라이언트|エージェントクライアント|智能体客户端
+Default SSH user|기본 SSH 사용자|既定の SSH ユーザー|默认 SSH 用户
+Register an agent client?|에이전트 클라이언트를 등록할까요?|エージェントクライアントを登録しますか？|要注册智能体客户端吗？
+Register|등록|登録|注册
+Close|닫기|閉じる|关闭
+allowed|허용|許可|已允许
+denied|거부|拒否|已拒绝
+success|성공|成功|成功
+failed|실패|失敗|失败
+unknown|알 수 없음|不明|未知
+waiting_for_user|사용자 응답 대기|ユーザー応答待ち|等待用户
+closed|종료|終了|已关闭
 Bookmark access|북마크 접근 권한|ブックマークへのアクセス|书签访问权限
+Agent connections follow the bookmark's OpenSSH configuration, including aliases, Include, ProxyJump, and ProxyCommand. Target and jump host keys must already be trusted. ProxyCommand can start a local process when the agent opens the connection. Remote actions remain limited by the access grant below.|에이전트 연결은 북마크의 OpenSSH 설정을 따르며 별칭, Include, ProxyJump, ProxyCommand를 지원합니다. 대상 서버와 점프 호스트의 키를 미리 신뢰해야 합니다. ProxyCommand는 에이전트가 연결할 때 로컬 프로세스를 실행할 수 있습니다. 원격 작업은 아래 접근 권한 설정으로 제한됩니다.|エージェント接続はブックマークの OpenSSH 設定に従い、エイリアス、Include、ProxyJump、ProxyCommand に対応します。接続先と踏み台ホストの鍵は事前に信頼されている必要があります。ProxyCommand はエージェント接続時にローカルプロセスを起動する場合があります。リモート操作は下のアクセス権設定で制限されます。|智能体连接遵循书签的 OpenSSH 配置，包括别名、Include、ProxyJump 和 ProxyCommand。目标主机和跳板主机的密钥必须已受信任。智能体连接时，ProxyCommand 可能会启动本地进程。远程操作仍受下方访问权限限制。
+Use a valid SSH host name or alias.|유효한 SSH 호스트명 또는 별칭을 입력하세요.|有効な SSH ホスト名またはエイリアスを指定してください。|请输入有效的 SSH 主机名或别名。
+Use a valid SSH username.|유효한 SSH 사용자 이름을 입력하세요.|有効な SSH ユーザー名を指定してください。|请输入有效的 SSH 用户名。
+Use an absolute path for the identity file.|개인 키 파일은 절대 경로로 지정하세요.|秘密鍵ファイルには絶対パスを指定してください。|请为身份文件使用绝对路径。
 Remote directory|원격 디렉터리|リモートディレクトリ|远程目录
 Allow SFTP browsing|SFTP 탐색 허용|SFTP の参照を許可|允许浏览 SFTP
 Allow downloads|다운로드 허용|ダウンロードを許可|允许下载
@@ -78,6 +112,22 @@ Update this skill automatically|이 스킬 자동 업데이트|スキルを自�
 Activity history|활동 이력|アクティビティ履歴|活动记录
 Retention (days)|보관 기간(일)|保持期間（日）|保留天数
 Save Retention|보관 기간 저장|保持期間を保存|保存保留期限
+Register a client to create an agent token.|에이전트 토큰을 만들려면 클라이언트를 등록하세요.|エージェントトークンを作成するにはクライアントを登録してください。|注册客户端以创建智能体令牌。
+Choose client|클라이언트 선택|クライアントを選択|选择客户端
+Choose bookmark|북마크 선택|ブックマークを選択|选择书签
+All|전체|すべて|全部
+Detected|감지됨|検出済み|已检测
+Automatic updates|자동 업데이트|自動更新|自动更新
+From|시작일|開始日|开始日期
+Result|결과|結果|结果
+Operation|작업|操作|操作
+Request ID|요청 ID|リクエスト ID|请求 ID
+Session ID|세션 ID|セッション ID|会话 ID
+Agent|에이전트|エージェント|智能体
+Scope|범위|範囲|范围
+User|사용자|ユーザー|用户
+Project|프로젝트|プロジェクト|项目
+Save as New Bookmark|새 북마크로 저장|新しいブックマークとして保存|另存为新书签
 Refresh History|이력 새로고침|履歴を更新|刷新记录
 Export JSON|JSON으로 내보내기|JSON をエクスポート|导出 JSON
 Include paths|경로 포함|パスを含める|包含路径
@@ -147,7 +197,6 @@ Apply|적용|適用|应用
 Remove|삭제|削除|移除
 Cancel|취소|キャンセル|取消
 Send|전송|送信|发送
-Close|닫기|閉じる|关闭
 Done|완료|完了|完成
 App|앱|アプリ|应用
 File|파일|ファイル|文件
@@ -172,7 +221,6 @@ Toggle sidebar|사이드바 전환|サイドバーを切り替え|切换侧边�
 Local shell (⌘T)|로컬 셸 (⌘T)|ローカルシェル (⌘T)|本地 Shell (⌘T)
 Local shell|로컬 셸|ローカルシェル|本地 Shell
 New SFTP connection|새 SFTP 연결|新規 SFTP 接続|新建 SFTP 连接
-Workspaces|워크스페이스|ワークスペース|工作区
 Bookmarks|북마크|ブックマーク|书签
 History|기록|履歴|历史记录
 Filter|필터|絞り込み|筛选
@@ -188,7 +236,6 @@ PAM authentication settings|PAM 인증 설정|PAM 認証設定|PAM 身份验证�
 Snippets (⌘P)|스니펫 (⌘P)|スニペット (⌘P)|代码片段 (⌘P)
 Resize sidebar|사이드바 크기 조절|サイドバーの幅を変更|调整侧边栏宽度
 Sessions|세션|セッション|会话
-Connect|연결|接続|连接
 SSH alias|SSH 별칭|SSH エイリアス|SSH 别名
 Use address|주소 사용|アドレスを使用|使用地址
 Hostname or IP|호스트명 또는 IP|ホスト名または IP|主机名或 IP
@@ -338,7 +385,6 @@ Folders are probably equal.|폴더가 같은 것으로 보입니다.|フォル�
 items selected|개 항목 선택|件選択|项已选
 Transfer progress|전송 진행률|転送の進行状況|传输进度
 Details|세부 정보|詳細|详情
-Folder|폴더|フォルダ|文件夹
 Files and empty folders can be selected; needed parent folders are created. Destination-only items are preserved.|파일과 빈 폴더를 선택할 수 있으며 필요한 상위 폴더는 자동 생성됩니다. 대상에만 있는 항목은 유지됩니다.|ファイルと空のフォルダを選択できます。必要な親フォルダは自動作成され、宛先だけの項目は保持されます。|可选择文件和空文件夹；必要时会创建父文件夹。仅存在于目标位置的项目会保留。
 Folder comparison|폴더 비교|フォルダを比較|文件夹比较
 Compare with|비교 대상|比較対象|比较对象
@@ -363,13 +409,6 @@ Difference|차이|差分|差异
 Source and destination|원본 및 대상|ソースと宛先|来源和目标
 Source|원본|ソース|来源
 Destination|대상|宛先|目标
-source-only|원본에만 있음|ソースのみ|仅来源存在
-destination-only|대상에만 있음|宛先のみ|仅目标存在
-different|다름|異なる|不同
-probably-equal|같을 가능성이 높음|同じ可能性が高い|可能相同
-type-conflict|항목 유형 충돌|項目タイプが競合|类型冲突
-Folders are probably equal.|폴더가 같은 것으로 보입니다.|フォルダは同じようです。|文件夹可能相同。
-items selected|개 항목 선택|件選択|项已选
 Cancel transfer|전송 취소|転送をキャンセル|取消传输
 Pause|일시 정지|一時停止|暂停
 Resume|계속|再開|继续
@@ -378,7 +417,6 @@ running|전송 중|転送中|传输中
 waiting-conflict|응답 대기 중|応答待ち|等待响应
 paused|일시 정지됨|一時停止中|已暂停
 interrupted|중단됨|中断|已中断
-failed|실패|失敗|失败
 cancelled|취소됨|キャンセル済み|已取消
 completed|완료|完了|已完成
 skipped|건너뜀|スキップ|已跳过
@@ -408,7 +446,6 @@ Remote|원격|リモート|远程
 Connected|연결됨|接続済み|已连接
 Disconnected|연결 종료|切断済み|已断开
 Reconnect|다시 연결|再接続|重新连接
-Name|이름|名前|名称
 Modified|수정일|更新日時|修改时间
 Size|크기|サイズ|大小
 Type|종류|種類|类型
@@ -418,7 +455,6 @@ Open Folder|폴더 열기|フォルダを開く|打开文件夹
 Refresh Folder|폴더 새로고침|フォルダを更新|刷新文件夹
 New local folder|로컬 폴더 추가|ローカルフォルダを追加|新建本地文件夹
 New remote folder|원격 폴더 추가|リモートフォルダを追加|新建远程文件夹
-Show hidden files|숨김 파일 표시|隠しファイルを表示|显示隐藏文件
 Hide hidden files|숨김 파일 숨기기|隠しファイルを隠す|隐藏隐藏文件
 Duplicate Tab|탭 복제|タブを複製|复制标签页
 Entire group|그룹 전체|グループ全体|整个分组
@@ -450,7 +486,6 @@ Ungroup Tabs|탭 그룹 해제|タブグループを解除|取消标签分组
 Rename Group|그룹 이름 변경|グループ名を変更|重命名分组
 Rename…|이름 변경…|名前を変更…|重命名…
 Open|열기|開く|打开
-Edit|편집|編集|编辑
 Edit…|편집…|編集…|编辑…
 Download|다운로드|ダウンロード|下载
 Copy|복사|コピー|复制
@@ -458,9 +493,7 @@ Copy Path|경로 복사|パスをコピー|复制路径
 Reveal in Finder|Finder에서 보기|Finderで表示|在 Finder 中显示
 Move to Trash|휴지통으로 이동|ゴミ箱に入れる|移到废纸篓
 Get Info|정보 가져오기|情報を見る|显示简介
-Delete|삭제|削除|删除
-Choose columns|열 선택|列を選択|选择列
-`.trim().split('\n').map(line => {
+Choose columns|열 선택|列を選択|选择列`.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];
 }));

@@ -12,9 +12,14 @@ const { problem } = require('./agent-service.cjs');
 const limit = 16 * 1024 * 1024;
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
+function eligibilityReason(p) {
+  if (!/^[\w][\w.:%-]*$/.test(p.host)) return 'Use a valid SSH host name or alias.';
+  if (p.username && !/^[a-zA-Z0-9_][\w.-]*$/.test(p.username)) return 'Use a valid SSH username.';
+  if (p.keyPath && !(path.isAbsolute(p.keyPath) && !/[%\r\n]/.test(p.keyPath))) return 'Use an absolute path for the identity file.';
+  return '';
+}
 function eligible(p) {
-  return !p.usesAlias && !p.configPath && /^[\w][\w.:%-]*$/.test(p.host) &&
-    /^[a-zA-Z0-9_][\w.-]*$/.test(p.username) && (!p.keyPath || path.isAbsolute(p.keyPath) && !/[%\r\n]/.test(p.keyPath));
+  return !eligibilityReason(p);
 }
 function command(value) {
   if (typeof value !== 'string' || !value.trim() || Buffer.byteLength(value) > 1024 ||
@@ -45,12 +50,19 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       commandApproval: value.commandApproval === true, pam: selected('pam'), triggers: selected('triggers'), ...(task && { task }) };
   }
 
-  async function connect(p, grant, mode, notify, check, signal) {
+  async function resolve(p, legacy = false) {
     if (!eligible(p)) throw problem('PROFILE_NOT_ELIGIBLE');
-    const { host, username, port, keyPath, pam } = p;
-    const config = { host, username, port, keyPath, pam, configPath: '/dev/null', knownHosts };
-    const original = { ...config, configPath: '' };
-    const endpoint = grant.savedAuth ? await openssh.effective(config) : '';
+    const config = { ...p, configPath: legacy ? '/dev/null' : p.configPath || '', knownHosts };
+    const output = await openssh.effectiveOutput(config);
+    return { config, endpoint: openssh.authEndpoint(output), route: digest(output) };
+  }
+
+  async function connect(p, grant, mode, notify, check, signal) {
+    if (!grant.route && (p.usesAlias || p.configPath)) throw problem('ACCESS_DENIED');
+    const { config, endpoint, route } = await resolve(p, !grant.route);
+    if (grant.route && grant.route !== route) throw problem('SSH_CONFIG_CHANGED');
+    const { host, keyPath } = p;
+    const original = { ...config, configPath: p.configPath || '' };
     check();
     const scope = endpoint && authScope(original, endpoint);
     let connection;
@@ -58,7 +70,7 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
     const answered = new Set();
     const onEvent = (event, value) => {
       if (signal.aborted) return;
-      if (event === 'ready') { authenticated = true; notify(event); return; }
+      if (event === 'ready') { authenticated = true; notify(event, { endpoint }); return; }
       if (event === 'closed' || event === 'prompt-clear') { notify(event, value); return; }
       if (event === 'error') { notify(event, 'CONNECTION_FAILED'); return; }
       if (event !== 'prompt') return;
@@ -71,7 +83,7 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
         }
         if (!authenticated && value.targetProcess && value.canRemember && state().useStoredAuthOnConnect !== false) {
           const question = value.prompt.replace(/^\([^\r\n)]{1,512}\) /, '');
-          const key = endpoint && digest([host, '', keyPath || '', endpoint, value.prompt]);
+          const key = endpoint && digest([host, original.configPath, keyPath || '', endpoint, value.prompt]);
           const saved = grant.savedAuth && state().useSavedRepliesAutomatically !== false && key && state().authReplies?.[key];
           const rules = (state().globalAuthRules || []).filter(rule => grant.pam.includes(rule.id));
           const global = rules.find(rule => rule.match !== 'regex' && (rule.prompt === value.prompt || rule.prompt === question))
@@ -99,7 +111,7 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
     };
     // Keep credentials on the authentication channel. Never stream the master PTY to a client.
     let password = '';
-    if (scope && state().useStoredAuthOnConnect !== false) {
+    if (grant.savedAuth && scope && state().useStoredAuthOnConnect !== false) {
       const entry = state().sshPasswords?.[scope];
       if (entry) {
         const answer = await readAnswer(entry).catch(() => '');
@@ -185,6 +197,6 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       throw error;
     }
   }
-  return { eligible, command, catalog, validateGrant, connect, approve, run, download };
+  return { eligible, eligibilityReason, resolve, command, catalog, validateGrant, connect, approve, run, download };
 }
 module.exports = { createTransport };

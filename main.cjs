@@ -98,6 +98,7 @@ const preferencesMethods = new Set([
   'update-auth-reply', 'remove-auth-reply', 'keychain-preferences', 'set-keychain-preferences',
   'agent-info', 'agent-enable', 'agent-register', 'agent-revoke', 'agent-grant', 'agent-answer',
   'agent-history', 'agent-retention', 'agent-export', 'agent-skill',
+  'write-clipboard',
 ]);
 function handle(name, fn) {
   ipcMain.handle(name, async (event, ...args) => {
@@ -475,7 +476,7 @@ function openPreferences(page, legacyTerminal) {
   panel.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   panel.webContents.on('will-navigate', event => event.preventDefault());
   panel.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && (input.key === 'Escape' || (input.meta && input.key.toLowerCase() === 'w'))) {
+    if (input.type === 'keyDown' && (input.meta && input.key.toLowerCase() === 'w')) {
       event.preventDefault();
       panel.close();
     }
@@ -1633,11 +1634,18 @@ function getAgent() {
   return agent;
 }
 function approveAgentCommand(session, command, profile, client) {
+  const endpoint = session.endpoint || '';
+  const resolvedHost = /^hostname (.+)$/m.exec(endpoint)?.[1] || profile.host;
+  const resolvedUser = /^user (.+)$/m.exec(endpoint)?.[1] || profile.username || os.userInfo().username;
+  const resolvedPort = /^port (.+)$/m.exec(endpoint)?.[1] || String(profile.port || 22);
+  const jumpHost = /^proxyjump (.+)$/m.exec(endpoint)?.[1];
   return dialog.showMessageBox(preferencesWindow || window, {
-    type: 'warning', message: 'Allow this SSH command once?',
-    detail: [String(client).replace(/[\p{C}]/gu, ''), `${profile.username}@${profile.host}:${profile.port || 22}`,
+    type: 'warning', message: localized('Allow this SSH command once?'),
+    detail: [String(client).replace(/[\p{C}]/gu, ''), `${localized('Bookmark')}: ${profile.label || profile.host}`,
+      `${localized('SSH target')}: ${resolvedUser}@${resolvedHost}:${resolvedPort}`,
+      ...(jumpHost && jumpHost !== 'none' ? [`${localized('Jump host')}: ${jumpHost}`] : []),
       '', command].join('\n'),
-    buttons: ['Deny', 'Run Command'], defaultId: 0, cancelId: 0, noLink: true, signal: session.controller.signal,
+    buttons: [localized('Deny'), localized('Run Command')], defaultId: 0, cancelId: 0, noLink: true, signal: session.controller.signal,
   }).then(({ response }) => response === 1);
 }
 async function initializeAgent() {
@@ -1659,6 +1667,7 @@ handle('agent-info', async () => {
   const service = getAgent();
   const info = service.info();
   return { ...info, profiles: info.profiles.map(p => ({ ...p,
+    ...(!p.eligible && { reason: agentTransport.eligibilityReason(state.profiles.find(entry => entry.id === p.id)) }),
     ...(p.eligible && agentTransport.catalog(state.profiles.find(entry => entry.id === p.id))),
   })), targets: await (detectedAgents ??= detectAgents(app.getPath('home'))),
     skills: Object.values(state.agent?.skills || {}),
@@ -1667,16 +1676,11 @@ handle('agent-info', async () => {
 handle('agent-enable', enabled => getAgent().enable(enabled));
 handle('agent-register', async name => {
   const { response } = await dialog.showMessageBox(preferencesWindow || window, {
-    message: 'Register an agent client?', buttons: ['Cancel', 'Register'], defaultId: 0, cancelId: 0,
+    message: localized('Register an agent client?'), buttons: [localized('Cancel'), localized('Register')], defaultId: 0, cancelId: 0,
   });
   if (response !== 1) return null;
   const { token } = await getAgent().register(name);
-  clipboard.writeText(token, 'clipboard');
-  const timer = setTimeout(() => {
-    if (clipboard.readText('clipboard') === token) clipboard.clear('clipboard');
-  }, 30_000);
-  timer.unref();
-  return true;
+  return { token };
 });
 handle('agent-revoke', id => getAgent().revoke(id));
 handle('agent-grant', (client, profileId, grant) => getAgent().grant(client, profileId, grant));

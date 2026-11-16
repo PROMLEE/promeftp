@@ -250,7 +250,7 @@ body.terminal-transparent .auth-requests { background: var(--paper); }
     --selection: #38475a; --danger: #ff9c92;
   }
 }
-.terminal-area { flex: 1; display: flex; min-height: 0; padding: 9px 10px 16px 12px; overflow: hidden; background: transparent; }
+.terminal-area { flex: 1; display: flex; min-height: 0; padding: 0; overflow: hidden; background: transparent; }
 .terminal-surface { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .terminal-area .xterm { height: 100%; }
 .terminal-area .xterm, .terminal-area .xterm-screen { background: transparent !important; }
@@ -616,6 +616,18 @@ body.preferences-body {
 
 .agent-section { padding: 0 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
 .agent-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-block: 6px; }
+.agent-retention-controls { display: grid; grid-template-columns: minmax(180px, 230px) auto; align-items: end; justify-content: start; gap: 9px; margin: 8px 0 10px; }
+.agent-retention-controls label { display: grid; grid-template-columns: 1fr; gap: 4px; min-width: 0; color: var(--ink); font-size: 12px; }
+.agent-retention-controls input { width: 100% !important; min-height: 27px !important; }
+.agent-retention-controls button { min-height: 27px !important; margin-bottom: 0; }
+#agent-token-help code { color: var(--ink); font-size: 11px; }
+#agent-profile-help { min-height: 0; }
+#agent-token-dialog { width: min(460px, 90vw); }
+#agent-token-form { display: grid; gap: 8px; }
+#agent-token-form h3 { margin: 0; }
+#agent-token-form .settings-note { margin: 0; }
+#agent-token-value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; user-select: all; }
+#agent-token-form .actions { margin-top: 4px; }
 #agent-grant-fields, .agent-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px 12px; min-width: 0; margin: 8px 0; }
 #agent-history details, #agent-prompts form { margin: 6px 0; padding: 7px; border: 1px solid var(--line); border-radius: 6px; }
 #agent-history details p { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
