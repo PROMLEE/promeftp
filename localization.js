@@ -20,7 +20,7 @@ Connect|연결|接続|连接
 OpenSSH config|OpenSSH 설정|OpenSSH 設定|OpenSSH 配置
 SFTP files|SFTP 파일|SFTP ファイル|SFTP 文件
 File navigation|파일 탐색|ファイル移動|文件导航
-Use the mouse Back and Forward buttons over a local or remote file panel to navigate that panel’s visited paths. Right-click any file or folder and choose Copy Path to copy its full path.|로컬 또는 원격 파일 패널 위에서 마우스 뒤로/앞으로 버튼을 눌러 방문한 경로를 이동합니다. 파일이나 폴더를 우클릭하고 경로 복사를 선택하면 전체 경로가 복사됩니다.|ローカルまたはリモートのファイルパネル上でマウスの戻る／進むボタンを押すと、訪問したパスを移動できます。ファイルやフォルダを右クリックして「パスをコピー」を選ぶと、フルパスをコピーします。|在本地或远程文件面板上按鼠标后退/前进按钮，可切换访问过的路径。右键点击文件或文件夹并选择“复制路径”，即可复制完整路径。
+Use the mouse Back and Forward buttons over a local or remote file panel to navigate that panel’s visited paths. Mark the current folder with the star; use the bookmark button to open saved folders. Local favorites are shared by local panels, and remote favorites are saved per connection on this Mac. Right-click any file or folder and choose Copy Path to copy its full path.|로컬 또는 원격 파일 패널 위에서 마우스 뒤로/앞으로 버튼을 눌러 방문한 경로를 이동합니다. 별표로 현재 폴더를 즐겨찾기에 추가하고 북마크 버튼으로 저장한 경로를 엽니다. 로컬 즐겨찾기는 모든 로컬 패널에서 공유하고 원격 즐겨찾기는 이 Mac의 접속별로 저장합니다. 파일이나 폴더를 우클릭하고 경로 복사를 선택하면 전체 경로를 복사합니다.|ローカルまたはリモートのファイルパネル上でマウスの戻る／進むボタンを押すと、訪問したパスを移動できます。星で現在のフォルダをお気に入りに追加し、ブックマークボタンから保存したフォルダを開きます。ローカルのお気に入りはすべてのローカルペインで共有し、リモートのお気に入りはこの Mac の接続ごとに保存します。ファイルやフォルダを右クリックして「パスをコピー」を選ぶと、フルパスをコピーします。|在本地或远程文件面板上按鼠标后退/前进按钮，可切换访问过的路径。点击星标可收藏当前文件夹，点击书签按钮可打开已保存的文件夹。本地收藏在所有本地面板间共享，远程收藏按连接保存在此 Mac 上。右键点击文件或文件夹并选择“复制路径”，即可复制完整路径。
 Tabs and splits|탭과 분할 화면|タブと分割|标签页与分屏
 Workspaces|워크스페이스|ワークスペース|工作区
 PAM authentication|PAM 인증|PAM 認証|PAM 身份验证
@@ -310,6 +310,82 @@ Waiting for connection|연결 대기 중|接続を待機中|正在等待连接
 Folder unavailable|폴더에 접근할 수 없습니다|フォルダを開けません|无法访问文件夹
 Empty folder|빈 폴더|空のフォルダ|空文件夹
 Recent folders|최근 폴더|最近のフォルダ|最近的文件夹
+Add path to favorites|경로 즐겨찾기에 추가|パスをお気に入りに追加|将路径添加到收藏夹
+Remove path from favorites|경로 즐겨찾기에서 제거|パスをお気に入りから削除|从收藏夹中移除路径
+Favorite folders|즐겨찾는 폴더|お気に入りのフォルダ|收藏的文件夹
+Transfers|전송|転送|传输
+Edit Path|경로 편집|パスを編集|编辑路径
+Rename Favorite|즐겨찾기 이름 변경|お気に入り名を変更|重命名收藏
+Move Up|위로 이동|上へ移動|上移
+Move Down|아래로 이동|下へ移動|下移
+Remove from Favorites|즐겨찾기에서 제거|お気に入りから削除|从收藏夹移除
+Retry|재시도|再試行|重试
+Clear|지우기|クリア|清除
+Folder comparison batch|폴더 비교 전송|フォルダ比較の転送|文件夹比较传输
+Pause batch|묶음 일시 정지|バッチを一時停止|暂停批次
+Cancel batch|묶음 취소|バッチをキャンセル|取消批次
+Retry failed|실패 항목 재시도|失敗項目を再試行|重试失败项
+Resume batch|묶음 재개|バッチを再開|恢复批次
+Create folder|폴더 생성|フォルダを作成|创建文件夹
+items|개 항목|件|项
+source-only|원본에만 있음|ソースのみ|仅来源存在
+destination-only|대상에만 있음|宛先のみ|仅目标存在
+different|다름|異なる|不同
+probably-equal|같을 가능성이 높음|同じ可能性が高い|可能相同
+type-conflict|항목 유형 충돌|項目タイプが競合|类型冲突
+path-conflict|대소문자 또는 유니코드 이름 충돌|大文字小文字またはUnicode名の競合|大小写或 Unicode 名称冲突
+Folders are probably equal.|폴더가 같은 것으로 보입니다.|フォルダは同じようです。|文件夹可能相同。
+items selected|개 항목 선택|件選択|项已选
+Transfer progress|전송 진행률|転送の進行状況|传输进度
+Details|세부 정보|詳細|详情
+Folder|폴더|フォルダ|文件夹
+Files and empty folders can be selected; needed parent folders are created. Destination-only items are preserved.|파일과 빈 폴더를 선택할 수 있으며 필요한 상위 폴더는 자동 생성됩니다. 대상에만 있는 항목은 유지됩니다.|ファイルと空のフォルダを選択できます。必要な親フォルダは自動作成され、宛先だけの項目は保持されます。|可选择文件和空文件夹；必要时会创建父文件夹。仅存在于目标位置的项目会保留。
+Folder comparison|폴더 비교|フォルダを比較|文件夹比较
+Compare with|비교 대상|比較対象|比较对象
+Destination-only items are preserved.|대상에만 있는 항목은 유지됩니다.|宛先にのみある項目は保持されます。|保留仅存在于目标中的项目。
+Replace the remote file?|원격 파일을 덮어쓸까요?|リモートファイルを置き換えますか？|覆盖远程文件？
+Replace the local file?|로컬 파일을 덮어쓸까요?|ローカルファイルを置き換えますか？|覆盖本地文件？
+Comparing folders|폴더 비교 중|フォルダを比較中|正在比较文件夹
+Cancel comparison|비교 취소|比較をキャンセル|取消比较
+items scanned|개 항목 확인|件を確認|项已扫描
+When a destination file exists|대상 파일이 이미 있을 때|宛先ファイルが存在する場合|目标文件已存在时
+Ask each time|매번 확인|毎回確認|每次询问
+Skip existing|기존 파일 건너뛰기|既存ファイルをスキップ|跳过现有文件
+Replace existing|기존 파일 덮어쓰기|既存ファイルを置き換え|替换现有文件
+Keep both|두 파일 모두 유지|両方のファイルを保持|保留两个文件
+Queue selected|선택 항목 전송|選択項目を転送|传输所选项
+Show details|세부 정보 펼치기|詳細を表示|显示详情
+Hide details|세부 정보 접기|詳細を隠す|隐藏详情
+Select all|전체 선택|すべて選択|全选
+Checking for changes|변경 사항 확인 중|変更を確認中|正在检查更改
+Compare folders|폴더 비교|フォルダを比較|比较文件夹
+Difference|차이|差分|差异
+Source and destination|원본 및 대상|ソースと宛先|来源和目标
+Source|원본|ソース|来源
+Destination|대상|宛先|目标
+source-only|원본에만 있음|ソースのみ|仅来源存在
+destination-only|대상에만 있음|宛先のみ|仅目标存在
+different|다름|異なる|不同
+probably-equal|같을 가능성이 높음|同じ可能性が高い|可能相同
+type-conflict|항목 유형 충돌|項目タイプが競合|类型冲突
+Folders are probably equal.|폴더가 같은 것으로 보입니다.|フォルダは同じようです。|文件夹可能相同。
+items selected|개 항목 선택|件選択|项已选
+Cancel transfer|전송 취소|転送をキャンセル|取消传输
+Pause|일시 정지|一時停止|暂停
+Resume|계속|再開|继续
+queued|대기 중|待機中|排队中
+running|전송 중|転送中|传输中
+waiting-conflict|응답 대기 중|応答待ち|等待响应
+paused|일시 정지됨|一時停止中|已暂停
+interrupted|중단됨|中断|已中断
+failed|실패|失敗|失败
+cancelled|취소됨|キャンセル済み|已取消
+completed|완료|完了|已完成
+skipped|건너뜀|スキップ|已跳过
+files to copy or update|개 파일 복사 또는 업데이트|件をコピーまたは更新|个文件待复制或更新
+Files only; parent folders are created as needed. Destination-only files are preserved.|파일을 선택하세요. 필요한 상위 폴더는 자동 생성하며 대상에만 있는 파일은 유지합니다.|ファイルを選択してください。必要な親フォルダを作成し、宛先だけにあるファイルは保持します。|请选择文件。必要时会创建父文件夹，并保留仅存在于目标位置的文件。
+No favorite folders|즐겨찾는 폴더 없음|お気に入りのフォルダはありません|没有收藏的文件夹
+Could not save folder favorite.|폴더 즐겨찾기를 저장할 수 없습니다.|フォルダのお気に入りを保存できません。|无法保存文件夹收藏。
 Rename|이름 변경|名前を変更|重命名
 Delete|삭제|削除|删除
 Toggle folder tree|폴더 트리 전환|フォルダツリーを切り替え|切换文件夹树

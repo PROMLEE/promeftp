@@ -6,6 +6,7 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const os = require('node:os');
 const { pipeline } = require('node:stream/promises');
+const { Transform } = require('node:stream');
 const path = require('node:path');
 const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
@@ -14,6 +15,9 @@ const { RE2 } = require('re2-wasm');
 const { createAgentService } = require('./agent-service.cjs');
 const { createTransport } = require('./agent-transport.cjs');
 const { manageSkill, agentTargets, detectAgents } = require('./agent-skills.cjs');
+const pathFavorites = require('./path-favorites.cjs');
+const { createTransferService } = require('./transfer-service.cjs');
+const directoryCompare = require('./directory-compare.cjs');
 
 let window;
 let preferencesWindow;
@@ -21,6 +25,11 @@ let preferencesLaunch;
 let state;
 let updater;
 let pendingWrites = 0;
+let queuedTransferBusy = false;
+let transferQueue;
+const comparisonPlans = new Map();
+const comparisonControllers = new Map();
+const transferConflictRequests = new Map();
 let agentConnections = 0;
 let agent;
 let agentTransport;
@@ -29,7 +38,7 @@ const sessions = new Map();
 const statePath = () => path.join(app.getPath('userData'), 'profiles.json');
 
 function syncUpdateBusy() {
-  updater?.setBusy(sessions.size > 0 || agentConnections > 0 || pendingWrites > 0);
+  updater?.setBusy(sessions.size > 0 || agentConnections > 0 || pendingWrites > 0 || queuedTransferBusy);
 }
 
 async function updateState(change) {
@@ -112,6 +121,38 @@ function bookmarkFolderName(value) {
   return name;
 }
 
+function favoriteScope(input) {
+  if (input === 'local') return 'local';
+  return pathFavorites.scopeFor(profile(input));
+}
+function emitFavorites(scope) {
+  if (!window || window.isDestroyed()) return;
+  const value = pathFavorites.list(state, scope);
+  for (const [id, record] of sessions) {
+    if (record.mode !== 'sftp') continue;
+    const target = scope === 'local' ? 'local' : record.input && pathFavorites.scopeFor(record.input);
+    if (target === scope) tell(id, 'sftp-favorites', { scope, items: value });
+  }
+}
+handle('sftp-favorites', async (id, legacy = []) => {
+  const scope = favoriteScope(id);
+  if (!pathFavorites.list(state, scope).length && Array.isArray(legacy) && legacy.length) {
+    await updateState(next => pathFavorites.migrate(next, scope, legacy));
+  }
+  return pathFavorites.list(state, scope);
+});
+handle('save-sftp-favorites', async (id, items, manualOrder = false) => {
+  const scope = favoriteScope(id);
+  await updateState(next => pathFavorites.replace(next, scope, items, manualOrder === true));
+  emitFavorites(scope);
+  return pathFavorites.list(state, scope);
+});
+handle('mutate-sftp-favorite', async (id, change) => {
+  const scope = favoriteScope(id);
+  await updateState(next => pathFavorites.mutate(next, scope, change));
+  emitFavorites(scope);
+  return pathFavorites.list(state, scope);
+});
 handle('bookmark-folders', () => [...bookmarkFolderNames(state)]);
 handle('save-bookmark-folder', (value, previous) => updateState(next => {
   const name = bookmarkFolderName(value);
@@ -699,7 +740,7 @@ handle('connect', async (id, input, mode, dimensions, rules = [], enteredPasswor
   if (typeof enteredPassword !== 'string' || Buffer.byteLength(enteredPassword) > 1023 || /[\r\n\0]/.test(enteredPassword)) {
     throw Error('Enter a single-line password up to 1023 bytes.');
   }
-  const record = { triggerScope: mode !== 'sftp' ? snippetScope({ mode, input }) : undefined,
+  const record = { input: config, mode, generation: randomUUID(), triggerScope: mode !== 'sftp' ? snippetScope({ mode, input }) : undefined,
     prompts: new Map(), remembered: new Map(), autoAnswered: new Set(), hostKeyDialogs: new Map() };
   sessions.set(id, record);
   syncUpdateBusy();
@@ -710,6 +751,7 @@ handle('connect', async (id, input, mode, dimensions, rules = [], enteredPasswor
       const endpoint = await record.authEndpoint;
       if (sessions.get(id) !== record) return;
       const scope = authScope(config, endpoint || config.host);
+      if (endpoint) record.transferIdentity = scope;
       record.passwordScope = scope;
       if (!password && (state.sshPasswords?.[scope]?.answer || state.sshPasswords?.[scope]?.ciphertext)) {
         try {
@@ -992,72 +1034,388 @@ function sftpCall(channel, method, ...args) {
 function validName(name) {
   return typeof name === 'string' && name.length > 0 && !/[\/\x00]/.test(name) && !['.', '..'].includes(name);
 }
-async function upload(channel, local, remote, depth = 0) {
+function verifySource(attrs, expected, remote, name) {
+  if (expected && (!attrs.isFile() || attrs.size !== expected.size || (remote ? attrs.mtime * 1000 : attrs.mtimeMs) !== expected.modifiedAt)) throw Error(`Source changed since comparison: ${name}. Compare again.`);
+}
+async function upload(channel, local, remote, depth = 0, signal, progress = () => {}, expectedDestination, conflictPolicy, expectedSource) {
+  await signal?.pausePoint?.();
   if (depth > 50) throw Error('Folder nesting is too deep.');
+  if (signal?.aborted) throw Error('Transfer cancelled.');
   const attributes = await fs.lstat(local);
+  verifySource(attributes, expectedSource, false, local);
   if (attributes.isDirectory()) {
-    await sftpCall(channel, 'mkdir', remote);
-    for (const name of await fs.readdir(local)) {
-      await upload(channel, path.join(local, name), path.posix.join(remote, name), depth + 1);
+    const existing = await sftpCall(channel, 'lstat', remote).catch(error => error.code === 2 ? null : Promise.reject(error));
+    if (existing && !existing.isDirectory()) throw Error('Destination is not a folder. ' + remote);
+    if (!existing) await sftpCall(channel, 'mkdir', remote);
+    let skippedCount = 0;
+    for (const name of (await fs.readdir(local)).sort((a, b) => a.localeCompare(b))) {
+      const result = await upload(channel, path.join(local, name), path.posix.join(remote, name), depth + 1, signal, progress, undefined, conflictPolicy);
+      skippedCount += result?.skippedCount || (result?.status === 'skipped' ? 1 : 0);
     }
-    return;
+    return { status: 'completed', skippedCount };
   }
   if (!attributes.isFile()) throw Error('Only regular files and folders can be uploaded. ' + local);
+  const comparedRemote = remote;
+  let keepBoth = false;
   const existing = await sftpCall(channel, 'lstat', remote).catch(error => {
     if (error.code !== 2) throw error;
     return null;
   });
+  if (expectedDestination?.absent && existing) throw Error(`Destination appeared since comparison: ${remote}`);
+  if (expectedDestination && !expectedDestination.absent && (!existing || existing.size !== expectedDestination.size || existing.mtime * 1000 !== expectedDestination.modifiedAt)) throw Error(`Destination changed since comparison: ${remote}`);
   if (existing && !existing.isFile()) throw Error('Destination is not a regular file. ' + remote);
   if (existing) {
-    const result = await dialog.showMessageBox(window, {
-      type: 'warning', message: 'Replace the remote file?', detail: remote,
-      buttons: ['Skip', 'Replace'], defaultId: 0, cancelId: 0,
-    });
-    if (result.response !== 1) return false;
+    expectedDestination ??= { size: existing.size, modifiedAt: existing.mtime * 1000 };
+    const choice = await conflictChoice('Replace the remote file?', remote, conflictPolicy, signal);
+    if (choice === 'skip') return { status: 'skipped' };
+    if (choice === 'keep-both') {
+      keepBoth = true;
+      const extension = path.posix.extname(remote), stem = remote.slice(0, remote.length - extension.length);
+      for (let index = 1; index <= 1000; index++) {
+        const candidate = `${stem} (${index})${extension}`;
+        const found = await sftpCall(channel, 'lstat', candidate).catch(error => error.code === 2 ? null : Promise.reject(error));
+        if (!found) { remote = candidate; break; }
+        if (index === 1000) throw Error('Could not create a unique remote filename.');
+      }
+    }
   }
-  const target = existing ? path.posix.join(path.posix.dirname(remote), '.promeftp-' + randomUUID()) : remote;
+  const target = path.posix.join(path.posix.dirname(remote), '.promeftp-' + randomUUID());
   const handle = await sftpCall(channel, 'open', target, 'wx');
   try {
-    await pipeline(createReadStream(local), channel.createWriteStream(target, { handle }));
-    if (existing) {
+    let bytes = 0;
+    const meter = new Transform({ transform(chunk, encoding, callback) { bytes += chunk.length; progress({ bytes, total: attributes.size, path: local }); callback(null, chunk); } });
+    await pipeline(createReadStream(local), meter, channel.createWriteStream(target, { handle }), { signal });
+    if (signal?.aborted) throw Error('Transfer cancelled.');
+    if (expectedSource) verifySource(await fs.lstat(local), expectedSource, false, local);
+    if (expectedDestination) {
+      const current = await sftpCall(channel, 'lstat', comparedRemote).catch(error => error.code === 2 ? null : Promise.reject(error));
+      if (expectedDestination.absent ? Boolean(current) : (!current || current.size !== expectedDestination.size || current.mtime * 1000 !== expectedDestination.modifiedAt)) throw Error(`Destination changed during transfer: ${comparedRemote}`);
+    }
+    if (keepBoth && await sftpCall(channel, 'lstat', remote).then(() => true, error => error.code === 2 ? false : Promise.reject(error))) throw Error(`Keep Both destination was created during transfer: ${remote}`);
+    if (keepBoth) {
+      if (typeof channel.ext_openssh_hardlink !== 'function') throw Error('This SFTP server does not support safe Keep Both commits.');
+      await sftpCall(channel, 'ext_openssh_hardlink', target, remote);
+      await sftpCall(channel, 'unlink', target);
+    } else if (existing) {
       try { await sftpCall(channel, 'ext_openssh_rename', target, remote); }
       catch (error) {
         if (error.code !== 8 && error.message !== 'Server does not support this extended request') throw error;
         try { await sftpCall(channel, 'rename', target, remote); }
         catch { throw Error('The server refused to replace the file. ' + remote); }
       }
-    }
+    } else await sftpCall(channel, 'rename', target, remote);
+    if (signal) signal.committed = true;
   } catch (error) {
     await sftpCall(channel, 'unlink', target).catch(() => {});
     throw error;
   }
-  return true;
+  return { status: 'completed' };
 }
-async function download(channel, remote, local, replace = false, depth = 0) {
+async function conflictChoice(message, detail, policy, signal) {
+  if (signal?.aborted) throw Error('Transfer cancelled.');
+  if (['skip', 'replace', 'keep-both'].includes(policy)) return policy;
+  if (!window || window.isDestroyed()) return 'skip';
+  const id = randomUUID();
+  const owner = window;
+  const request = () => new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(Error('Transfer cancelled.')); return; }
+    const finish = choice => {
+      transferConflictRequests.delete(id);
+      signal?.removeEventListener('abort', abort);
+      owner.removeListener('closed', abort);
+      if (choice) resolve(choice);
+      else {
+        if (!owner.isDestroyed()) owner.webContents.send('session', { id: '*', event: 'transfer-conflict-dismissed', value: id });
+        reject(Error('Transfer cancelled.'));
+      }
+    };
+    const abort = () => finish();
+    transferConflictRequests.set(id, finish);
+    signal?.addEventListener('abort', abort, { once: true });
+    owner.once('closed', abort);
+    owner.webContents.send('session', { id: '*', event: 'transfer-conflict', value: { id, message, detail } });
+  });
+  return signal?.waitForDecision ? signal.waitForDecision(request) : request();
+}
+handle('transfer-resolve-conflict', (id, choice) => {
+  if (!['skip', 'replace', 'keep-both'].includes(choice)) throw Error('Invalid conflict choice.');
+  const finish = transferConflictRequests.get(id);
+  if (!finish) return false;
+  finish(choice);
+  return true;
+});
+async function download(channel, remote, local, replace = false, depth = 0, signal, progress = () => {}, expectedDestination, conflictPolicy, expectedSource) {
+  await signal?.pausePoint?.();
   if (depth > 50) throw Error('Folder nesting is too deep.');
+  if (signal?.aborted) throw Error('Transfer cancelled.');
   const attributes = await sftpCall(channel, 'lstat', remote);
+  verifySource(attributes, expectedSource, true, remote);
   if (attributes.isDirectory()) {
-    await fs.mkdir(local, { mode: 0o700 });
-    for (const entry of await sftpCall(channel, 'readdir', remote)) {
+    await fs.mkdir(local, { mode: 0o700, recursive: true });
+    let skippedCount = 0;
+    for (const entry of (await sftpCall(channel, 'readdir', remote)).sort((a, b) => a.filename.localeCompare(b.filename))) {
       const name = entry.filename;
       if (!validName(name)) {
         if (['.', '..'].includes(name)) continue;
         throw Error('Invalid remote name.');
       }
-      await download(channel, path.posix.join(remote, name), path.join(local, name), false, depth + 1);
+      const result = await download(channel, path.posix.join(remote, name), path.join(local, name), false, depth + 1, signal, progress, undefined, conflictPolicy);
+      skippedCount += result?.skippedCount || (result?.status === 'skipped' ? 1 : 0);
     }
-    return;
+    return { status: 'completed', skippedCount };
   }
   if (!attributes.isFile()) throw Error('Only regular files and folders can be downloaded. ' + remote);
+  const comparedLocal = local;
+  let keepBoth = false;
+  const present = await fs.lstat(local).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
+  if (expectedDestination?.absent && present) throw Error(`Destination appeared since comparison: ${local}`);
+  if (expectedDestination && !expectedDestination.absent && (!present || present.size !== expectedDestination.size || present.mtimeMs !== expectedDestination.modifiedAt)) throw Error(`Destination changed since comparison: ${local}`);
+  if (present && (!replace || (conflictPolicy && conflictPolicy !== 'replace'))) {
+    expectedDestination ??= { size: present.size, modifiedAt: present.mtimeMs };
+    const choice = await conflictChoice('Replace the local file?', local, conflictPolicy, signal);
+    if (choice === 'skip') return { status: 'skipped' };
+    if (choice === 'keep-both') {
+      keepBoth = true;
+      const extension = path.extname(local), stem = local.slice(0, local.length - extension.length);
+      for (let index = 1; index <= 1000; index++) {
+        const candidate = `${stem} (${index})${extension}`;
+        if (!await fs.lstat(candidate).then(() => true, error => error.code === 'ENOENT' ? false : Promise.reject(error))) { local = candidate; break; }
+        if (index === 1000) throw Error('Could not create a unique local filename.');
+      }
+    } else replace = true;
+  }
   const temp = path.join(path.dirname(local), '.promeftp-' + randomUUID());
   try {
-    await pipeline(channel.createReadStream(remote), createWriteStream(temp, { flags: 'wx', mode: 0o600 }));
-    if (replace) await fs.rename(temp, local);
+    let bytes = 0;
+    const meter = new Transform({ transform(chunk, encoding, callback) { bytes += chunk.length; progress({ bytes, total: attributes.size, path: remote }); callback(null, chunk); } });
+    await pipeline(channel.createReadStream(remote), meter, createWriteStream(temp, { flags: 'wx', mode: 0o600 }), { signal });
+    if (signal?.aborted) throw Error('Transfer cancelled.');
+    if (expectedSource) verifySource(await sftpCall(channel, 'lstat', remote), expectedSource, true, remote);
+    if (expectedDestination) {
+      const current = await fs.lstat(comparedLocal).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
+      if (expectedDestination.absent ? Boolean(current) : (!current || current.size !== expectedDestination.size || current.mtimeMs !== expectedDestination.modifiedAt)) throw Error(`Destination changed during transfer: ${comparedLocal}`);
+    }
+    if (keepBoth && await fs.lstat(local).then(() => true, error => error.code === 'ENOENT' ? false : Promise.reject(error))) throw Error(`Keep Both destination was created during transfer: ${local}`);
+    if (keepBoth) await fs.link(temp, local);
+    else if (replace) await fs.rename(temp, local);
     else await fs.link(temp, local);
+    if (signal) signal.committed = true;
   } finally {
     await fs.rm(temp, { force: true });
   }
 }
+transferQueue = createTransferService({
+  file: path.join(app.getPath('userData'), 'sftp-transfer-queue.json'),
+  emit: jobs => { if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-jobs', value: jobs }); },
+  onBusy: busy => { queuedTransferBusy = busy; syncUpdateBusy(); },
+  execute: async (job, signal, progress) => {
+    if (job.operation === 'mkdir-local') { await fs.mkdir(job.localPath, { recursive: true, mode: 0o700 }); return { status: 'completed' }; }
+    let record = sessions.get(job.sessionId);
+    if ((!record || !record.connection?.channel) && !job.connectionGeneration && job.connectionScope) record = [...sessions.values()].find(item => item.mode === 'sftp' && pathFavorites.scopeFor(item.input) === job.connectionScope);
+    if (job.connectionGeneration && record?.generation !== job.connectionGeneration) throw Error('Connection changed. Open the matching SFTP connection and retry.');
+    const channel = record?.connection?.channel;
+    if (!channel?.readdir || record.mode !== 'sftp') throw Error('Reconnect this SFTP session before retrying.');
+    if (job.operation === 'mkdir-remote') {
+      const existing = await sftpCall(channel, 'lstat', job.remotePath).catch(error => error.code === 2 ? null : Promise.reject(error));
+      if (!existing) await sftpCall(channel, 'mkdir', job.remotePath);
+      else if (!existing.isDirectory()) throw Error(`Destination is not a folder: ${job.remotePath}`);
+      return { status: 'completed' };
+    }
+    if (job.operation === 'upload') {
+      return await upload(channel, job.localPath, job.remotePath, 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource);
+    } else if (job.operation === 'download') {
+      return await download(channel, job.remotePath, job.localPath, Boolean(job.replace), 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource);
+    } else {
+      const targetRecord = sessions.get(job.targetSessionId) || [...sessions.values()].find(item => item.mode === 'sftp' && pathFavorites.scopeFor(item.input) === job.targetScope);
+      if (job.targetGeneration && targetRecord?.generation !== job.targetGeneration) throw Error('Destination connection changed. Open the matching SFTP connection and retry.');
+      const target = targetRecord?.connection?.channel;
+      if (!target?.readdir || target === channel) throw Error('Both SFTP connections must be open.');
+      const stage = await fs.mkdtemp(path.join(app.getPath('temp'), 'promeftp-transfer-'));
+      try {
+        const local = path.join(stage, path.posix.basename(job.sourcePath));
+        await download(channel, job.sourcePath, local, false, 0, signal, progress, undefined, undefined, job.expectedSource);
+        if (signal.aborted) throw Error('Transfer cancelled.');
+        return await upload(target, local, path.posix.join(job.targetDirectory, path.posix.basename(job.sourcePath)), 0, signal, progress, job.expectedDestination, job.conflictPolicy);
+      } finally { await fs.rm(stage, { recursive: true, force: true }); }
+    }
+  },
+});
+handle('transfer-list', () => transferQueue.list());
+function enqueueTransfer(input) {
+  const source = sessions.get(input?.sessionId);
+  if (!source || source.mode !== 'sftp') throw Error('Open the source SFTP connection first.');
+  const sourceName = input.operation === 'upload' ? 'Local' : source.input.label || source.input.host;
+  const enriched = { ...input, sourceName, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, connectionScope: pathFavorites.scopeFor(source.input) };
+  if (input.operation === 'remote-copy') {
+    const target = sessions.get(input.targetSessionId);
+    if (!target || target.mode !== 'sftp') throw Error('Open the destination SFTP connection first.');
+    enriched.targetScope = pathFavorites.scopeFor(target.input); enriched.targetName = target.input.label || target.input.host; enriched.targetGeneration = target.generation; enriched.targetIdentity = target.transferIdentity;
+  }
+  return transferQueue.enqueue(enriched);
+}
+handle('transfer-enqueue', enqueueTransfer);
+function retryBinding(job) {
+  const binding = {};
+  function bind(idKey, generationKey, identityKey) {
+    const record = sessions.get(job[idKey]);
+    if (record?.connection?.channel?.readdir && record.mode === 'sftp' && record.generation === job[generationKey]) return;
+    const identity = job[identityKey];
+    const matches = identity ? [...sessions].filter(([, candidate]) =>
+      candidate.mode === 'sftp' && candidate.connection?.channel?.readdir && candidate.transferIdentity === identity) : [];
+    if (matches.length !== 1) throw Error('Open one matching SFTP connection, then retry. If the connection settings changed, queue the transfer again.');
+    const [id, candidate] = matches[0];
+    binding[idKey] = id;
+    binding[generationKey] = candidate.generation;
+  }
+  if (job.operation !== 'mkdir-local') bind('sessionId', 'connectionGeneration', 'connectionIdentity');
+  if (job.operation === 'remote-copy') bind('targetSessionId', 'targetGeneration', 'targetIdentity');
+  return binding;
+}
+handle('transfer-control', (id, action) => {
+  const job = transferQueue.list().find(item => item.id === id);
+  return transferQueue.control(id, action, action === 'retry' && job ? retryBinding(job) : undefined);
+});
+handle('transfer-batch-control', async (batchId, action) => {
+  if (typeof batchId !== 'string' || !['cancel', 'pause', 'resume', 'retry', 'clear'].includes(action)) throw Error('Invalid batch control.');
+  const jobs = transferQueue.list().filter(job => job.batchId === batchId);
+  if (!jobs.length) throw Error('Transfer batch no longer exists.');
+  const eligible = jobs.filter(job => action === 'cancel' ? ['queued','running','paused','waiting-conflict'].includes(job.state) : action === 'pause' ? ['queued','running'].includes(job.state) : action === 'resume' ? job.state === 'paused' : action === 'retry' ? ['failed','interrupted'].includes(job.state) : ['completed','failed','cancelled','skipped','interrupted'].includes(job.state));
+  const bindings = eligible.map(job => action === 'retry' ? retryBinding(job) : undefined);
+  await Promise.all(eligible.map((job, index) => transferQueue.control(job.id, action, bindings[index])));
+  return transferQueue.list();
+});
+function compareEndpoint(input) {
+  if (!input || !['local', 'remote'].includes(input.kind) || typeof input.path !== 'string') throw Error('Invalid comparison folder.');
+  if (input.kind === 'local') return { ...input, path: path.resolve(expandHome(input.path)) };
+  const record = sessions.get(input.sessionId);
+  if (!record || record.mode !== 'sftp' || !record.connection?.channel) throw Error('Reconnect the SFTP session before comparing.');
+  if (!input.path.startsWith('/') || input.path.split('/').includes('..')) throw Error('Remote comparison path must be absolute and normalized.');
+  return { ...input, scope: pathFavorites.scopeFor(record.input), generation: record.generation };
+}
+function comparisonAdapter(endpoint) {
+  if (endpoint.kind === 'local') return {
+    join: (base, name) => path.join(base, name),
+    async list(directory) {
+      const rows = await fs.readdir(directory, { withFileTypes: true });
+      return Promise.all(rows.map(async row => {
+        const attrs = await fs.lstat(path.join(directory, row.name));
+        return { name: row.name, directory: attrs.isDirectory(), link: attrs.isSymbolicLink(), size: attrs.size, modifiedAt: attrs.mtimeMs };
+      }));
+    },
+  };
+  const channel = sessions.get(endpoint.sessionId)?.connection?.channel;
+  return {
+    join: (base, name) => path.posix.join(base, name),
+    async list(directory) {
+      const rows = await sftpCall(channel, 'readdir', directory);
+      return rows.filter(row => validName(row.filename)).map(row => ({ name: row.filename, directory: row.attrs.isDirectory(), link: row.attrs.isSymbolicLink(), size: row.attrs.size, modifiedAt: row.attrs.mtime * 1000 }));
+    },
+  };
+}
+handle('compare-start', async (sourceInput, destinationInput, requestId) => {
+  const controller = new AbortController();
+  if (requestId) comparisonControllers.set(requestId, controller);
+  try {
+    const source = compareEndpoint(sourceInput), destination = compareEndpoint(destinationInput);
+    const [sourceRoot, destinationRoot] = await Promise.all([
+      source.kind === 'local' ? fs.realpath(source.path) : path.posix.normalize(source.path),
+      destination.kind === 'local' ? fs.realpath(destination.path) : path.posix.normalize(destination.path),
+    ]);
+    let lastProgress = 0;
+    const entries = await directoryCompare.compare({
+      sourceRoot, destinationRoot, source: comparisonAdapter(source), destination: comparisonAdapter(destination),
+      signal: controller.signal,
+      onProgress: count => {
+        const now = Date.now();
+        if (!requestId || now - lastProgress < 120 || !window || window.isDestroyed()) return;
+        lastProgress = now;
+        window.webContents.send('session', { id: '*', event: 'compare-progress', value: { requestId, count } });
+      },
+    });
+    if (controller.signal.aborted) throw Error('Comparison cancelled.');
+    const id = randomUUID();
+    comparisonPlans.set(id, { source, destination, sourceRoot, destinationRoot, entries, createdAt: Date.now() });
+    while (comparisonPlans.size > 10) comparisonPlans.delete(comparisonPlans.keys().next().value);
+    const describe = (endpoint, root) => {
+      const input = sessions.get(endpoint.sessionId)?.input;
+      return input ? `${input.label || input.host} ${root}` : root;
+    };
+    return { id, source: describe(source, sourceRoot), destination: describe(destination, destinationRoot), entries };
+  } finally {
+    if (requestId) comparisonControllers.delete(requestId);
+  }
+});
+handle('compare-cancel', requestId => { const controller = comparisonControllers.get(requestId); if (!controller) return false; controller.abort(); return true; });
+handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', requestId) => {
+  const plan = comparisonPlans.get(id);
+  if (!plan || !Array.isArray(selectedPaths) || selectedPaths.length > 20_000) throw Error('Comparison plan expired. Compare again.');
+  if (!['ask', 'skip', 'replace', 'keep-both'].includes(conflictPolicy)) throw Error('Invalid conflict policy.');
+  for (const endpoint of [plan.source, plan.destination]) if (endpoint.kind === 'remote' && sessions.get(endpoint.sessionId)?.generation !== endpoint.generation) throw Error('Connection changed since comparison. Compare again.');
+  const selection = directoryCompare.selectedFilePlan(plan.entries, selectedPaths);
+  const entries = selection.files;
+  const controller = new AbortController();
+  if (requestId) comparisonControllers.set(requestId, controller);
+  let check;
+  try {
+    let lastProgress = 0;
+    check = await directoryCompare.compare({ sourceRoot: plan.sourceRoot, destinationRoot: plan.destinationRoot, source: comparisonAdapter(plan.source), destination: comparisonAdapter(plan.destination), signal: controller.signal,
+      onProgress: count => {
+        const now = Date.now();
+        if (!requestId || now - lastProgress < 120 || !window || window.isDestroyed()) return;
+        lastProgress = now;
+        window.webContents.send('session', { id: '*', event: 'compare-progress', value: { requestId, count } });
+      },
+    });
+    if (controller.signal.aborted) throw Error('Comparison cancelled.');
+  } finally { if (requestId) comparisonControllers.delete(requestId); }
+  for (const row of entries) {
+    const current = check.find(item => item.relativePath === row.relativePath);
+    if (!current || current.reason !== row.reason || current.source?.size !== row.source?.size || current.source?.modifiedAt !== row.source?.modifiedAt || current.destination?.size !== row.destination?.size || current.destination?.modifiedAt !== row.destination?.modifiedAt) throw Error(`Folder changed since preview: ${row.relativePath}. Compare again.`);
+  }
+  const ids = [];
+  const batchId = randomUUID();
+  const sourceRecord = plan.source.kind === 'remote' ? sessions.get(plan.source.sessionId) : null;
+  const destinationRecord = plan.destination.kind === 'remote' ? sessions.get(plan.destination.sessionId) : null;
+  const sourceScope = sourceRecord && pathFavorites.scopeFor(sourceRecord.input);
+  const destinationScope = destinationRecord && pathFavorites.scopeFor(destinationRecord.input);
+  for (const [endpoint, record] of [[plan.source, sourceRecord], [plan.destination, destinationRecord]]) {
+    if (endpoint.kind === 'remote' && record?.generation !== endpoint.generation) throw Error('Connection changed since comparison. Compare again.');
+  }
+  const labelEndpoint = (record, root) => [record?.input.label || record?.input.host, root].filter(Boolean).join(' ');
+  const batchLabel = `${labelEndpoint(sourceRecord, plan.sourceRoot)} → ${labelEndpoint(destinationRecord, plan.destinationRoot)}`;
+  for (const relativeDirectory of selection.directories) {
+    const localPath = plan.destination.kind === 'local' ? path.join(plan.destinationRoot, ...relativeDirectory.split('/')) : null;
+    const remotePath = plan.destination.kind === 'remote' ? path.posix.join(plan.destinationRoot, relativeDirectory) : null;
+    if (plan.destination.kind === 'local') ids.push(await transferQueue.enqueue({ operation: 'mkdir-local', batchId, batchLabel, localPath, label: relativeDirectory }));
+    else ids.push(await transferQueue.enqueue({ operation: 'mkdir-remote', batchId, batchLabel, sessionId: plan.destination.sessionId, connectionScope: destinationScope, connectionGeneration: destinationRecord.generation, connectionIdentity: destinationRecord.transferIdentity, localPath: '', remotePath, targetName: destinationRecord?.input.label || destinationRecord?.input.host, label: relativeDirectory }));
+  }
+  for (const row of selection.emptyDirectories) {
+    if (selection.directories.includes(row.relativePath)) continue;
+    const localPath = plan.destination.kind === 'local' ? path.join(plan.destinationRoot, ...row.relativePath.split('/')) : null;
+    const remotePath = plan.destination.kind === 'remote' ? path.posix.join(plan.destinationRoot, row.relativePath) : null;
+    if (plan.destination.kind === 'local') ids.push(await transferQueue.enqueue({ operation: 'mkdir-local', batchId, batchLabel, localPath, label: row.relativePath }));
+    else ids.push(await transferQueue.enqueue({ operation: 'mkdir-remote', batchId, batchLabel, sessionId: plan.destination.sessionId, connectionScope: destinationScope, connectionGeneration: destinationRecord.generation, connectionIdentity: destinationRecord.transferIdentity, remotePath, label: row.relativePath }));
+  }
+  for (const row of entries) {
+    const sourcePath = plan.source.kind === 'local' ? path.join(plan.sourceRoot, ...row.relativePath.split('/')) : path.posix.join(plan.sourceRoot, row.relativePath);
+    const destinationPath = plan.destination.kind === 'local' ? path.join(plan.destinationRoot, ...row.relativePath.split('/')) : path.posix.join(plan.destinationRoot, row.relativePath);
+    const label = row.relativePath;
+    if (plan.source.kind === 'local' && plan.destination.kind === 'remote') {
+      const destination = sessions.get(plan.destination.sessionId);
+      ids.push(await transferQueue.enqueue({ operation: 'upload', batchId, batchLabel, conflictPolicy, sessionId: plan.destination.sessionId, connectionScope: destinationScope, connectionGeneration: destination.generation, connectionIdentity: destination.transferIdentity, sourceName: 'Local', targetName: destination?.input.label || destination?.input.host, localPath: sourcePath, remotePath: destinationPath, expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
+    } else if (plan.source.kind === 'remote' && plan.destination.kind === 'local') {
+      const source = sessions.get(plan.source.sessionId);
+      ids.push(await transferQueue.enqueue({ operation: 'download', batchId, batchLabel, conflictPolicy, sessionId: plan.source.sessionId, connectionScope: sourceScope, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, sourceName: source?.input.label || source?.input.host, targetName: 'Local', remotePath: sourcePath, localPath: destinationPath, replace: row.operation === 'update', expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
+    } else if (plan.source.kind === 'remote' && plan.destination.kind === 'remote') {
+      const source = sessions.get(plan.source.sessionId), destination = sessions.get(plan.destination.sessionId);
+      ids.push(await transferQueue.enqueue({ operation: 'remote-copy', batchId, batchLabel, conflictPolicy, sessionId: plan.source.sessionId, connectionScope: sourceScope, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, sourceName: source?.input.label || source?.input.host, targetName: destination?.input.label || destination?.input.host, sourcePath, targetSessionId: plan.destination.sessionId, targetScope: destinationScope, targetGeneration: destination.generation, targetIdentity: destination.transferIdentity, targetDirectory: path.posix.dirname(destinationPath), expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
+    }
+    else throw Error('Local-to-local folder comparison is unnecessary.');
+  }
+  comparisonPlans.delete(id);
+  return ids;
+});
+
 handle('copy-remote', async (sourceId, sourcePath, targetId, targetDirectory) => {
   const source = sessions.get(sourceId)?.connection?.channel;
   const target = sessions.get(targetId)?.connection?.channel;
@@ -1152,14 +1510,14 @@ handle('sftp', async (id, action, target, name) => {
   if (action === 'upload' || action === 'upload-local') {
     const locals = action === 'upload-local' ? [name] :
       (await dialog.showOpenDialog(window, { properties: ['openFile', 'multiSelections'] })).filePaths;
-    for (const local of locals) await upload(channel, local, path.posix.join(target, path.basename(local)));
+    for (const local of locals) await enqueueTransfer({ operation: 'upload', sessionId: id, sourceName: 'Local', targetName: sessions.get(id)?.input.label || sessions.get(id)?.input.host, localPath: local, remotePath: path.posix.join(target, path.basename(local)), label: path.basename(local) });
   } else if (action === 'download-local') {
     const basename = path.posix.basename(target);
     if (!validName(basename)) throw Error('Invalid remote name.');
     await download(channel, target, path.join(name, basename));
   } else if (action === 'download') {
     const result = await dialog.showSaveDialog(window, { defaultPath: path.posix.basename(target) });
-    if (!result.canceled) await download(channel, target, result.filePath, true);
+    if (!result.canceled) await enqueueTransfer({ operation: 'download', sessionId: id, sourceName: sessions.get(id)?.input.label || sessions.get(id)?.input.host, targetName: 'Local', remotePath: target, localPath: result.filePath, label: path.posix.basename(target) });
   } else if (action === 'edit') {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'promeftp-edit-'));
     const local = path.join(directory, path.posix.basename(target));
@@ -1173,9 +1531,14 @@ handle('sftp', async (id, action, target, name) => {
         detail: path.posix.basename(target),
         buttons: ['Keep Local Copy', 'Upload'], defaultId: 0, cancelId: 0,
       });
-      if (decision.response !== 1 || !await upload(channel, local, target)) {
+      if (decision.response !== 1) {
         shell.showItemInFolder(local);
         return { savedLocalPath: local };
+      }
+      const uploaded = await upload(channel, local, target);
+      if (uploaded?.status !== 'completed') {
+        shell.showItemInFolder(local);
+        return { savedLocalPath: local, uploadStatus: uploaded?.status || 'failed' };
       }
       preserve = false;
     } catch (error) {
@@ -1387,11 +1750,13 @@ app.whenReady().then(async () => {
   try {
     state = JSON.parse(await fs.readFile(statePath(), 'utf8'));
     state.snippets ??= [];
+    state.sftpPathFavorites ??= [];
     state.workspaces ??= [];
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
-    state = { profiles: [], snippets: [], workspaces: [] };
+    state = { profiles: [], snippets: [], workspaces: [], sftpPathFavorites: [] };
   }
+  await transferQueue.start();
   if (['system', 'light', 'dark'].includes(state.appearance)) nativeTheme.themeSource = state.appearance;
   window = new BrowserWindow({
     width: 1200, height: 760, minWidth: 800, minHeight: 530,
@@ -1430,7 +1795,13 @@ app.whenReady().then(async () => {
   dialog.showErrorBox('PromeFTP', error.message);
   app.exit(1);
 });
-app.on('before-quit', () => agent?.stop());
+let waitingForTransfersBeforeQuit = false;
+app.on('before-quit', event => {
+  if (waitingForTransfersBeforeQuit) return;
+  if (!queuedTransferBusy) { agent?.stop(); return; }
+  event.preventDefault(); waitingForTransfersBeforeQuit = true; agent?.stop();
+  Promise.resolve(transferQueue?.stop()).finally(() => app.quit());
+});
 app.on('window-all-closed', () => {
   for (const { connection } of sessions.values()) connection?.close();
   app.quit();

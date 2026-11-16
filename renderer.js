@@ -1616,6 +1616,13 @@ function start(input, mode, options = {}) {
 api.onSession(({ id, event, value }) => {
   if (event === 'history-changed' && !historyPanel.hidden) refreshHistory();
   const session = sessions.get(id);
+  if (event === 'transfer-jobs') { renderTransferQueue(value); return; }
+  if (event === 'compare-progress' && value.requestId === activeCompareRequest) { byId('compare-progress-count').textContent = `${value.count} ${t('items scanned')}`; return; }
+  if (event === 'transfer-conflict-dismissed') { dismissTransferConflict(value); return; }
+  if (event === 'transfer-conflict') {
+    presentTransferConflict(value); return;
+  }
+  if (event === 'sftp-favorites') session?.applyFavorites?.(value.scope, value.items);
   if (!session) return;
   if (event === 'prompt') {
     const form = document.createElement('form');
@@ -2110,7 +2117,7 @@ function setupFiles(session) {
 
   function panel(title, side) {
     const element = document.createElement('section');
-    element.className = 'file-panel';
+    element.className = 'file-panel file-browser';
     const heading = document.createElement('h3');
     heading.textContent = title;
     const address = document.createElement('form');
@@ -2134,9 +2141,15 @@ function setupFiles(session) {
     pathSpace.className = 'file-path-space';
     pathSpace.setAttribute('aria-label', 'Edit folder path');
     pathBar.append(breadcrumbs, pathSpace);
+    const favoriteToggle = iconButton('star', 'Add path to favorites', () => toggleFavorite(entry));
+    favoriteToggle.setAttribute('aria-pressed', 'false');
+    favoriteToggle.disabled = true;
+    const favorites = iconButton('bookmark', 'Favorite folders', () => showFavorites(entry));
+    favorites.addEventListener('contextmenu', event => { event.preventDefault(); manageFavorites(entry); });
+    favorites.disabled = true;
     const history = iconButton('history', 'Recent folders', () => showHistory(entry));
     history.disabled = true;
-    address.append(location, pathBar, history);
+    address.append(location, pathBar, favoriteToggle, favorites, history);
     const sortBar = document.createElement('div');
     sortBar.className = 'file-sort';
     const sortName = button(t('Name'), () => setSort(entry, 'name'));
@@ -2168,7 +2181,7 @@ function setupFiles(session) {
     if (side === 'local') listing.prepend(element);
     else (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
     const entry = {
-      side, element, address, location, pathBar, pathSpace, breadcrumbs, history, tools, items, body, tree,
+      side, element, address, location, pathBar, pathSpace, breadcrumbs, favoriteToggle, favorites, history, tools, items, body, tree,
       folders: new Map(), expanded: new Set(['/']), entries: [], selected: new Set(), sortKey: 'name', sortDescending: false,
       sortName, sortSize, sortModified, sortType, pathHistory: [], pathHistoryIndex: -1, pendingPathIndex: undefined,
     };
@@ -2214,10 +2227,11 @@ function setupFiles(session) {
   dragPane.draggable = true;
   dragPane.addEventListener('dragstart', event => dragStart(event, session));
   dragPane.addEventListener('dragend', clearLayoutDrag);
-  leading.append(dragPane, activity);
+  leading.append(dragPane, activity, iconButton('transfer', 'Compare folders', () => showFolderCompare(session, layout, remote)));
   remote.element.querySelector('.file-heading').prepend(leading);
   let busy = false;
   let localRequest = 0;
+  const favoritesCache = new Map();
   let hiddenFiles = true;
   try { hiddenFiles = localStorage.getItem('sftp-show-hidden') !== 'false'; } catch {}
 
@@ -2239,6 +2253,117 @@ function setupFiles(session) {
         .sort((a, b) => fileNameOrder.compare(a.split('/').filter(Boolean).at(-1) || '/', b.split('/').filter(Boolean).at(-1) || '/')
           || fileNameOrder.compare(a, b)) : [];
     } catch { return []; }
+  }
+  function favoriteFolders(side) { return favoritesCache.get(side) || []; }
+  async function refreshFavorites(side) {
+    let legacy = [];
+    const key = historyKey(side).replace('sftp-folders:', 'sftp-favorites:');
+    try { legacy = JSON.parse(localStorage.getItem(key)) || []; } catch {}
+    const scope = side === local ? 'local' : session.input;
+    const values = await api['sftp-favorites'](scope, legacy);
+    favoritesCache.set(side, values);
+    if (legacy.length) { try { localStorage.removeItem(key); } catch {} }
+    syncFavoriteControl(side);
+  }
+  function syncFavoriteControl(side) {
+    const current = currentDirectory(side);
+    side.favoriteToggle.disabled = !current;
+    side.favorites.disabled = !current;
+    const saved = Boolean(current && favoriteFolders(side).some(item => item.path === current));
+    side.favoriteToggle.setAttribute('aria-pressed', String(saved));
+    const hint = saved ? 'Remove path from favorites' : 'Add path to favorites';
+    side.favoriteToggle.title = t(hint);
+    side.favoriteToggle.setAttribute('aria-label', t(hint));
+  }
+  async function mutateFavorite(side, change) {
+    const result = await api['mutate-sftp-favorite'](side === local ? 'local' : session.input, change);
+    favoritesCache.set(side, result); syncFavoriteControl(side); return result;
+  }
+  function toggleFavorite(side) {
+    const current = currentDirectory(side);
+    if (!current) return;
+    const saved = favoriteFolders(side);
+    const exists = saved.find(item => item.path === current);
+    mutateFavorite(side, exists ? { action: 'remove', id: exists.id } : { action: 'add', path: current, displayName: current.split('/').filter(Boolean).at(-1) || '/' })
+      .catch(() => status(session, t('Could not save folder favorite.'), true));
+  }
+  function showFavorites(side) {
+    side.element.querySelector('.favorite-popover')?.remove();
+    const popover = document.createElement('div'); popover.className = 'favorite-popover';
+    const heading = document.createElement('strong'); heading.textContent = t('Favorite folders'); popover.append(heading);
+    let dragging = -1;
+    const render = () => {
+      popover.querySelectorAll('.favorite-popover-row').forEach(row => row.remove());
+      favoriteFolders(side).forEach((item, index) => {
+        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true; row.title = item.path;
+        const name = document.createElement('span'); name.textContent = item.displayName;
+        const location = document.createElement('small'); location.textContent = item.path;
+        row.append(icon('folder'), name, location);
+        row.addEventListener('click', () => { navigate(side, item.path); popover.remove(); });
+        row.addEventListener('contextmenu', async event => {
+          event.preventDefault(); event.stopPropagation();
+          try {
+          const action = await api['context-menu']([
+            { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
+            { id: 'up', label: t('Move Up'), enabled: index > 0 }, { id: 'down', label: t('Move Down'), enabled: index < favoriteFolders(side).length - 1 }, null,
+            { id: 'remove', label: t('Remove from Favorites') },
+          ]);
+          if (!action) return;
+          let values = favoriteFolders(side);
+          if (action === 'rename' || action === 'edit') {
+            const value = await askName(action === 'rename' ? item.displayName : item.path, action === 'rename' ? 'Rename Favorite' : 'Edit Favorite Path');
+            if (value === undefined) return;
+            await mutateFavorite(side, action === 'rename' ? { action, id: item.id, displayName: value } : { action: 'edit-path', id: item.id, path: value }); render(); return;
+          } else if (action === 'remove') { await mutateFavorite(side, { action, id: item.id }); render(); return; }
+          else if (action === 'up' || action === 'down') {
+            const target = index + (action === 'up' ? -1 : 1); [values[index], values[target]] = [values[target], values[index]];
+            await mutateFavorite(side, { action: 'reorder', ids: values.map(value => value.id) }); render(); return;
+          }
+          } catch (error) { status(session, error.message, true); }
+        });
+        row.addEventListener('dragstart', event => { dragging = index; event.dataTransfer.effectAllowed = 'move'; });
+        row.addEventListener('dragover', event => { event.preventDefault(); });
+        row.addEventListener('drop', async event => {
+          event.preventDefault(); if (dragging < 0 || dragging === index) return;
+          const values = [...favoriteFolders(side)]; const [moved] = values.splice(dragging, 1); values.splice(index, 0, moved); dragging = -1;
+          try { await mutateFavorite(side, { action: 'reorder', ids: values.map(value => value.id) }); render(); }
+          catch (error) { status(session, error.message, true); }
+        });
+        popover.append(row);
+      });
+      if (!favoriteFolders(side).length) { const empty = document.createElement('small'); empty.className = 'favorite-empty'; empty.textContent = t('No favorite folders'); popover.append(empty); }
+    };
+    render(); side.element.append(popover);
+    const anchor = side.favorites.getBoundingClientRect();
+    popover.style.position = 'fixed'; popover.style.top = `${Math.min(anchor.bottom + 4, window.innerHeight - 300)}px`;
+    popover.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - 430))}px`; popover.style.right = 'auto';
+    const dismiss = event => { if (!popover.contains(event.target) && !side.favorites.contains(event.target)) { popover.remove(); document.removeEventListener('pointerdown', dismiss, true); } };
+    setTimeout(() => document.addEventListener('pointerdown', dismiss, true), 0);
+  }
+  async function manageFavorites(side) {
+    try { await refreshFavorites(side); } catch (error) { status(session, error.message, true); return; }
+    const items = favoriteFolders(side);
+    if (!items.length) return showFavorites(side);
+    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: `${item.displayName} — ${item.path}` })));
+    if (chosen === null) return;
+    const item = items[chosen];
+    const action = await api['context-menu']([
+      { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
+      { id: 'up', label: t('Move Up'), enabled: chosen > 0 }, { id: 'down', label: t('Move Down'), enabled: chosen < items.length - 1 },
+      null, { id: 'remove', label: t('Remove from Favorites') },
+    ]);
+    if (action === null) return;
+    if (!action) return;
+    if (action === 'rename' || action === 'edit') {
+      const value = await askName(action === 'rename' ? item.displayName : item.path, action === 'rename' ? 'Rename Favorite' : 'Edit Favorite Path');
+      if (value === undefined) return;
+      await mutateFavorite(side, action === 'rename' ? { action, id: item.id, displayName: value } : { action: 'edit-path', id: item.id, path: value });
+    } else if (action === 'remove') await mutateFavorite(side, { action, id: item.id });
+    else if (action === 'up' || action === 'down') {
+      const values = [...items], target = action === 'up' ? chosen - 1 : chosen + 1;
+      [values[chosen], values[target]] = [values[target], values[chosen]];
+      await mutateFavorite(side, { action: 'reorder', ids: values.map(value => value.id) });
+    }
   }
   function showHistory(side) {
     chooseMenu(recentFolders(side).map(path => [
@@ -2262,6 +2387,7 @@ function setupFiles(session) {
     control.replaceChildren(icon(name), label);
   }
   function showPath(side, directory) {
+    if (!favoritesCache.has(side)) refreshFavorites(side).catch(() => {});
     if (side.pendingPathIndex !== undefined && side.pathHistory[side.pendingPathIndex] === directory) {
       side.pathHistoryIndex = side.pendingPathIndex;
       side.pendingPathIndex = undefined;
@@ -2273,6 +2399,7 @@ function setupFiles(session) {
     }
     side.location.value = directory;
     side.location.hidden = true;
+    syncFavoriteControl(side);
     const nav = side.breadcrumbs;
     side.pathBar.hidden = false;
     nav.replaceChildren();
@@ -2433,35 +2560,20 @@ function setupFiles(session) {
   }
 
   async function transfer(receiving, entries, remoteSource) {
-    if (!entries.length || (!remoteSource && !layout.directory) || !session.remoteDirectory ||
-      layout.transferring || busy || !session.ready) return;
-    layout.transferring = true;
-    const updateAll = () => {
-      for (const connection of layout.connections) connection.refreshFileControls?.();
-    };
-    updateAll();
-    try {
-      await run(async () => {
-        const localTarget = layout.directory;
-        const remoteTarget = session.remoteDirectory;
-        const join = (folder, name) => folder.replace(/\/$/, '') + '/' + name;
-        try {
-          for (const [index, entry] of entries.entries()) {
-            status(session, `${index + 1}/${entries.length} · ${entry.name} · Transferring…`);
-            if (remoteSource) {
-              await api['copy-remote'](remoteSource.id, join(remoteSource.directory, entry.name), session.id, remoteTarget);
-            } else if (receiving) await api.sftp(session.id, 'download-local', join(remoteTarget, entry.name), localTarget);
-            else await api.sftp(session.id, 'upload-local', remoteTarget, join(localTarget, entry.name));
-          }
-        } finally {
-          if (receiving && layout.directory === localTarget) await layout.loadLocal(localTarget).catch(() => {});
-          else if (!receiving && session.ready) await loadRemote(remoteTarget).catch(() => {});
-        }
-      });
-    } finally {
-      layout.transferring = false;
-      updateAll();
+    if (!entries.length || !session.remoteDirectory || !session.ready) return;
+    const localTarget = layout.directory;
+    const remoteTarget = session.remoteDirectory;
+    for (const entry of entries) {
+      const localPath = localTarget.replace(/\/$/, '') + '/' + entry.name;
+      const remotePath = remoteTarget.replace(/\/$/, '') + '/' + entry.name;
+      const job = remoteSource
+        ? { operation: 'remote-copy', sessionId: remoteSource.id, sourcePath: remoteSource.directory.replace(/\/$/, '') + '/' + entry.name, targetSessionId: session.id, targetDirectory: remoteTarget, label: entry.name }
+        : receiving
+          ? { operation: 'download', sessionId: session.id, remotePath, localPath, label: entry.name }
+          : { operation: 'upload', sessionId: session.id, localPath, remotePath, label: entry.name };
+      await api['transfer-enqueue'](job);
     }
+    status(session, `${entries.length} transfer job${entries.length === 1 ? '' : 's'} queued.`);
   }
 
   function navigate(side, target) {
@@ -2778,6 +2890,10 @@ function setupFiles(session) {
     for (const control of [splitRight, splitDown, close]) control.dataset.connectionAction = 'true';
     remote.tools.append(splitRight, splitDown, close);
   }
+  session.applyFavorites = (scope, items) => {
+    if (scope === 'local') { favoritesCache.set(local, items || []); syncFavoriteControl(local); }
+    else { favoritesCache.set(remote, items || []); syncFavoriteControl(remote); }
+  };
   session.load = target => run(() => loadRemote(target));
   session.transferFiles = transfer;
   session.refreshFileControls = updateControls;
@@ -2788,6 +2904,271 @@ function setupFiles(session) {
   });
 }
 
+let transferJobs = [];
+let activeCompareRequest = null;
+const transferConflictQueue = [];
+function dismissTransferConflict(id) {
+  const queued = transferConflictQueue.findIndex(item => item.id === id);
+  if (queued !== -1) transferConflictQueue.splice(queued, 1);
+  const dialog = byId('transfer-conflict-dialog');
+  if (dialog.dataset.requestId !== id) return;
+  delete dialog.dataset.requestId;
+  dialog.close();
+  const next = transferConflictQueue.shift();
+  if (next) presentTransferConflict(next);
+}
+function presentTransferConflict(value) {
+  const dialog = byId('transfer-conflict-dialog');
+  if (dialog.open) { transferConflictQueue.push(value); return; }
+  dialog.dataset.requestId = value.id;
+  byId('transfer-conflict-title').textContent = t(value.message);
+  byId('transfer-conflict-detail').textContent = value.detail;
+  const answer = async choice => {
+    try {
+      await api['transfer-resolve-conflict'](value.id, choice);
+      dismissTransferConflict(value.id);
+    } catch (error) { showTransferError(error); }
+  };
+  dialog.oncancel = event => { event.preventDefault(); void answer('skip'); };
+  for (const control of dialog.querySelectorAll('[data-conflict-choice]')) {
+    control.onclick = () => answer(control.dataset.conflictChoice);
+  }
+  dialog.show();
+}
+function showTransferError(error) {
+  const message = byId('transfer-message');
+  message.textContent = error.message;
+  message.hidden = false;
+}
+async function runTransferControl(method, id, action) {
+  byId('transfer-message').hidden = true;
+  try { await api[method](id, action); }
+  catch (error) { showTransferError(error); }
+}
+const transferDrawer = byId('transfer-drawer');
+async function showFolderCompare(session, layout, remote) {
+  try {
+    const remotePeers = [...sessions.values()].filter(item => item.id !== session.id && item.mode === 'sftp' && item.remoteDirectory);
+    const choices = [{ id: 'upload', label: t('Local to Remote') }, { id: 'download', label: t('Remote to Local') }, ...remotePeers.map(peer => ({ id: `remote:${peer.id}`, label: `${t('Compare with')} ${peer.input.label || peer.input.host}` }))];
+    const direction = await api['context-menu'](choices);
+    if (!direction) return;
+    const remoteEndpoint = { kind: 'remote', sessionId: session.id, path: session.remoteDirectory };
+    let source, destination;
+    if (direction === 'upload' || direction === 'download') {
+      const localRoot = layout.directory || await api['local-directory']();
+      if (!localRoot) return;
+      const localEndpoint = { kind: 'local', path: localRoot };
+      [source, destination] = direction === 'upload' ? [localEndpoint, remoteEndpoint] : [remoteEndpoint, localEndpoint];
+    } else {
+      const peer = sessions.get(String(direction).slice(7));
+      if (!peer?.remoteDirectory) throw Error(t('Reconnect the SFTP session before comparing.'));
+      source = remoteEndpoint;
+      destination = { kind: 'remote', sessionId: peer.id, path: peer.remoteDirectory };
+    }
+    const dialog = byId('compare-dialog'), rows = byId('compare-rows');
+    if (dialog.open || activeCompareRequest) return;
+    const requestId = crypto.randomUUID();
+    activeCompareRequest = requestId;
+    dialog.classList.add('scanning');
+    byId('compare-progress-count').textContent = t('Comparing folders');
+    const abort = () => api['compare-cancel'](requestId).catch(error => status(session, error.message, true));
+    byId('compare-cancel').onclick = () => { dialog.close(); void abort(); };
+    dialog.onclose = () => { if (activeCompareRequest === requestId) void abort(); };
+    dialog.show();
+    let plan;
+    try {
+      plan = await api['compare-start'](source, destination, requestId);
+    } catch (error) {
+      if (dialog.open) { dialog.close(); throw error; }
+      return;
+    } finally {
+      activeCompareRequest = null;
+      dialog.classList.remove('scanning');
+      dialog.onclose = null;
+    }
+    if (!dialog.open) return;
+    rows.replaceChildren();
+    byId('compare-error').hidden = true;
+    const all = byId('compare-select-all');
+    const detailsToggle = byId('compare-details');
+    detailsToggle.textContent = t('Show details'); detailsToggle.setAttribute('aria-pressed', 'false');
+    detailsToggle.onclick = () => {
+      const open = detailsToggle.getAttribute('aria-pressed') !== 'true';
+      rows.querySelectorAll('details').forEach(detail => { detail.open = open; });
+      detailsToggle.setAttribute('aria-pressed', String(open));
+      detailsToggle.textContent = t(open ? 'Hide details' : 'Show details');
+    };
+    const summary = byId('compare-summary');
+    const actionable = plan.entries.filter(row => row.operation && row.operation !== 'conflict' && (row.source?.type === 'file' || row.source?.emptyDirectory));
+    const selectedCount = actionable.filter(row => row.selected).length;
+    const apply = byId('compare-apply');
+    apply.disabled = selectedCount === 0;
+    summary.textContent = `${plan.source} → ${plan.destination} · ${selectedCount} / ${actionable.length} ${t('items selected')}. ${t('Destination-only items are preserved.')}`;
+    const updateCount = () => {
+      const count = rows.querySelectorAll('input[type=checkbox]:checked').length;
+      apply.disabled = count === 0;
+      all.checked = count > 0 && count === actionable.length;
+      all.indeterminate = count > 0 && count < actionable.length;
+      all.disabled = actionable.length === 0;
+      summary.dataset.selection = `${count} / ${actionable.length}`;
+      summary.querySelector('.compare-selected-count')?.replaceChildren(document.createTextNode(`${count} / ${actionable.length} ${t('items selected')}`));
+    };
+    const instructions = document.createElement('span'); instructions.className = 'compare-selected-count'; instructions.textContent = `${selectedCount} / ${actionable.length} ${t('items selected')}`;
+    summary.replaceChildren(document.createTextNode(`${plan.source} → ${plan.destination} · `), instructions, document.createElement('br'), document.createTextNode(t('Destination-only items are preserved.')));
+    if (!plan.entries.some(entry => entry.reason !== 'probably-equal')) {
+      const empty = document.createElement('p'); empty.textContent = t('Folders are probably equal.'); rows.append(empty);
+    }
+    for (const entry of plan.entries) {
+      const row = document.createElement('div'); row.className = 'compare-row';
+      const selectable = entry.source?.type === 'file' || entry.source?.emptyDirectory;
+      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = Boolean(entry.selected && selectable); checkbox.disabled = !entry.operation || entry.operation === 'conflict' || !selectable; checkbox.dataset.path = entry.relativePath; checkbox.id = `compare-item-${rows.childElementCount}`;
+      const name = document.createElement('label'); name.htmlFor = checkbox.id; name.className = 'compare-entry-name'; name.title = entry.relativePath;
+      if (entry.source?.type === 'directory') name.append(icon('folder'));
+      const filename = document.createElement('span'); filename.textContent = entry.relativePath; name.append(filename);
+      const status = document.createElement('span'); status.textContent = t(entry.reason);
+      const sizes = document.createElement('small'); sizes.className = 'compare-metadata';
+      const sourceInfo = entry.source ? `${t('Source')}: ${entry.source.type === 'directory' ? t('Folder') : formatFileSize(entry.source.size)} · ${entry.source.modifiedAt ? new Date(entry.source.modifiedAt).toLocaleString() : '—'}` : `${t('Source')}: —`;
+      const destinationInfo = entry.destination ? `${t('Destination')}: ${entry.destination.type === 'directory' ? t('Folder') : formatFileSize(entry.destination.size)} · ${entry.destination.modifiedAt ? new Date(entry.destination.modifiedAt).toLocaleString() : '—'}` : `${t('Destination')}: —`;
+      for (const info of [sourceInfo, destinationInfo]) {
+        const line = document.createElement('span');
+        line.textContent = info;
+        sizes.append(line);
+      }
+      const detail = document.createElement('details');
+      const heading = document.createElement('summary');
+      heading.textContent = t('Details');
+      detail.append(heading, sizes);
+      row.append(checkbox, name, status, detail); rows.append(row);
+      checkbox.addEventListener('change', updateCount);
+    }
+    all.onchange = () => { rows.querySelectorAll('input[type=checkbox]:not(:disabled)').forEach(input => { input.checked = all.checked; }); updateCount(); };
+    updateCount();
+    apply.onclick = async () => {
+      const selected = [...rows.querySelectorAll('input:checked')].map(input => input.dataset.path);
+      if (!selected.length) { dialog.close(); return; }
+      apply.disabled = true;
+      byId('compare-error').hidden = true;
+      const applyRequest = crypto.randomUUID(); activeCompareRequest = applyRequest;
+      dialog.classList.add('scanning'); byId('compare-progress-count').textContent = t('Checking for changes');
+      const cancelApply = () => api['compare-cancel'](applyRequest).catch(error => status(session, error.message, true));
+      byId('compare-cancel').onclick = () => { dialog.close(); void cancelApply(); };
+      dialog.onclose = () => { if (activeCompareRequest === applyRequest) void cancelApply(); };
+      try {
+        const jobs = await api['compare-apply'](plan.id, selected, byId('compare-conflict-policy').value, applyRequest);
+        dialog.close();
+        if (jobs.length) {
+          transferDrawer.hidden = false;
+          renderTransferQueue(await api['transfer-list']());
+          status(session, `${jobs.length} transfer jobs queued.`);
+        }
+      } catch (error) {
+        if (dialog.open) { byId('compare-error').textContent = error.message; byId('compare-error').hidden = false; }
+      } finally {
+        activeCompareRequest = null; dialog.onclose = null; dialog.classList.remove('scanning'); updateCount();
+      }
+    };
+  } catch (error) { status(session, error.message, true); }
+}
+function renderTransferQueue(jobs) {
+  transferJobs = Array.isArray(jobs) ? jobs : [];
+  const list = byId('transfer-list');
+  if (!list) return;
+  const scrollTop = transferDrawer.scrollTop;
+  const focusedControl = document.activeElement?.matches?.('[data-transfer-focus]') ? document.activeElement : document.activeElement?.closest?.('[data-transfer-focus]');
+  const focusKey = focusedControl?.dataset.transferFocus || '';
+  const openBatches = new Set([...list.querySelectorAll('.transfer-batch[open]')].map(node => node.dataset.batchId));
+  const openDetails = new Set([...list.querySelectorAll('.transfer-detail[open]')].map(node => node.dataset.jobId));
+  list.replaceChildren();
+  const activeStates = ['queued', 'running', 'paused', 'waiting-auth', 'waiting-conflict'];
+  const activeJobs = transferJobs.filter(job => activeStates.includes(job.state));
+  const failedJobs = transferJobs.filter(job => ['failed', 'interrupted'].includes(job.state));
+  const finishedJobs = transferJobs.filter(job => !activeStates.includes(job.state) && !['failed', 'interrupted'].includes(job.state)).slice(-40);
+  const visible = [...finishedJobs, ...failedJobs, ...activeJobs].reverse();
+  const allGroups = new Map();
+  for (const job of transferJobs) {
+    const key = job.batchId || job.id;
+    if (!allGroups.has(key)) allGroups.set(key, []);
+    allGroups.get(key).push(job);
+  }
+  const groups = new Map();
+  for (const job of visible) {
+    const key = job.batchId || job.id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(job);
+  }
+  for (const [batchId, items] of groups) {
+    const batch = items.length > 1 || items[0].batchId;
+    const container = batch ? document.createElement('details') : document.createElement('div');
+    container.className = batch ? 'transfer-batch' : 'transfer-single';
+    if (batch) {
+      container.dataset.batchId = String(batchId);
+      container.open = openBatches.has(String(batchId)) || (!list.dataset.initialized && items.some(job => activeStates.includes(job.state)));
+      const summary = document.createElement('summary');
+      summary.dataset.transferFocus = `batch:${batchId}`;
+      const title = document.createElement('strong'); title.textContent = items[0].batchLabel || t('Folder comparison batch'); title.title = title.textContent;
+      const allItems = allGroups.get(batchId) || items;
+      const completeCount = allItems.filter(job => job.state === 'completed').length;
+      const skippedCount = allItems.filter(job => job.state === 'skipped').length;
+      const failedCount = allItems.filter(job => ['failed','interrupted'].includes(job.state)).length;
+      const aggregate = document.createElement('small'); aggregate.textContent = [`${completeCount} / ${allItems.length} ${t('completed')}`, skippedCount && `${skippedCount} ${t('skipped')}`, failedCount && `${failedCount} ${t('failed')}`].filter(Boolean).join(' · ');
+      const current = allItems.find(job => job.state === 'failed') || allItems.find(job => job.state === 'interrupted') || allItems.find(job => job.state === 'running') || allItems.find(job => activeStates.includes(job.state)) || allItems[0];
+      const state = document.createElement('span'); state.className = `transfer-state state-${current.state}`; state.textContent = t(current.state);
+      const batchControls = document.createElement('span'); batchControls.className = 'transfer-controls';
+      const batchAction = (action, label) => { const control = button(t(label), async event => { event?.preventDefault?.(); event?.stopPropagation?.(); await runTransferControl('transfer-batch-control', String(batchId), action); }); control.dataset.transferFocus = `batch:${batchId}:${action}`; control.addEventListener('click', event => event.stopPropagation()); return control; };
+      if (allItems.some(job => ['queued','running'].includes(job.state))) batchControls.append(batchAction('pause', 'Pause batch'));
+      if (allItems.some(job => ['queued','running','paused','waiting-conflict'].includes(job.state))) batchControls.append(batchAction('cancel', 'Cancel batch'));
+      if (allItems.some(job => ['failed','interrupted'].includes(job.state))) batchControls.append(batchAction('retry', 'Retry failed'));
+      if (allItems.some(job => job.state === 'paused')) batchControls.append(batchAction('resume', 'Resume batch'));
+      summary.append(title, aggregate, ...(failedCount ? [] : [state]), batchControls); container.append(summary);
+    }
+    for (const job of items) {
+      const row = document.createElement('article'); row.className = 'transfer-row';
+      const primary = document.createElement('div'); primary.className = 'transfer-primary';
+      const name = document.createElement('strong'); name.textContent = job.label || job.id; name.title = job.label || job.id;
+      const route = document.createElement('small'); route.textContent = job.operation.startsWith('mkdir-') ? t('Create folder') : `${job.sourceName || (job.operation === 'upload' ? 'Local' : 'Remote')} → ${job.targetName || (job.operation === 'download' ? 'Local' : 'Remote')}`;
+      const state = document.createElement('span'); state.className = `transfer-state state-${job.state}`; state.textContent = t(job.state);
+      primary.append(name, route, state); row.append(primary);
+      let metrics;
+      if (job.progress?.total) {
+        const progress = document.createElement('progress'); progress.max = job.progress.total; progress.value = Math.min(job.progress.bytes || 0, job.progress.total); progress.setAttribute('aria-label', t('Transfer progress')); row.append(progress);
+        metrics = document.createElement('div');
+        const remaining = job.progress.speed > 0 ? Math.max(0, Math.ceil((job.progress.total - (job.progress.bytes || 0)) / job.progress.speed)) : null;
+        metrics.textContent = `${formatFileSize(job.progress.bytes || 0)} / ${formatFileSize(job.progress.total)} · ${job.progress.speed ? `${formatFileSize(job.progress.speed)}/s` : '—'}${remaining !== null ? ` · ${remaining}s` : ''}`;
+      }
+      const controls = document.createElement('div'); controls.className = 'transfer-controls';
+      const actionButton = (action, label) => { const control = button(t(label), () => runTransferControl('transfer-control', job.id, action)); control.dataset.transferControl = action; control.dataset.jobId = String(job.id); control.dataset.transferFocus = `job:${job.id}:${action}`; return control; };
+      if (['failed', 'interrupted'].includes(job.state)) controls.append(actionButton('retry', 'Retry'));
+      const canCancel = ['queued', 'running', 'paused', 'waiting-conflict'].includes(job.state);
+      const canPause = ['queued', 'running'].includes(job.state);
+      if (canCancel && job.state !== 'paused') controls.append(actionButton('cancel', 'Cancel transfer'));
+      if (job.state === 'paused') controls.append(actionButton('resume', 'Resume'));
+      const canClear = ['completed', 'failed', 'cancelled', 'skipped', 'interrupted'].includes(job.state);
+      row.append(controls);
+      if (metrics || canClear || canCancel || job.error || job.localPath || job.remotePath || job.sourcePath) {
+        const detail = document.createElement('details'); detail.className = 'transfer-detail';
+        detail.dataset.jobId = String(job.id);
+        detail.open = openDetails.has(String(job.id));
+        const summary = document.createElement('summary'); summary.textContent = t('Details'); summary.dataset.transferFocus = `detail:${job.id}`; detail.append(summary);
+        for (const value of [job.localPath, job.remotePath || job.sourcePath, job.error].filter(Boolean)) { const line = document.createElement('div'); line.textContent = value; line.title = value; detail.append(line); }
+        if (metrics) detail.append(metrics);
+        if (canPause) detail.append(actionButton('pause', 'Pause'));
+        if (job.state === 'paused') detail.append(actionButton('cancel', 'Cancel transfer'));
+        if (canClear) detail.append(actionButton('clear', 'Clear'));
+        row.append(detail);
+      }
+      container.append(row);
+    }
+    list.append(container);
+  }
+  list.dataset.initialized = 'true';
+  if (focusKey) [...list.querySelectorAll('[data-transfer-focus]')].find(node => node.dataset.transferFocus === focusKey)?.focus({ preventScroll: true });
+  transferDrawer.scrollTop = scrollTop;
+  transferDrawer.hidden = transferJobs.length === 0;
+  const height = transferDrawer.hidden ? 0 : Math.min(transferDrawer.scrollHeight || 220, Math.round(workspace.clientHeight * 0.38));
+  workspace.style.setProperty('--transfer-drawer-height', `${height}px`);
+}
+api['transfer-list']().then(renderTransferQueue).catch(() => {});
+byId('transfer-toggle').addEventListener('click', () => { transferDrawer.classList.toggle('collapsed'); renderTransferQueue(transferJobs); });
 const workspaceDialog = byId('workspaces-dialog');
 const workspaceForm = byId('workspace-form');
 const workspaceMessage = byId('workspace-message');
@@ -2938,7 +3319,7 @@ const guideTopics = [
   ['Connect', 'Use + or ⌘N to enter a host. Choose SSH for a terminal or SFTP for file transfer. Select an OpenSSH alias to inherit its hostname, user, port, and identity.'],
   ['OpenSSH config', 'Use Edit directives to manage global options and Host sections in the app. Match sections are preserved. If a server offers a legacy key exchange, use Configure SSH and add the suggested KEX to that host only.'],
   ['SFTP files', 'Local files are on the left and remote files are on the right. Drag files between panels to transfer. Use the grip in a remote panel toolbar to move that panel within the same tab. Shift selects a range; ⌘ toggles individual items. Right-click files for actions. Remote-to-remote copies work between remote panels in the same tab.'],
-  ['File navigation', 'Use the mouse Back and Forward buttons over a local or remote file panel to navigate that panel’s visited paths. Right-click any file or folder and choose Copy Path to copy its full path.'],
+  ['File navigation', 'Use the star to save the current folder and the bookmark button to open saved paths. Local favorites are shared across local panels; remote favorites are saved per connection on this Mac. Use the clock for recent paths. Mouse Back and Forward navigate visited paths. Right-click any file or folder and choose Copy Path to copy its full path.'],
   ['Tabs and splits', 'Drag tabs to reorder, group them, or drop a terminal on an edge to split. Right-click a tab to rename it, set its tab color, duplicate it, group it, or close it. Right-click a group name to rename the group or set its separate group color. ⌘D splits right; ⌘⇧D splits down.'],
   ['Workspaces', 'Save selected open tabs or entire tab groups, including split layout and SFTP paths. Opening a workspace adds its tabs and keeps current sessions open. Restored connections authenticate again. Right-click a saved workspace to rename or delete it.'],
   ['PAM authentication', 'Keyboard-interactive questions appear in the session. Save reusable answers after a successful login, or create global exact-match and regular-expression rules in Preferences → Authentication. Saved values are plain text in the local profile file. Turn off automatic sending if you want to review answers first.'],
