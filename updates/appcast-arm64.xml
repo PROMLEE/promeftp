@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.4</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.4</link>
-      <pubDate>Mon, 16 Nov 2026 10:28:48 +0000</pubDate>
-      <sparkle:version>1.1.4</sparkle:version>
-      <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.5</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.5</link>
+      <pubDate>Mon, 16 Nov 2026 14:21:56 +0000</pubDate>
+      <sparkle:version>1.1.5</sparkle:version>
+      <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Snippets, SFTP alignment, and guide improvements&lt;/h2&gt;
-&lt;p&gt;Fix the ⌘P Snippets shortcut, simplify SFTP file rows, and make the Quick Guide easier to scan.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Fix ⌘P snippets&lt;/strong&gt;&lt;br&gt;The terminal shortcut opens Snippets consistently. Terminal Triggers remain on their own toolbar button.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Polish SFTP browsing&lt;/strong&gt;&lt;br&gt;Remove duplicate row actions, align file columns, and clarify access to local and connection-specific path favorites.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Improve the Quick Guide&lt;/strong&gt;&lt;br&gt;Separate instructions into readable steps, complete translations, and cover the transfer queue and folder comparison.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Fix saved agent token lookup&lt;/strong&gt;&lt;br&gt;The CLI now reads an opted-in token from the correct PromeFTP app data folder, with owner-only permissions.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Snippets shortcut fix and documentation corrections&lt;/h2&gt;
+&lt;p&gt;Fix ⌘P in the application menu so it opens Snippets, correct the 1.1.4 notes, and improve the Quick Guide.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Fix ⌘P snippets in the menu&lt;/strong&gt;&lt;br&gt;⌘P opens Snippets from both the application menu and the SSH terminal. Terminal Triggers open from the SSH toolbar and no longer use ⌘P.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Correct the documentation&lt;/strong&gt;&lt;br&gt;The README, user guides, and LLM reference files describe the shortcut and the Terminal Triggers entry point accurately.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Improve the Quick Guide&lt;/strong&gt;&lt;br&gt;Add a transfer queue and folder compare section and match the reconnect message the app shows.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clarify shortcuts&lt;/strong&gt;&lt;br&gt;Preferences → Shortcuts shows a dash for actions without a keyboard shortcut.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Requires macOS 13 or later on Apple Silicon. Saved agent tokens remain local and are never written into skill files.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.4"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.5"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.4/PromeFTP-1.1.4-macos-arm64.zip" length="141063392" type="application/octet-stream" sparkle:edSignature="f70tLIhwJiNBBZPQgzLlMnJsJUekDPKh67/yMCJIcVFfb1S+kMPrLkveE7oHfQLbAxj4xLaNpuRRYp1WMYTnBQ=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.5/PromeFTP-1.1.5-macos-arm64.zip" length="141014085" type="application/octet-stream" sparkle:edSignature="rOv4mqdjCbs8F+W8Oy6zu2QJUWSAYmMY3GBWF3p5R3mKDmboeQqCSShBNH5OpVZQROEWUZvPLd6OJ/vewu9wBg=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: tyqc44IOINUPEjZYBjCd1tsuK9osb5+Z17JDhs+K6WmLBS502J7llDeT1OSDQ5ZZ8Wj5AEEWZjTKFh3tb7XMBg==
-length: 2948
+edSignature: HGExlrSDn86cqa7gGtnZndiRe8U9QtTiKo6pHqBwXULX8uIWMeBylJ5mU11ngS1y32tEA8rWGZlz0IMZeuFODA==
+length: 2956
 -->
