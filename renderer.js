@@ -1922,7 +1922,7 @@ function setupTerminal(session, label) {
     actions.className = 'session-tools-actions';
     actions.append(iconButton('splitRight', 'Split right (⌘D)', () => splitSession(session, 'row')),
       iconButton('splitDown', 'Split down (⌘⇧D)', () => splitSession(session, 'column')), iconButton('search', 'Find (⌘F)', showSearch),
-      iconButton('code', 'Snippets', () => showSnippets(session)), iconButton('trigger', 'Terminal Triggers (⌘P)', () => showTriggers(session)),
+      iconButton('code', 'Snippets', () => showSnippets(session)), iconButton('trigger', 'Terminal Triggers', () => showTriggers(session)),
     iconButton('download', 'Export session log', async () => {
       try { await api['export-log'](label, session.log || ''); }
       catch (error) { status(session, error.message, true); }
@@ -1969,7 +1969,7 @@ function setupTerminal(session, label) {
     if (key === 'p' && !event.shiftKey && !event.altKey) {
       event.preventDefault();
       event.stopPropagation();
-      showTriggers(session);
+      showSnippets(session);
       return false;
     }
     if (!['c', 'v'].includes(key) && !(event.altKey && ['arrowup', 'arrowdown'].includes(key))) return true;
@@ -2744,23 +2744,6 @@ function setupFiles(session) {
         ];
         chooseMenu(entries).catch(error => status(session, error.message, true));
       });
-      if (side === remote) {
-        const rename = iconButton('edit', 'Rename', async () => {
-          const next = await askName(entry.name);
-          if (next === undefined) return;
-          await run(async () => {
-            await api.sftp(session.id, 'rename', itemPath(remote, entry.name), next);
-            await loadRemote(session.remoteDirectory);
-          });
-        });
-        const remove = iconButton('trash', 'Delete', () => run(async () => {
-          await api.sftp(session.id, 'delete', itemPath(remote, entry.name));
-          await loadRemote(session.remoteDirectory);
-        }));
-        rename.classList.add('file-action');
-        remove.classList.add('file-action');
-        row.append(rename, remove);
-      }
       if (!entry.link) {
         row.draggable = true;
         row.addEventListener('dragstart', event => {
@@ -3335,7 +3318,9 @@ function renderGuide() {
     const title = document.createElement('h3');
     title.textContent = t(heading);
     const body = document.createElement('p');
-    body.textContent = t(copy);
+    const translated = t(copy);
+    body.replaceChildren(...translated.split(/(?<=[.!?。！？])\s+/u).flatMap((sentence, index, all) =>
+      index < all.length - 1 ? [document.createTextNode(sentence), document.createElement('br')] : [document.createTextNode(sentence)]));
     section.append(title, body);
     section.hidden = query && !(title.textContent + ' ' + body.textContent).toLocaleLowerCase().includes(query);
     return section;

@@ -1,0 +1,11 @@
+{
+  "heading": "Snippets, SFTP alignment, and guide improvements",
+  "summary": "Fix the ⌘P Snippets shortcut, simplify SFTP file rows, and make the Quick Guide easier to scan.",
+  "changes": [
+    ["Fix ⌘P snippets", "The terminal shortcut opens Snippets consistently. Terminal Triggers remain on their own toolbar button."],
+    ["Polish SFTP browsing", "Remove duplicate row actions, align file columns, and clarify access to local and connection-specific path favorites."],
+    ["Improve the Quick Guide", "Separate instructions into readable steps, complete translations, and cover the transfer queue and folder comparison."],
+    ["Fix saved agent token lookup", "The CLI now reads an opted-in token from the correct PromeFTP app data folder, with owner-only permissions."]
+  ],
+  "notice": "Requires macOS 13 or later on Apple Silicon. Saved agent tokens remain local and are never written into skill files."
+}

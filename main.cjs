@@ -1799,7 +1799,7 @@ app.whenReady().then(async () => {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || !input.meta || input.control || input.alt) return;
-    const command = input.key.toLowerCase() === 'p' && !input.shift ? 'triggers'
+    const command = input.key.toLowerCase() === 'p' && !input.shift ? 'snippets'
       : ['+', '='].includes(input.key) ? 'zoom-in'
       : input.key === '-' ? 'zoom-out' : input.key === '0' ? 'zoom-reset' : '';
     if (!command) return;
