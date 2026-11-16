@@ -1581,7 +1581,8 @@ const fileShortcuts = [
   ['Close Tab', 'CmdOrCtrl+W', 'close-tab'],
 ];
 const terminalShortcuts = [
-  ['Terminal Triggers', 'CmdOrCtrl+P', 'triggers'],
+  ['Snippets', 'CmdOrCtrl+P', 'snippets'],
+  ['Terminal Triggers', '', 'triggers'],
   ['Find', 'CmdOrCtrl+F', 'find'],
   ['Split Right', 'CmdOrCtrl+D', 'split'],
   ['Split Down', 'CmdOrCtrl+Shift+D', 'split-down'],
@@ -1605,7 +1606,7 @@ function buildApplicationMenu() {
     { type: 'separator' },
   ] : [];
   const command = (label, accelerator, id) => ({
-    label: localized(label), accelerator, click: () => window?.webContents.send('command', id),
+    label: localized(label), ...(accelerator && { accelerator }), click: () => window?.webContents.send('command', id),
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: app.name, submenu: [

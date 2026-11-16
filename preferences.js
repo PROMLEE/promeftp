@@ -361,7 +361,7 @@ async function renderShortcutPreferences() {
       term.textContent = t(label);
       const definition = document.createElement('dd');
       const keys = document.createElement('kbd');
-      keys.textContent = accelerator.replace('CmdOrCtrl+', '⌘').replace('Shift+', '⇧').replace('Alt+', '⌥');
+      keys.textContent = accelerator ? accelerator.replace('CmdOrCtrl+', '⌘').replace('Shift+', '⇧').replace('Alt+', '⌥') : t('No shortcut');
       definition.append(keys);
       rows.append(term, definition);
     }

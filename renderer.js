@@ -1922,7 +1922,7 @@ function setupTerminal(session, label) {
     actions.className = 'session-tools-actions';
     actions.append(iconButton('splitRight', 'Split right (⌘D)', () => splitSession(session, 'row')),
       iconButton('splitDown', 'Split down (⌘⇧D)', () => splitSession(session, 'column')), iconButton('search', 'Find (⌘F)', showSearch),
-      iconButton('code', 'Snippets', () => showSnippets(session)), iconButton('trigger', 'Terminal Triggers', () => showTriggers(session)),
+      iconButton('code', 'Snippets (⌘P)', () => showSnippets(session)), iconButton('trigger', 'Terminal Triggers', () => showTriggers(session)),
     iconButton('download', 'Export session log', async () => {
       try { await api['export-log'](label, session.log || ''); }
       catch (error) { status(session, error.message, true); }
@@ -2697,22 +2697,30 @@ function setupFiles(session) {
           if (event.key === 'Enter') { event.preventDefault(); navigate(side, itemPath(side, entry.name)); }
         });
       }
+      const target = itemPath(side, entry.name);
+      const reload = () => side === local ? loadLocal(currentDirectory(side)) : loadRemote(currentDirectory(side));
+      const rename = async () => {
+        const next = await askName(entry.name, t('Rename…'));
+        if (next === undefined || next === entry.name || !next.trim()) return;
+        if (side === local) await api['local-action']('rename', currentDirectory(side), entry.name, next.trim());
+        else await api.sftp(session.id, 'rename', target, next.trim());
+        await reload();
+      };
+      const remove = async () => {
+        if (side === local) await api['local-action']('trash', currentDirectory(side), entry.name);
+        else await api.sftp(session.id, 'delete', target);
+        await reload();
+      };
+      // Keyboard equivalents of the context menu's Rename and Delete (Delete moves local items to Trash; remote deletes still confirm in main).
+      name.addEventListener('keydown', event => {
+        if (event.key === 'F2') { event.preventDefault(); rename().catch(error => status(session, error.message, true)); }
+        else if (event.metaKey && (event.key === 'Backspace' || event.key === 'Delete')) {
+          event.preventDefault();
+          remove().catch(error => status(session, error.message, true));
+        }
+      });
       row.addEventListener('contextmenu', event => {
         event.preventDefault();
-        const target = itemPath(side, entry.name);
-        const reload = () => side === local ? loadLocal(currentDirectory(side)) : loadRemote(currentDirectory(side));
-        const rename = async () => {
-          const next = await askName(entry.name, t('Rename…'));
-          if (next === undefined || next === entry.name || !next.trim()) return;
-          if (side === local) await api['local-action']('rename', currentDirectory(side), entry.name, next.trim());
-          else await api.sftp(session.id, 'rename', target, next.trim());
-          await reload();
-        };
-        const remove = async () => {
-          if (side === local) await api['local-action']('trash', currentDirectory(side), entry.name);
-          else await api.sftp(session.id, 'delete', target);
-          await reload();
-        };
         const properties = async () => {
           if (side === local) await api['local-action']('info', currentDirectory(side), entry.name);
           else await api.sftp(session.id, 'info', target);
@@ -3303,6 +3311,7 @@ const guideTopics = [
   ['OpenSSH config', 'Use Edit directives to manage global options and Host sections in the app. Match sections are preserved. If a server offers a legacy key exchange, use Configure SSH and add the suggested KEX to that host only.'],
   ['SFTP files', 'Local files are on the left and remote files are on the right. Drag files between panels to transfer. Use the grip in a remote panel toolbar to move that panel within the same tab. Shift selects a range; ⌘ toggles individual items. Right-click files for actions. Remote-to-remote copies work between remote panels in the same tab.'],
   ['File navigation', 'Use the star to save the current folder and the bookmark button to open saved paths. Local favorites are shared across local panels; remote favorites are saved per connection on this Mac. Use the clock for recent paths. Mouse Back and Forward navigate visited paths. Right-click any file or folder and choose Copy Path to copy its full path.'],
+  ['Transfer queue and folder compare', 'Open Compare folders from a remote pane to compare the current folders. Select files and queue them for transfer. The Transfers drawer shows progress with pause, cancel, and retry controls. Reconnect this SFTP session before retrying interrupted work.'],
   ['Tabs and splits', 'Drag tabs to reorder, group them, or drop a terminal on an edge to split. Right-click a tab to rename it, set its tab color, duplicate it, group it, or close it. Right-click a group name to rename the group or set its separate group color. ⌘D splits right; ⌘⇧D splits down.'],
   ['Workspaces', 'Save selected open tabs or entire tab groups, including split layout and SFTP paths. Opening a workspace adds its tabs and keeps current sessions open. Restored connections authenticate again. Right-click a saved workspace to rename or delete it.'],
   ['PAM authentication', 'Keyboard-interactive questions appear in the session. Save reusable answers after a successful login, or create global exact-match and regular-expression rules in Preferences → Authentication. Saved values are plain text in the local profile file. Turn off automatic sending if you want to review answers first.'],
@@ -3310,36 +3319,44 @@ const guideTopics = [
   ['Snippets and search', '⌘P opens snippets; choose one to paste it into the focused terminal. ⌘F searches terminal output. Return moves to the next match and Shift+Return moves to the previous match.'],
   ['Preferences and shortcuts', 'Open Preferences with ⌘,. Choose installed terminal fonts, theme, transparency, and scrollback behavior. ⌘+ and ⌘− adjust terminal text; ⌘0 resets its size. Preferences → Shortcuts lists available key bindings.'],
 ];
-function renderGuide() {
-  const query = byId('guide-search').value.trim().toLocaleLowerCase();
-  const sections = guideTopics.map(([heading, copy]) => {
+// Split only at sentence ends followed by a capital, CJK/Hangul letter or ⌘, so abbreviations like "e.g. lower" stay intact.
+const guideSentenceBreak = /(?<=[.!?。！？])\s+(?=[^\s\p{Ll}])/u;
+let guideSections = [];
+let guideEmpty;
+function buildGuide() {
+  guideSections = guideTopics.map(([heading, copy]) => {
     const section = document.createElement('section');
     section.className = 'guide-section';
     const title = document.createElement('h3');
     title.textContent = t(heading);
     const body = document.createElement('p');
-    const translated = t(copy);
-    body.replaceChildren(...translated.split(/(?<=[.!?。！？])\s+/u).flatMap((sentence, index, all) =>
-      index < all.length - 1 ? [document.createTextNode(sentence), document.createElement('br')] : [document.createTextNode(sentence)]));
+    const sentences = t(copy).split(guideSentenceBreak);
+    body.replaceChildren(...sentences.flatMap((sentence, index) =>
+      index < sentences.length - 1 ? [document.createTextNode(sentence), document.createElement('br')] : [document.createTextNode(sentence)]));
     section.append(title, body);
-    section.hidden = query && !(title.textContent + ' ' + body.textContent).toLocaleLowerCase().includes(query);
+    section.dataset.search = (title.textContent + ' ' + body.textContent).toLocaleLowerCase();
     return section;
   });
-  if (!sections.some(section => !section.hidden)) {
-    const empty = document.createElement('p');
-    empty.className = 'empty-hosts';
-    empty.textContent = t('No guide results');
-    sections.push(empty);
-  }
-  byId('guide-sections').replaceChildren(...sections);
+  guideEmpty = document.createElement('p');
+  guideEmpty.className = 'empty-hosts';
+  guideEmpty.setAttribute('role', 'status');
+  guideEmpty.textContent = t('No guide results');
+  byId('guide-sections').replaceChildren(...guideSections, guideEmpty);
+}
+// Search only toggles visibility; the sections are built once per open.
+function filterGuide() {
+  const query = byId('guide-search').value.trim().toLocaleLowerCase();
+  for (const section of guideSections) section.hidden = Boolean(query) && !section.dataset.search.includes(query);
+  guideEmpty.hidden = guideSections.some(section => !section.hidden);
 }
 byId('rail-guide').addEventListener('click', () => {
   byId('guide-search').value = '';
-  renderGuide();
+  buildGuide();
+  filterGuide();
   if (!guideDialog.open) guideDialog.showModal();
   byId('guide-search').focus();
 });
-byId('guide-search').addEventListener('input', renderGuide);
+byId('guide-search').addEventListener('input', filterGuide);
 byId('close-guide').addEventListener('click', () => guideDialog.close());
 workspaceForm.addEventListener('submit', async event => {
   event.preventDefault();

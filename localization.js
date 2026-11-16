@@ -11,6 +11,7 @@ General|일반|一般|通用
 Terminal|터미널|ターミナル|终端
 Authentication|인증|認証|身份验证
 Shortcuts|단축키|ショートカット|快捷键
+No shortcut|단축키 없음|ショートカットなし|无快捷键
 About PromeFTP|PromeFTP 정보|PromeFTP について|关于 PromeFTP
 Guide|가이드|ガイド|指南
 Quick Guide|빠른 가이드|クイックガイド|快速指南
@@ -20,9 +21,11 @@ Connect|연결|接続|连接
 OpenSSH config|OpenSSH 설정|OpenSSH 設定|OpenSSH 配置
 SFTP files|SFTP 파일|SFTP ファイル|SFTP 文件
 File navigation|파일 탐색|ファイル移動|文件导航
-Use the mouse Back and Forward buttons over a local or remote file panel to navigate that panel’s visited paths. Mark the current folder with the star; use the bookmark button to open saved folders. Local favorites are shared by local panels, and remote favorites are saved per connection on this Mac. Right-click any file or folder and choose Copy Path to copy its full path.|로컬 또는 원격 파일 패널 위에서 마우스 뒤로/앞으로 버튼을 눌러 방문한 경로를 이동합니다. 별표로 현재 폴더를 즐겨찾기에 추가하고 북마크 버튼으로 저장한 경로를 엽니다. 로컬 즐겨찾기는 모든 로컬 패널에서 공유하고 원격 즐겨찾기는 이 Mac의 접속별로 저장합니다. 파일이나 폴더를 우클릭하고 경로 복사를 선택하면 전체 경로를 복사합니다.|ローカルまたはリモートのファイルパネル上でマウスの戻る／進むボタンを押すと、訪問したパスを移動できます。星で現在のフォルダをお気に入りに追加し、ブックマークボタンから保存したフォルダを開きます。ローカルのお気に入りはすべてのローカルペインで共有し、リモートのお気に入りはこの Mac の接続ごとに保存します。ファイルやフォルダを右クリックして「パスをコピー」を選ぶと、フルパスをコピーします。|在本地或远程文件面板上按鼠标后退/前进按钮，可切换访问过的路径。点击星标可收藏当前文件夹，点击书签按钮可打开已保存的文件夹。本地收藏在所有本地面板间共享，远程收藏按连接保存在此 Mac 上。右键点击文件或文件夹并选择“复制路径”，即可复制完整路径。
+Use the star to save the current folder and the bookmark button to open saved paths. Local favorites are shared across local panels; remote favorites are saved per connection on this Mac. Use the clock for recent paths. Mouse Back and Forward navigate visited paths. Right-click any file or folder and choose Copy Path to copy its full path.|별표로 현재 폴더를 저장하고 북마크 버튼으로 저장한 경로를 엽니다. 로컬 즐겨찾기는 모든 로컬 패널에서 공유하고 원격 즐겨찾기는 이 Mac의 접속별로 저장합니다. 시계 버튼으로 최근 경로를 엽니다. 마우스 뒤로/앞으로 버튼으로 방문한 경로를 이동합니다. 파일이나 폴더를 우클릭하고 경로 복사를 선택하면 전체 경로를 복사합니다.|星で現在のフォルダを保存し、ブックマークボタンから保存したパスを開きます。ローカルのお気に入りはすべてのローカルペインで共有し、リモートのお気に入りはこの Mac の接続ごとに保存します。時計ボタンで最近のパスを開きます。マウスの戻る／進むボタンで訪問したパスを移動します。ファイルやフォルダを右クリックして「パスをコピー」を選ぶと、フルパスをコピーします。|点击星标可保存当前文件夹，点击书签按钮可打开已保存的路径。本地收藏在所有本地面板间共享，远程收藏按连接保存在此 Mac 上。点击时钟按钮可打开最近的路径。鼠标后退/前进按钮可切换访问过的路径。右键点击文件或文件夹并选择“复制路径”，即可复制完整路径。
 Tabs and splits|탭과 분할 화면|タブと分割|标签页与分屏
 Workspaces|워크스페이스|ワークスペース|工作区
+Transfer queue and folder compare|전송 큐와 폴더 비교|転送キューとフォルダ比較|传输队列与文件夹比较
+Open Compare folders from a remote pane to compare the current folders. Select files and queue them for transfer. The Transfers drawer shows progress with pause, cancel, and retry controls. Reconnect this SFTP session before retrying interrupted work.|원격 패널에서 폴더 비교를 열어 현재 폴더를 비교합니다. 파일을 선택해 전송 큐에 넣습니다. 전송 드로어에서 진행률을 보고 일시정지, 취소, 재시도를 할 수 있습니다. 중단된 작업을 다시 시도하기 전에 이 SFTP 세션을 다시 연결하세요.|リモートペインから「フォルダを比較」を開いて現在のフォルダを比較します。ファイルを選んで転送キューに追加します。転送ドロワーで進行状況を確認し、一時停止、キャンセル、再試行ができます。中断された作業を再試行する前に、この SFTP セッションを再接続してください。|从远程窗格打开“比较文件夹”以比较当前文件夹。选择文件并加入传输队列。“传输”抽屉可查看进度，并提供暂停、取消和重试控制。重试被中断的任务前，请先重新连接此 SFTP 会话。
 PAM authentication|PAM 인증|PAM 認証|PAM 身份验证
 Snippets and search|스니펫과 검색|スニペットと検索|代码片段与搜索
 Preferences and shortcuts|설정과 단축키|設定とショートカット|设置与快捷键
