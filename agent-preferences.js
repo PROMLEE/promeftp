@@ -56,17 +56,107 @@ function agentOptions(name, entries, empty) {
 function selectedProfile() {
   return agentInfo?.profiles.find(p => p.id === agentValue('profile'));
 }
-function showAgentGrant() {
+// The first thing that blocks the grant form, in order. Only blockers that stop editing disable the fields.
+function grantBlocker(client, p) {
+  if (!agentChecked('enabled')) return { text: 'Local agent access is off.', action: 'Turn On', run: () => { agentElement('enabled').checked = true; agentElement('enabled').dispatchEvent(new Event('change')); }, stops: true };
+  if (!agentInfo?.clients.length) return { text: 'Register an agent client first.', action: 'Register Client', run: () => agentElement('client-name').focus(), stops: true };
+  if (!client) return { text: 'Choose the client that will receive this access.', action: 'Choose Client', run: () => agentElement('client').focus(), stops: true };
+  if (!p) return { text: 'Choose a bookmark.', action: 'Choose Bookmark', run: () => agentElement('profile').focus(), stops: true };
+  if (!p.eligible) return { text: p.reason || 'Use a valid SSH host name or alias.', stops: true };
+  if (p.trusted === false) return { text: "This server's host key is not trusted yet. Connect to it once in PromeFTP to trust it.", stops: false };
+  return null;
+}
+function renderGrantBlocker(blocker) {
+  agentElement('grant-blocker').hidden = !blocker;
+  agentElement('grant-blocker-text').textContent = blocker ? t(blocker.text) : '';
+  const action = agentElement('grant-blocker-action');
+  action.hidden = !blocker?.action;
+  action.textContent = blocker?.action ? t(blocker.action) : '';
+  action.onclick = blocker?.run || null;
+}
+// Presets only fill the form. Nothing is saved until the user saves it.
+const agentPresets = {
+  read: { sftp: true, root: '/', download: false, commandApproval: false, savedAuth: false, pam: false, triggers: false },
+  browse: { sftp: true, root: '/', download: true, commandApproval: false, savedAuth: false, pam: false, triggers: false },
+  commands: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: false, pam: false, triggers: false },
+  maximum: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: true, pam: true, triggers: true },
+};
+function applyAgentPreset(name) {
+  const preset = agentPresets[name];
+  if (!preset) return;
+  agentElement('sftp').checked = preset.sftp;
+  agentElement('root').value = preset.root;
+  agentElement('download').checked = preset.download;
+  agentElement('approve-commands').checked = preset.commandApproval;
+  agentElement('saved-auth').checked = preset.savedAuth;
+  for (const field of ['pam', 'triggers']) {
+    for (const option of agentElement(field).options) option.selected = preset[field];
+  }
+  updateAgentSftpFields();
+}
+// The broadest preset needs a deliberate acknowledgement. Resolves true only when the user confirms.
+function confirmMaximumGrant(bookmarkCount) {
+  return new Promise(resolve => {
+    const dialog = byId('agent-maximum-dialog');
+    const ack = byId('agent-maximum-ack');
+    const save = byId('agent-maximum-save');
+    ack.checked = false;
+    save.disabled = true;
+    byId('agent-maximum-detail').textContent = t('This client gets browsing, downloads, approved commands, saved authentication and every rule and trigger, for') + ' ' + (bookmarkCount || 1) + ' ' + t('bookmark(s).');
+    ack.onchange = () => { save.disabled = !ack.checked; };
+    byId('agent-maximum-cancel').onclick = () => { dialog.close(); resolve(false); };
+    save.onclick = () => { dialog.close(); resolve(true); };
+    dialog.addEventListener('close', () => resolve(false), { once: true });
+    dialog.showModal();
+    byId('agent-maximum-cancel').focus();
+  });
+}
+function rememberAgentChoice() {
+  try { sessionStorage.setItem('agent-grant-choice', JSON.stringify({ client: agentValue('client'), profile: agentValue('profile') })); } catch {}
+}
+function restoreAgentChoice() {
+  let saved = {};
+  try { saved = JSON.parse(sessionStorage.getItem('agent-grant-choice') || '{}'); } catch {}
+  const pick = (name, ids) => {
+    const element = agentElement(name);
+    if (!element.value && ids.includes(saved[name === 'client' ? 'client' : 'profile'])) element.value = saved[name === 'client' ? 'client' : 'profile'];
+  };
+  pick('client', agentInfo?.clients.map(c => c.id) || []);
+  pick('profile', agentInfo?.profiles.map(p => p.id) || []);
+  // With a single client there is nothing to choose.
+  if (!agentValue('client') && agentInfo?.clients.length === 1) agentElement('client').value = agentInfo.clients[0].id;
+}
+// The current client, bookmark, and saved grant for the selection.
+function currentAgentGrant() {
   const client = agentInfo?.clients.find(c => c.id === agentValue('client'));
   const p = selectedProfile();
-  const grant = client?.grants[p?.id];
-  agentElement('grant-fields').disabled = !client || !p?.eligible;
-  agentElement('save-grant').disabled = !client || !p?.eligible;
+  return { client, p, grant: client?.grants[p?.id] };
+}
+// Choosing a bookmark or client fills the form from the saved grant.
+function showAgentGrant() {
+  const { client, p, grant } = currentAgentGrant();
+  agentElement('preset').value = '';
+  loadAgentGrantForm(p, grant);
+  refreshAgentGrantState(client, p, grant);
+}
+// Changing the preset only changes the form. It never reloads the saved values over the choice.
+function refreshAgentGrantState(client, p, grant) {
+  const blocker = grantBlocker(client, p);
+  renderGrantBlocker(blocker);
+  const stops = Boolean(blocker?.stops);
+  agentElement('grant-fields').disabled = stops;
+  agentElement('grant-fields').title = stops ? t(blocker.text) : '';
+  agentElement('save-grant').disabled = stops;
+  agentElement('preset').disabled = stops;
+  agentElement('preset-all').hidden = !agentValue('preset');
+  agentElement('preset-all').disabled = stops;
   agentElement('remove-grant').disabled = !grant;
   agentElement('revoke').disabled = !client;
   agentElement('endpoint').textContent = p ? `${p.username ? p.username + '@' : ''}${p.host}${p.port ? ':' + p.port : ''}` +
     (grant?.stale ? ' · ' + t('Save access again after a bookmark change.') : '') : '';
   agentElement('profile-summary').textContent = p && !p.eligible ? t(p.reason || 'Use a valid SSH host name or alias.') : t("Uses this bookmark's SSH settings.");
+}
+function loadAgentGrantForm(p, grant) {
   agentElement('root').value = grant?.root || '';
   agentElement('sftp').checked = grant ? grant.sftp !== false : false;
   for (const field of Object.keys(agentFieldErrors)) setAgentFieldError(field, '');
@@ -86,6 +176,7 @@ function updateAgentSftpFields() {
   if (!agentChecked('sftp')) setAgentFieldError('root', '');
 }
 function renderAgentPrompts(prompts) {
+  agentElement('prompts').closest('section').hidden = prompts.length === 0;
   const list = agentElement('prompts');
   const existing = new Map([...list.children].map(form => [form.dataset.prompt, form]));
   if (prompts.length === existing.size && prompts.every(p => existing.has(p.id))) return;
@@ -128,7 +219,8 @@ async function refreshAgents(full = true) {
   agentElement('enabled').checked = info.enabled;
   agentElement('cli-path').textContent = info.cli || t('The installed app provides the CLI.');
   if (info.enabled && !info.online) agentStatus('Agent service is offline.');
-  agentOptions('client', info.clients, 'Choose client');
+  agentOptions('client', info.clients.map(client => ({ ...client, name: `${client.name} · ${Object.keys(client.grants || {}).length} ${t('bookmark(s)')}` })), 'Choose client');
+  restoreAgentChoice();
   agentOptions('profile', info.profiles.map(p => ({ ...p, disabled: !p.eligible,
     name: p.eligible ? p.name : p.name + ' · ' + t(p.reason || 'Use a valid SSH host name or alias.') })), 'Choose bookmark');
   agentOptions('skill-engine', [...info.targets].sort((a, b) => Number(b.detected) - Number(a.detected))
@@ -173,6 +265,16 @@ async function refreshAgentHistory() {
     const text = document.createElement('p');
     text.textContent = [event.request && 'Request: ' + event.request, event.session && 'Session: ' + event.session, event.detail].filter(Boolean).join('\n');
     details.append(summary, text);
+    if (event.operation === 'session.error' && event.session) {
+      // The raw OpenSSH output is shown here only, and only on request.
+      details.append(button(t('Show log'), async () => {
+        const diagnostic = await api['agent-diagnostic'](event.session).catch(() => null);
+        const log = document.createElement('pre');
+        log.className = 'agent-log';
+        log.textContent = diagnostic ? diagnostic.log.join('\n') : t('No log is kept for this session.');
+        details.append(log, button(t('Copy'), () => api['write-clipboard'](log.textContent).catch(showError)));
+      }));
+    }
     if (event.session && !agentValue('filter-session')) {
       details.append(button(t('Show session timeline'), () => {
         agentElement('filter-session').value = event.session;
@@ -213,8 +315,8 @@ agentElement('enabled').addEventListener('change', () => agentAction(async () =>
   try { await api['agent-enable'](agentChecked('enabled')); }
   catch (error) { agentElement('enabled').checked = !agentChecked('enabled'); throw error; }
 }));
-agentElement('client').addEventListener('change', () => { setGrantStatus(''); showAgentGrant(); });
-agentElement('profile').addEventListener('change', () => { setGrantStatus(''); showAgentGrant(); });
+agentElement('client').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); showAgentGrant(); });
+agentElement('profile').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); showAgentGrant(); });
 agentElement('sftp').addEventListener('change', updateAgentSftpFields);
 for (const field of Object.keys(agentFieldErrors)) agentElement(field).addEventListener('input', () => setAgentFieldError(field, ''));
 agentButton('register', async () => {
@@ -277,6 +379,7 @@ function agentGrantFields() {
 }
 async function saveAgentGrant(remove) {
   if (agentBusy || (!remove && !checkAgentGrant())) return;
+  if (!remove && agentElement('preset').value === 'maximum' && !(await confirmMaximumGrant(1))) return;
   agentBusy = true;
   setGrantStatus('');
   try {
@@ -288,6 +391,29 @@ async function saveAgentGrant(remove) {
   } finally { agentBusy = false; }
 }
 agentElement('save-grant').addEventListener('click', () => saveAgentGrant(false));
+agentElement('preset').addEventListener('change', () => {
+  applyAgentPreset(agentValue('preset'));
+  const { client, p, grant } = currentAgentGrant();
+  refreshAgentGrantState(client, p, grant);
+});
+// Applies the current form to every eligible bookmark of the client. Each one is checked again on the server.
+agentElement('preset-all').addEventListener('click', async () => {
+  const client = agentValue('client');
+  const eligible = (agentInfo?.profiles || []).filter(profile => profile.eligible).map(profile => profile.id);
+  if (!client || !eligible.length) return;
+  if (agentValue('preset') === 'maximum' && !(await confirmMaximumGrant(eligible.length))) return;
+  try {
+    const results = await api['agent-grant-bulk'](client, eligible, agentGrantFields());
+    const saved = results.filter(item => item.ok).length;
+    const notes = results.filter(item => item.skipped).map(item => {
+      const name = agentInfo.profiles.find(p => p.id === item.id)?.name || item.id;
+      return `${name}: ${t('PAM rules and triggers are per bookmark and were left out here.')}`;
+    });
+    const failed = results.filter(item => !item.ok).map(item => `${agentInfo.profiles.find(p => p.id === item.id)?.name || item.id}: ${agentErrorText({ message: item.reason })}`);
+    setGrantStatus(`${t('Access saved')}: ${saved} / ${results.length}` + [...notes, ...failed].map(line => ' · ' + line).join(''), saved === results.length && !notes.length);
+    await refreshAgents();
+  } catch (error) { setGrantStatus(t('Save failed') + ': ' + agentErrorText(error), false); }
+});
 agentElement('remove-grant').addEventListener('click', () => saveAgentGrant(true));
 function skill(action) {
   return api['agent-skill']({ target: agentValue('skill-engine'), action, project: agentValue('skill-scope') === 'project',

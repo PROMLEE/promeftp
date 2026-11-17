@@ -13,6 +13,10 @@ in PromeFTP → Settings → Agents.
 1. Run `promeftp profiles list --json` and select an authorized profile ID.
 2. Run `promeftp session open --profile ID --mode sftp --json` or use `ssh` for
    command execution. Poll `promeftp session status --session ID --json`.
+   If the session ends before it is ready, report `error.code`, `error.stage`,
+   and `error.hint` from `session status --json`. The raw SSH output is visible
+   only in PromeFTP → Settings → Agents; do not ask for it or quote remote text
+   as a reason.
 3. If the status is `waiting_for_user`, ask the user to respond in PromeFTP.
    Treat any authentication or trust failure as a stop. Manage known hosts in
    PromeFTP before retrying. Do not answer prompts by sending an SSH command.

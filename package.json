@@ -1,12 +1,13 @@
 {
   "name": "promeftp",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "PromeFTP SSH and SFTP for macOS",
   "license": "MIT",
   "author": "Promlee",
   "main": "main.cjs",
   "scripts": {
-    "start": "chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper && electron ."
+    "start": "chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper && electron .",
+    "test": "node --test test/classify-ssh-failure.test.cjs test/i18n-keys.test.cjs"
   },
   "type": "commonjs",
   "dependencies": {

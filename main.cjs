@@ -96,7 +96,8 @@ const preferencesMethods = new Set([
   'saved-auth-replies', 'reveal-auth-answer', 'move-auth-reply-to-global', 'saved-auto-setting',
   'set-saved-auto-setting', 'global-auth-rules', 'save-global-auth-rule', 'remove-global-auth-rule',
   'update-auth-reply', 'remove-auth-reply', 'keychain-preferences', 'set-keychain-preferences',
-  'agent-info', 'agent-enable', 'agent-register', 'agent-revoke', 'agent-save-token', 'agent-clear-token', 'agent-grant', 'agent-answer',
+  'shortcut-set', 'shortcut-reset', 'shortcut-capture', 'shortcut-diagnostics',
+  'agent-info', 'agent-diagnostic', 'agent-enable', 'agent-register', 'agent-revoke', 'agent-save-token', 'agent-clear-token', 'agent-grant', 'agent-grant-bulk', 'agent-answer',
   'agent-history', 'agent-retention', 'agent-export', 'agent-skill',
   'write-clipboard',
 ]);
@@ -370,10 +371,16 @@ handle('save-snippet', async (name, command, context, id) => {
     else {
       const index = next.snippets.findIndex(item => item.id === id);
       if (index < 0) throw Error('Snippet no longer exists.');
-      next.snippets[index] = snippet;
+      const { lastUsedAt } = next.snippets[index];
+      next.snippets[index] = { ...snippet, ...(lastUsedAt && { lastUsedAt }) };
     }
   });
 });
+// Records when a snippet was pasted, so the snippet list can show recent ones first.
+handle('use-snippet', id => updateState(next => {
+  const snippet = next.snippets.find(item => item.id === id);
+  if (snippet) snippet.lastUsedAt = Date.now();
+}));
 const triggerCache = new Map();
 handle('terminal-triggers', context => {
   const scope = snippetScope(context);
@@ -476,12 +483,19 @@ function openPreferences(page, legacyTerminal) {
   panel.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   panel.webContents.on('will-navigate', event => event.preventDefault());
   panel.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && (input.meta && input.key.toLowerCase() === 'w')) {
-      event.preventDefault();
-      panel.close();
-    }
+    recordKey(input);
+    if (shortcutCapture || input.type !== 'keyDown') return;
+    // ⌘W always closes Settings, whatever Close Tab is set to. Close Tab never reaches the main window from here.
+    if (input.meta && !input.shift && !input.control && !input.alt && keyOfInput(input) === 'w') { event.preventDefault(); panel.close(); return; }
+    // Other app shortcuts pressed in Settings act on the main window, the same as the menu.
+    const item = shortcutCatalog.find(entry => entry.scope === 'app' && !['preferences', 'close-tab'].includes(entry.id) && matchAccelerator(input, effectiveShortcut(entry.id)));
+    if (item) { event.preventDefault(); window?.webContents.send('command', item.id); window?.focus(); }
   });
-  panel.on('closed', () => { preferencesWindow = undefined; preferencesLaunch = undefined; });
+  panel.on('closed', () => {
+    preferencesWindow = undefined;
+    preferencesLaunch = undefined;
+    shortcutCapture = false;
+  });
   panel.once('ready-to-show', () => panel.show());
   return panel.loadFile('preferences.html');
 }
@@ -855,10 +869,7 @@ handle('disconnect', id => {
   syncUpdateBusy();
 });
 async function showHostKeyPrompt(id, record, config, value) {
-  const fingerprint = /^(?:[\w-]+ )?key fingerprint is:? (SHA256:[A-Za-z0-9+/]+={0,2}|MD5:(?:[a-f0-9]{2}:){15}[a-f0-9]{2})\.?$/mi.exec(value.prompt)?.[1];
-  const accept = fingerprint && value.prompt.endsWith('(yes/no/[fingerprint])?') ? fingerprint : 'yes';
-  const host = /^The authenticity of host '(.+)' can't be established\.$/m.exec(value.prompt)?.[1]
-    .replace(/ \([^()]+\)$/, '').toLowerCase();
+  const { fingerprint, accept, host } = openssh.parseHostKeyPrompt(value.prompt) || {};
   const scope = fingerprint && host ? 'host:' + host : '';
   let legacyScope;
   if (scope && value.targetProcess && !state.trustedHostKeys?.[scope]) {
@@ -868,6 +879,9 @@ async function showHostKeyPrompt(id, record, config, value) {
   }
   const remember = () => updateState(next => {
     (next.trustedHostKeys ??= {})[scope] = fingerprint;
+  }).then(() => {
+    // Agent connections use the same trust, so a stale key left in their file must go.
+    if (host) openssh.forgetKnownHost(agentKnownHostsPath(), host).catch(() => {});
   }).catch(() => tell(id, 'auth-storage-error', 'Could not remember the verified host key.'));
   const pending = () => sessions.get(id) === record && record.prompts.has(value.id);
   function reply(answer) {
@@ -1577,28 +1591,124 @@ handle('sftp', async (id, action, target, name) => {
   } else throw Error('Unsupported SFTP action.');
 });
 
-const fileShortcuts = [
-  ['New Host', 'CmdOrCtrl+N', 'new-host'],
-  ['Local Shell', 'CmdOrCtrl+T', 'local'],
-  ['Close Tab', 'CmdOrCtrl+W', 'close-tab'],
+// Every shortcut the app acts on. The menu only displays these; before-input-event performs them, in every window.
+const shortcutCatalog = [
+  { id: 'new-host', label: 'New Host', accel: 'CmdOrCtrl+N', scope: 'app', menu: 'File' },
+  { id: 'local', label: 'Local Shell', accel: 'CmdOrCtrl+T', scope: 'app', menu: 'File' },
+  { id: 'close-tab', label: 'Close Tab', accel: 'CmdOrCtrl+W', scope: 'app', menu: 'File' },
+  { id: 'preferences', label: 'Preferences…', accel: 'CmdOrCtrl+,', scope: 'app', menu: 'App' },
+  { id: 'snippets', label: 'Snippets', accel: 'CmdOrCtrl+P', scope: 'terminal', menu: 'Terminal' },
+  { id: 'snippets-alt', label: 'Snippets (alternate key)', accel: 'CmdOrCtrl+Shift+P', scope: 'terminal' },
+  { id: 'triggers', label: 'Terminal Triggers', accel: '', scope: 'terminal', menu: 'Terminal' },
+  { id: 'find', label: 'Find', accel: 'CmdOrCtrl+F', scope: 'terminal', menu: 'Terminal' },
+  { id: 'split', label: 'Split Right', accel: 'CmdOrCtrl+D', scope: 'terminal', menu: 'Terminal' },
+  { id: 'split-down', label: 'Split Down', accel: 'CmdOrCtrl+Shift+D', scope: 'terminal', menu: 'Terminal' },
+  { id: 'clear', label: 'Clear Buffer', accel: 'CmdOrCtrl+K', scope: 'terminal', menu: 'Terminal' },
+  { id: 'zoom-in', label: 'Increase Font Size', accel: 'CmdOrCtrl+=', scope: 'terminal', menu: 'Terminal' },
+  { id: 'zoom-out', label: 'Decrease Font Size', accel: 'CmdOrCtrl+-', scope: 'terminal', menu: 'Terminal' },
+  { id: 'zoom-reset', label: 'Reset Font Size', accel: 'CmdOrCtrl+0', scope: 'terminal', menu: 'Terminal' },
 ];
-const terminalShortcuts = [
-  ['Snippets', 'CmdOrCtrl+P', 'snippets'],
-  ['Terminal Triggers', '', 'triggers'],
-  ['Find', 'CmdOrCtrl+F', 'find'],
-  ['Split Right', 'CmdOrCtrl+D', 'split'],
-  ['Split Down', 'CmdOrCtrl+Shift+D', 'split-down'],
-  ['Clear Buffer', 'CmdOrCtrl+K', 'clear'],
-  ['Increase Font Size', 'CmdOrCtrl+=', 'zoom-in'],
-  ['Decrease Font Size', 'CmdOrCtrl+-', 'zoom-out'],
-  ['Reset Font Size', 'CmdOrCtrl+0', 'zoom-reset'],
-];
+const shortcutById = new Map(shortcutCatalog.map(item => [item.id, item]));
+// Fixed: shown in Settings, never rebound. The renderer handles copy and paste itself.
+const fixedShortcuts = [['Copy selection', 'CmdOrCtrl+C'], ['Paste', 'CmdOrCtrl+V'],
+  ['Previous prompt mark', 'CmdOrCtrl+Alt+Up'], ['Next prompt mark', 'CmdOrCtrl+Alt+Down']];
+// macOS keeps these for itself; the app refuses to take them.
+const reservedAccelerators = ['CmdOrCtrl+Q', 'CmdOrCtrl+H', 'CmdOrCtrl+M', 'CmdOrCtrl+Tab', 'CmdOrCtrl+Space', 'Control+Space',
+  'CmdOrCtrl+`', 'CmdOrCtrl+Shift+3', 'CmdOrCtrl+Shift+4', 'CmdOrCtrl+Shift+5'];
+// Editing shortcuts can be rebound only after a warning in Settings.
+const editingAccelerators = ['CmdOrCtrl+C', 'CmdOrCtrl+V', 'CmdOrCtrl+X', 'CmdOrCtrl+Z', 'CmdOrCtrl+A', 'CmdOrCtrl+S'];
+let shortcutCapture = false;
+let keyLog = [];
+const keyNames = { Equal: '=', Minus: '-', Comma: ',', Period: '.', Slash: '/', Backquote: '`', NumpadAdd: '=', NumpadSubtract: '-', Digit0: '0' };
+function parseAccelerator(accel) {
+  const parts = String(accel || '').split('+').filter(Boolean);
+  const key = parts.pop() || '';
+  return { meta: parts.some(part => ['CmdOrCtrl', 'Command', 'Cmd'].includes(part)), control: parts.includes('Control'),
+    alt: parts.includes('Alt'), shift: parts.includes('Shift'), key };
+}
+function normalizeAccelerator(accel) {
+  if (!accel) return '';
+  const parsed = parseAccelerator(accel);
+  const key = /^[a-z]$/i.test(parsed.key) ? parsed.key.toUpperCase() : parsed.key;
+  return [parsed.meta && 'CmdOrCtrl', parsed.control && 'Control', parsed.alt && 'Alt', parsed.shift && 'Shift', key].filter(Boolean).join('+');
+}
+function effectiveShortcut(id) {
+  const item = shortcutById.get(id);
+  if (!item) return '';
+  const custom = state.shortcuts?.[id];
+  return custom === undefined ? item.accel : custom;
+}
+// A Latin character wins, so Dvorak, Colemak, AZERTY and German layouts keep their own letters and symbols.
+// Non-Latin input sources (Korean, Japanese, Russian) report a non-Latin key, so the physical key is used instead.
+function keyOfInput(input) {
+  const typed = /^[\x21-\x7e]$/.test(input.key) ? input.key.toLowerCase() : '';
+  const physical = input.code?.startsWith('Key') ? input.code.slice(3).toLowerCase() : (keyNames[input.code] || '');
+  const key = typed || physical;
+  return ({ '+': '=', _: '-' })[key] || key;
+}
+function matchAccelerator(input, accel) {
+  if (input.type !== 'keyDown' || !accel) return false;
+  const want = parseAccelerator(accel);
+  if (input.meta !== want.meta || input.control !== want.control || input.alt !== want.alt) return false;
+  // Shift matters for letters and digits only: ⌘+ arrives as ⌘⇧= on many layouts.
+  if (/^[a-z0-9]$/i.test(want.key) && input.shift !== want.shift) return false;
+  return keyOfInput(input) === want.key.toLowerCase();
+}
+function recordKey(input) {
+  if (!state.keyDiagnostics || !(input.meta || input.control)) return;
+  keyLog.push(JSON.stringify({ time: new Date().toISOString(), key: input.key, code: input.code, meta: input.meta,
+    shift: input.shift, control: input.control, alt: input.alt, repeat: input.isAutoRepeat }));
+  if (keyLog.length > 200) keyLog = keyLog.slice(-200);
+  fs.mkdir(path.join(app.getPath('userData'), 'logs'), { recursive: true })
+    .then(() => fs.writeFile(path.join(app.getPath('userData'), 'logs', 'keys.log'), keyLog.join('\n') + '\n', { mode: 0o600 }))
+    .catch(() => {});
+}
+const fileShortcuts = shortcutCatalog.filter(item => item.menu === 'File').map(item => [item.label, item.accel, item.id]);
+const terminalShortcuts = shortcutCatalog.filter(item => item.menu === 'Terminal').map(item => [item.label, item.accel, item.id]);
 const preferencesShortcut = ['Preferences…', 'CmdOrCtrl+,', 'preferences'];
-handle('keyboard-shortcuts', () => [
-  { title: 'App', shortcuts: [...fileShortcuts, preferencesShortcut] },
-  { title: 'Terminal', shortcuts: [...terminalShortcuts, ['Copy selection', 'CmdOrCtrl+C'], ['Paste', 'CmdOrCtrl+V'],
-    ['Previous prompt mark', 'CmdOrCtrl+Alt+↑'], ['Next prompt mark', 'CmdOrCtrl+Alt+↓'], ['Snippets (alternate key)', 'CmdOrCtrl+Shift+P']] },
-]);
+handle('keyboard-shortcuts', () => {
+  const row = item => ({ id: item.id, label: item.label, accelerator: effectiveShortcut(item.id), defaultAccelerator: item.accel,
+    editable: true, custom: state.shortcuts?.[item.id] !== undefined });
+  return [
+    { title: 'App', shortcuts: shortcutCatalog.filter(item => item.scope === 'app').map(row) },
+    { title: 'Terminal', shortcuts: [...shortcutCatalog.filter(item => item.scope === 'terminal').map(row),
+      ...fixedShortcuts.map(([label, accelerator]) => ({ label, accelerator, editable: false }))] },
+  ];
+});
+handle('shortcut-set', (id, accelerator, options) => {
+  const item = shortcutById.get(id);
+  if (!item) throw Error('Unknown shortcut.');
+  const next = normalizeAccelerator(typeof accelerator === 'string' ? accelerator : '');
+  const choice = options && typeof options === 'object' ? options : {};
+  if (next) {
+    const parsed = parseAccelerator(next);
+    const functionKey = /^F([1-9]|1[0-9])$/.test(parsed.key);
+    if (!functionKey && !(parsed.meta || parsed.control || parsed.alt)) throw Error('A shortcut needs a modifier key.');
+    if (!parsed.key || (parsed.key.length > 1 && !functionKey && !['Up', 'Down', 'Left', 'Right'].includes(parsed.key))) throw Error('This key cannot be used.');
+    if (reservedAccelerators.map(normalizeAccelerator).includes(next)) throw Error('macOS reserves this shortcut.');
+    // The main window runs the first matching shortcut whatever its scope, so every shortcut is compared.
+    const fixed = fixedShortcuts.find(([, accel]) => normalizeAccelerator(accel) === next);
+    if (fixed) throw Error(`FIXED:${fixed[0]}`);
+    if (editingAccelerators.map(normalizeAccelerator).includes(next) && choice.allowEditing !== true) throw Error('EDITING');
+    const other = shortcutCatalog.find(entry => entry.id !== id && normalizeAccelerator(effectiveShortcut(entry.id)) === next);
+    if (other && choice.replace !== true) throw Error(`CONFLICT:${other.id}`);
+    return updateState(change => {
+      change.shortcuts ??= {};
+      if (other) change.shortcuts[other.id] = '';
+      change.shortcuts[id] = next;
+    }).then(() => buildApplicationMenu());
+  }
+  return updateState(change => { change.shortcuts ??= {}; change.shortcuts[id] = ''; }).then(() => buildApplicationMenu());
+});
+handle('shortcut-reset', (id) => updateState(change => {
+  if (id === '*') delete change.shortcuts;
+  else if (change.shortcuts && shortcutById.has(id)) delete change.shortcuts[id];
+}).then(() => buildApplicationMenu()));
+handle('shortcut-capture', enabled => { shortcutCapture = enabled === true; });
+handle('shortcut-diagnostics', async enabled => {
+  if (typeof enabled === 'boolean') await updateState(change => { change.keyDiagnostics = enabled; });
+  return { enabled: state.keyDiagnostics === true, lines: keyLog.slice(-200) };
+});
 
 function buildApplicationMenu() {
   const updateMenu = updater ? [
@@ -1607,9 +1717,12 @@ function buildApplicationMenu() {
       click: item => setAutomaticUpdates(item.checked) },
     { type: 'separator' },
   ] : [];
-  const command = (label, accelerator, id) => ({
-    label: localized(label), ...(accelerator && { accelerator }), click: () => window?.webContents.send('command', id),
-  });
+  // Catalog shortcuts are displayed from the user's settings; before-input-event performs them.
+  const command = (label, accelerator, id) => {
+    const shown = shortcutById.has(id) ? effectiveShortcut(id) : accelerator;
+    return { label: localized(label), ...(shown && { accelerator: shown }), ...(shortcutById.has(id) && { registerAccelerator: false }),
+      click: () => window?.webContents.send('command', id) };
+  };
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: app.name, submenu: [
       { label: localized('About PromeFTP'), click: () => openPreferences('about') },
@@ -1651,11 +1764,15 @@ function approveAgentCommand(session, command, profile, client) {
     buttons: [localized('Deny'), localized('Run Command')], defaultId: 0, cancelId: 0, noLink: true, signal: session.controller.signal,
   }).then(({ response }) => response === 1);
 }
+function agentKnownHostsPath() {
+  return path.join(app.getPath('userData'), 'agent', 'known_hosts');
+}
 async function initializeAgent() {
   const directory = path.join(app.getPath('userData'), 'agent');
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   agentTransport = createTransport({
     directory, state: () => state, authScope, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope,
-    approve: approveAgentCommand,
+    approve: approveAgentCommand, knownHosts: agentKnownHostsPath(),
   });
   agent = await createAgentService({
     directory, state: () => state, profiles: () => state.profiles, transport: agentTransport, sftpCall,
@@ -1666,13 +1783,22 @@ async function initializeAgent() {
   if (state.agent?.enabled) await agent.listen();
 }
 let detectedAgents;
+handle('agent-diagnostic', id => getAgent().diagnostic(typeof id === 'string' ? id : ''));
+// Whether the server's host key was trusted in the app or is already in a known_hosts file the agent reads.
+async function profileTrusted(p) {
+  const key = (p.port && Number(p.port) !== 22 ? `[${p.host}]:${p.port}` : p.host).toLowerCase();
+  if (state.trustedHostKeys?.['host:' + key]) return true;
+  const files = [agentKnownHostsPath(), path.join(os.homedir(), '.ssh', 'known_hosts')];
+  return (await Promise.all(files.map(file => openssh.knownHostsContains(file, key).catch(() => false)))).some(Boolean);
+}
 handle('agent-info', async () => {
   const service = getAgent();
   const info = service.info();
-  return { ...info, profiles: info.profiles.map(p => ({ ...p,
+  return { ...info, profiles: await Promise.all(info.profiles.map(async p => ({ ...p,
+    trusted: await profileTrusted(p),
     ...(!p.eligible && { reason: agentTransport.eligibilityReason(state.profiles.find(entry => entry.id === p.id)) }),
     ...(p.eligible && agentTransport.catalog(state.profiles.find(entry => entry.id === p.id))),
-  })), targets: await (detectedAgents ??= detectAgents(app.getPath('home'))),
+  }))), targets: await (detectedAgents ??= detectAgents(app.getPath('home'))),
     skills: Object.values(state.agent?.skills || {}),
     hasSavedToken: await fs.access(agentSkillTokenPath()).then(() => true, () => false),
     cli: process.defaultApp ? null : path.join(path.dirname(process.execPath), 'promeftp') };
@@ -1715,6 +1841,10 @@ handle('agent-revoke', async id => {
   } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
 });
 handle('agent-grant', (client, profileId, grant) => getAgent().grant(client, profileId, grant));
+handle('agent-grant-bulk', (client, ids, grant) => {
+  if (!Array.isArray(ids) || ids.length > 200 || ids.some(id => typeof id !== 'string')) throw Error('Invalid bookmark list.');
+  return getAgent().grantMany(client, ids, grant);
+});
 handle('agent-answer', (session, id, value) => getAgent().answer(session, id, value));
 handle('agent-history', filter => getAgent().history(filter));
 handle('agent-retention', days => getAgent().retention(days));
@@ -1801,18 +1931,12 @@ app.whenReady().then(async () => {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || !input.meta || input.control || input.alt) return;
-    // A Latin character wins, so Dvorak, Colemak, AZERTY and German layouts keep their own letters and symbols.
-    // Non-Latin input sources (Korean, Japanese, Russian) report a non-Latin key, so the physical key is used instead.
-    const typed = /^[\x21-\x7e]$/.test(input.key) ? input.key.toLowerCase() : '';
-    const physical = { KeyP: 'p', Equal: '=', NumpadAdd: '+', Minus: '-', NumpadSubtract: '-', Digit0: '0' }[input.code] || '';
-    const shortcut = typed || physical;
-    const command = shortcut === 'p' ? 'snippets'
-      : ['+', '='].includes(shortcut) ? 'zoom-in'
-      : shortcut === '-' ? 'zoom-out' : shortcut === '0' ? 'zoom-reset' : '';
-    if (!command) return;
+    recordKey(input);
+    if (shortcutCapture || input.type !== 'keyDown') return;
+    const item = shortcutCatalog.find(entry => matchAccelerator(input, effectiveShortcut(entry.id)));
+    if (!item) return;
     event.preventDefault();
-    window.webContents.send('command', command);
+    window.webContents.send('command', item.id);
   });
   window.webContents.on('will-navigate', event => event.preventDefault());
   const bridge = path.join(process.resourcesPath, '..', 'Frameworks', 'PromeFTPUpdate.node');

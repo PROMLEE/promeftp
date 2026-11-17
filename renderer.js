@@ -1974,13 +1974,7 @@ function setupTerminal(session, label) {
     // Non-Latin input sources (Korean, Japanese, Russian) fall back to the physical key.
     const typed = /^[\x21-\x7e]$/.test(event.key) ? event.key.toLowerCase() : '';
     const physical = event.code?.startsWith('Key') ? event.code.slice(3).toLowerCase() : '';
-    const letter = ['p', 'c', 'v'].includes(typed || physical) ? (typed || physical) : '';
-    if (letter === 'p' && !event.altKey && !event.ctrlKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      openSnippetsFromShortcut(session);
-      return false;
-    }
+    const letter = ['c', 'v'].includes(typed || physical) ? (typed || physical) : '';
     const key = event.key.toLowerCase();
     if (!letter && !(event.altKey && ['arrowup', 'arrowdown'].includes(key))) return true;
     event.preventDefault();
@@ -2239,7 +2233,7 @@ function setupFiles(session) {
   dragPane.addEventListener('dragend', clearLayoutDrag);
   const transfers = iconButton('transfer', 'Transfers', toggleTransferDrawer);
   transfers.classList.add('transfer-toolbar-button');
-  leading.append(dragPane, activity, transfers, iconButton('tree', 'Compare folders', () => showFolderCompare(session, layout, remote)));
+  leading.append(dragPane, activity, transfers, iconButton('compare', 'Compare folders', () => showFolderCompare(session, layout, remote)));
   remote.element.querySelector('.file-heading').prepend(leading);
   let busy = false;
   let localRequest = 0;
@@ -3791,70 +3785,107 @@ triggerForm.addEventListener('submit', async event => {
 });
 
 const snippetDialog = byId('snippets-dialog');
+const snippetEditor = byId('snippet-editor-dialog');
 const snippetForm = byId('snippet-form');
 const snippetSearch = byId('snippet-search');
 const snippetList = byId('snippet-list');
-keyboardChoices(snippetDialog, snippetSearch, snippetList, '.paste-snippet');
-function filterSnippets() {
-  const query = snippetSearch.value.trim().toLowerCase();
-  for (const row of snippetList.children) row.hidden = !row.dataset.search.includes(query);
-}
-snippetSearch.addEventListener('input', filterSnippets);
 let snippetSession;
 let editingSnippet;
+let snippetActive;
+// Higher scores come first: name prefix, then a word start in the name, then anywhere in the name, then the command.
+function snippetScore(snippet, query) {
+  if (!query) return 0;
+  const name = snippet.name.toLowerCase();
+  if (name.startsWith(query)) return 4;
+  if (name.split(/[\s._/-]+/).some(word => word.startsWith(query))) return 3;
+  if (name.includes(query)) return 2;
+  return snippet.command.toLowerCase().includes(query) ? 1 : -1;
+}
+// The highlighted row is announced through aria-activedescendant; keyboard focus stays in the search field.
+function highlightSnippet(row) {
+  snippetActive = row;
+  for (const item of snippetList.children) item.setAttribute('aria-selected', String(item === row));
+  snippetSearch.setAttribute('aria-activedescendant', row ? row.id : '');
+  row?.scrollIntoView({ block: 'nearest' });
+}
+function filterSnippets() {
+  const query = snippetSearch.value.trim().toLowerCase();
+  const rows = [...snippetList.children];
+  const ranked = rows
+    .map(row => ({ row, score: snippetScore(row.snippet, query), used: row.snippet.lastUsedAt || 0 }))
+    .filter(entry => entry.score >= 0)
+    .sort((a, b) => b.score - a.score || b.used - a.used || a.row.snippet.name.localeCompare(b.row.snippet.name));
+  for (const row of rows) row.hidden = true;
+  for (const { row } of ranked) { row.hidden = false; snippetList.append(row); }
+  for (const row of rows.filter(item => item.hidden)) snippetList.append(row);
+  const empty = byId('snippet-empty');
+  empty.hidden = ranked.length > 0;
+  empty.textContent = rows.length ? t('No matching snippets. Use + to add one.') : t('No snippets yet. Use + to add one.');
+  snippetSearch.setAttribute('aria-expanded', String(ranked.length > 0));
+  highlightSnippet(query && ranked[0] ? ranked[0].row : undefined);
+}
+snippetSearch.addEventListener('input', filterSnippets);
 function setSnippetEditor(snippet) {
   editingSnippet = snippet?.id;
   snippetForm.elements.name.value = snippet?.name || '';
   snippetForm.elements.command.value = snippet?.command || '';
   snippetForm.elements.scope.value = snippet ? (snippet.scope ? 'session' : 'global') : (snippetSession ? 'session' : 'global');
-  byId('cancel-snippet-edit').hidden = !snippet;
   byId('save-snippet').textContent = t(snippet ? 'Save Changes' : 'Save');
   byId('snippet-error').textContent = '';
 }
-byId('cancel-snippet-edit').addEventListener('click', () => setSnippetEditor());
+function openSnippetEditor(snippet) {
+  setSnippetEditor(snippet);
+  if (!snippetEditor.open) snippetEditor.showModal();
+  snippetForm.elements.name.focus();
+}
+// Pastes into the connection when one is ready; otherwise the snippet can only be edited.
+function runSnippet(snippet) {
+  const target = snippetSession;
+  if (!target?.ready || !sessions.has(target.id)) { openSnippetEditor(snippet); return; }
+  api['use-snippet'](snippet.id).catch(() => {});
+  snippetDialog.close();
+  target.terminal.paste(snippet.command);
+  target.terminal.focus();
+}
 async function refreshSnippets() {
-  const list = byId('snippet-list');
-  list.replaceChildren();
   const context = snippetSession && { mode: snippetSession.mode, input: snippetSession.input };
-  for (const snippet of await api.snippets(context)) {
+  const snippets = await api.snippets(context);
+  snippetList.replaceChildren(...snippets.map(snippet => {
     const row = document.createElement('div');
     row.className = 'snippet-row';
-    row.dataset.search = (snippet.name + ' ' + snippet.command).toLowerCase();
-    const title = document.createElement('span');
+    row.id = 'snippet-option-' + snippet.id;
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', 'false');
+    row.snippet = snippet;
+    const text = document.createElement('span');
+    text.className = 'snippet-text';
+    const title = document.createElement('strong');
     title.textContent = snippet.name;
-    if (snippet.scope) title.title = 'This connection';
-    row.append(title);
+    if (snippet.scope) title.title = t('This connection');
+    const preview = document.createElement('small');
+    preview.textContent = snippet.command.split('\n')[0];
+    text.append(title, preview);
+    row.append(text);
     if (snippetSession?.ready) {
-      const target = snippetSession;
-      const paste = button(t('Paste into terminal'), () => {
-        if (!sessions.has(target.id) || !target.ready) return;
-        snippetDialog.close();
-        target.terminal.paste(snippet.command);
-        target.terminal.focus();
-      });
+      const paste = button(t('Paste into terminal'), () => runSnippet(snippet));
       paste.className = 'paste-snippet';
       row.append(paste);
     }
-    row.append(iconButton('edit', 'Edit snippet', () => {
-      setSnippetEditor(snippet);
-      snippetForm.elements.name.focus();
-    }), iconButton('trash', 'Remove snippet', async () => {
+    row.append(iconButton('edit', 'Edit snippet', () => openSnippetEditor(snippet)), iconButton('trash', 'Remove snippet', async () => {
       try {
         await api['remove-snippet'](snippet.id);
-        if (editingSnippet === snippet.id) setSnippetEditor();
         await refreshSnippets();
       }
       catch (error) { showError(error); }
     }));
-    list.append(row);
-  }
+    row.addEventListener('click', event => { if (!event.target.closest('button')) highlightSnippet(row); });
+    return row;
+  }));
   filterSnippets();
 }
 function showSnippets(session) {
   snippetSession = session && session.mode !== 'sftp' ? session : undefined;
-  const scope = snippetForm.elements.scope;
-  scope.options[1].disabled = !snippetSession;
-  setSnippetEditor();
+  snippetForm.elements.scope.options[1].disabled = !snippetSession;
   byId('snippet-hint').textContent = snippetSession
     ? 'Paste into ' + (snippetSession.input.label || snippetSession.input.host)
     : 'Open a terminal to use connection snippets.';
@@ -3870,15 +3901,35 @@ function openSnippetsFromShortcut(session) {
   if (document.querySelector('dialog[open][data-blocking]')) return;
   showSnippets(session);
 }
+snippetSearch.addEventListener('keydown', event => {
+  const rows = [...snippetList.children].filter(row => !row.hidden);
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (!rows.length) return;
+    const index = rows.indexOf(snippetActive);
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    highlightSnippet(rows[index < 0 ? (step > 0 ? 0 : rows.length - 1) : (index + step + rows.length) % rows.length]);
+  } else if (event.key === 'Enter' && event.metaKey && snippetActive && !event.isComposing) {
+    event.preventDefault();
+    openSnippetEditor(snippetActive.snippet);
+  } else if (event.key === 'Enter' && !event.isComposing) {
+    // Enter while an input method is still composing text must not paste.
+    event.preventDefault();
+    if (snippetActive) runSnippet(snippetActive.snippet);
+  }
+});
 byId('rail-snippets').addEventListener('click', () => showSnippets(sessions.get(active)));
 byId('close-snippets').addEventListener('click', () => snippetDialog.close());
+byId('add-snippet').addEventListener('click', () => openSnippetEditor());
+byId('cancel-snippet-edit').addEventListener('click', () => snippetEditor.close());
+snippetEditor.addEventListener('close', () => setSnippetEditor());
 snippetForm.addEventListener('submit', async event => {
   event.preventDefault();
   const { name, command, scope } = Object.fromEntries(new FormData(snippetForm));
   const context = scope === 'session' && snippetSession ? { mode: snippetSession.mode, input: snippetSession.input } : undefined;
   try {
     await api['save-snippet'](name, command, context, editingSnippet);
-    setSnippetEditor();
+    snippetEditor.close();
     await refreshSnippets();
   } catch (error) { byId('snippet-error').textContent = error.message; }
 });
@@ -3889,7 +3940,7 @@ api.onCommand(command => {
   const session = sessions.get(active);
   if (command === 'new-host') { byId('new-host').click(); return; }
   if (command === 'local') { byId('rail-local').click(); return; }
-  if (command === 'snippets') { openSnippetsFromShortcut(session); return; }
+  if (command === 'snippets' || command === 'snippets-alt') { openSnippetsFromShortcut(session); return; }
   if (command === 'triggers') { showTriggers(session); return; }
   if (command === 'open-config') { byId('rail-config').click(); return; }
   if (command === 'preferences') { openPreferences(); return; }

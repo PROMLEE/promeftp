@@ -45,6 +45,20 @@ Install the font required by your shell theme on the Mac running PromeFTP. In **
 
 Check the architecture, verify the official DMG, and follow the [first-launch instructions](INSTALL.md#first-launch-on-macos). For updates, close all sessions and retry from **Preferences → About**. If the signed update cannot download, use the official DMG. [Update guide](UPDATES.md)
 
+## Shortcuts that do not work
+
+Another app can take a key before PromeFTP sees it. Common causes are a global shortcut in another app, and key remapping tools such as Karabiner-Elements.
+
+1. Open **Preferences → Shortcuts** and turn on **Key diagnostics**.
+2. Press the shortcut, then choose **View log**.
+3. If the key is listed, PromeFTP receives it and the conflict is elsewhere. Check the other apps. If the key is missing, another app or a remapping tool took it.
+
+Change the shortcut in **Preferences → Shortcuts** if the key is taken, or turn off the other app's global shortcut.
+
+## Agent connection failures
+
+Run `session status` for the session. Its `error.code` names the cause, such as `HOST_KEY_UNKNOWN`, `HOST_KEY_CHANGED`, `DNS_FAILED`, `CONNECTION_REFUSED`, or `AUTH_FAILED`. Open the activity history in **Preferences → Agents** and choose **Show log** for the raw OpenSSH output.
+
 ## Report a bug
 
 Include your PromeFTP version and build from **Preferences → About**, macOS version, and reproducible steps using sample data. For SSH or SFTP issues, mention whether the connection uses an alias, a jump host, or keyboard-interactive authentication. Remove private hostnames, usernames, fingerprints, passwords, OTPs, keys, terminal output, and config details before posting. [GitHub Issues](https://github.com/PROMLEE/promeftp/issues)

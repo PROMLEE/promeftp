@@ -44,10 +44,10 @@
         <h3>Background</h3>
         <label class="settings-row">Terminal opacity <span class="range-value"><input name="opacity" type="range" min="55" max="100" step="5"><output id="opacity-value">100%</output></span></label>
         <p class="settings-note">Lower values reveal your desktop wallpaper through the terminal.</p>
-        <h3>Scrollback</h3>
+        <h3 data-tip="Output is never discarded, so memory keeps growing while a session stays open.">Scrollback</h3>
         <div class="segmented" role="radiogroup" aria-label="Scrollback">
           <label><input name="scrollbackMode" type="radio" value="limit"><span>Limit</span></label>
-          <label data-tip="Output is never discarded, so memory keeps growing while a session stays open."><input name="scrollbackMode" type="radio" value="unlimited"><span>Unlimited</span></label>
+          <label><input name="scrollbackMode" type="radio" value="unlimited"><span>Unlimited</span></label>
         </div>
         <label class="settings-row" id="scrollback-limit-row">Line limit<input name="scrollback" type="number" min="100" max="100000" step="100" required></label>
         <p class="settings-note" id="scrollback-help">Keeps the newest lines in memory. Older lines are discarded at the limit. Output is cleared when the session closes.</p>
@@ -72,10 +72,16 @@
         <label class="settings-check"><input id="saved-auto" type="checkbox" data-tip="On: send the saved answer right away. Off: fill the field and wait for you to press Send.">Send saved answers automatically</label>
         <div id="saved-auth-list"></div>
         <p id="saved-auth-message" role="status"></p>
+        <div id="auth-undo" class="auth-undo" role="status" hidden></div>
       </div>
     </section>
     <section id="settings-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" data-settings-panel="shortcuts" tabindex="0" hidden>
       <div id="shortcuts-list"></div>
+      <p id="shortcut-message" role="status"></p>
+      <p class="settings-note">If a shortcut does nothing, another app may use the same key globally. Turn on key diagnostics to see whether PromeFTP receives the key.</p>
+      <label class="settings-check"><input id="shortcut-diagnostics" type="checkbox">Key diagnostics</label>
+      <div class="agent-controls"><button id="shortcut-log" type="button">View log</button></div>
+      <pre id="shortcut-log-output" class="agent-log" hidden></pre>
     </section>
     <section id="settings-agent" role="tabpanel" aria-labelledby="settings-tab-agent" data-settings-panel="agent" hidden>
       <div class="agent-section">
@@ -83,8 +89,8 @@
         <p class="settings-note" id="agent-cli-path"></p>
         <p id="agent-message" class="settings-note" role="status"></p>
       </div>
-      <section class="agent-section">
-        <h3>Authentication requests</h3>
+      <section id="agent-prompts-section" class="agent-section agent-requests" hidden>
+        <h3 data-tip="Shows a question from a server that an agent session is waiting for you to answer. This section appears only when a request is waiting.">Authentication requests</h3>
         <div id="agent-prompts"></div>
       </section>
       <section class="agent-section">
@@ -98,6 +104,11 @@
         <select id="agent-profile" aria-label="Bookmark" data-tip="Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump. ProxyCommand may start a local process."></select>
         <p class="settings-note" id="agent-profile-summary">Uses this bookmark's SSH settings.</p>
         <p class="settings-note" id="agent-endpoint"></p>
+        <p id="agent-grant-blocker" class="agent-blocker" role="status" hidden><span id="agent-grant-blocker-text"></span> <button id="agent-grant-blocker-action" type="button" hidden></button></p>
+        <div class="agent-controls agent-preset-row">
+          <label>Permission preset<select id="agent-preset"><option value="">Choose a preset</option><option value="read">Read-only: browse the root</option><option value="browse">Browse and download</option><option value="commands">Browse, download, and approved commands</option><option value="maximum">Maximum allowed (review first)</option></select></label>
+          <button id="agent-preset-all" type="button" hidden>Apply to all eligible bookmarks</button>
+        </div>
         <fieldset id="agent-grant-fields" class="agent-groups">
           <fieldset class="agent-group">
             <legend>SFTP</legend>
@@ -123,6 +134,15 @@
             <label data-tip="Reports matching output to the agent as an event. It never sends an automatic reply.">Notification triggers<select id="agent-triggers" multiple size="2"></select></label>
           </fieldset>
         </fieldset>
+        <dialog id="agent-maximum-dialog" aria-labelledby="agent-maximum-title">
+          <div class="agent-maximum-form">
+            <h3 id="agent-maximum-title">Give this client every permission?</h3>
+            <p class="settings-note" id="agent-maximum-detail"></p>
+            <p class="settings-note">Commands still need approval each time. SFTP writes and commands without approval are not available through this API.</p>
+            <label class="settings-check"><input id="agent-maximum-ack" type="checkbox">I understand the risks</label>
+            <div class="actions"><button id="agent-maximum-cancel" type="button" autofocus>Cancel</button><button id="agent-maximum-save" type="button" class="primary" disabled>Save Access</button></div>
+          </div>
+        </dialog>
         <div class="agent-controls"><button id="agent-save-grant" type="button" class="primary">Save Access</button><button id="agent-remove-grant" type="button">Remove Access</button></div>
         <p id="agent-grant-status" class="settings-note" role="status" aria-live="polite"></p>
       </section>
@@ -192,5 +212,9 @@
   </dialog>
   <p id="preferences-error" role="status" hidden></p>
 </main>
+  <dialog id="auth-editor-dialog" aria-labelledby="auth-editor-title">
+    <h3 id="auth-editor-title"></h3>
+    <form id="auth-editor-form" class="auth-editor-form"></form>
+  </dialog>
 </body>
 </html>

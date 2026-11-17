@@ -8,173 +8,195 @@ function showError(error) {
   message.textContent = error.message;
   message.hidden = false;
 }
-function savedAnswerViewer(kind, entry, row) {
-  const view = document.createElement('div');
-  view.className = 'saved-answer-view';
-  const answer = document.createElement('output');
-  answer.hidden = true;
-  let generation = 0;
-  const hide = () => {
-    generation++;
-    answer.value = '';
-    answer.hidden = true;
-    eye.title = t('Show saved answer');
-    eye.setAttribute('aria-label', eye.title);
-    eye.setAttribute('aria-pressed', 'false');
-    eye.replaceChildren(icon('eye'));
-  };
-  const eye = iconButton('eye', 'Show saved answer', async () => {
-    if (!answer.hidden) { hide(); return; }
-    const request = ++generation;
-    eye.disabled = true;
-    try {
-      const value = await api['reveal-auth-answer'](kind, entry.id);
-      if (request !== generation || !row.isConnected || !row.open || !isAuthenticationVisible()) return;
-      answer.value = value;
-      answer.hidden = false;
-      eye.title = t('Hide saved answer');
-      eye.setAttribute('aria-label', eye.title);
-      eye.setAttribute('aria-pressed', 'true');
-      eye.replaceChildren(icon('eyeOff'));
-    } catch { byId('saved-auth-message').textContent = t('Could not read the saved answer.'); }
-    finally { eye.disabled = false; }
-  });
-  eye.setAttribute('aria-pressed', 'false');
-  row.addEventListener('toggle', () => { if (!row.open) hide(); });
-  view.append(eye, answer);
-  return view;
-}
-async function renderSavedAuthReplies(isCurrent = isAuthenticationVisible) {
-  const list = byId('saved-auth-list');
-  const entries = await api['saved-auth-replies']();
-  if (!isCurrent()) return;
-  list.replaceChildren();
-  if (!entries.length) {
-    const empty = document.createElement('p');
-    empty.textContent = t('No saved answers');
-    list.append(empty);
+// Saved answers and global rules are rows. Editing happens in a sheet, and a deleted global rule can be restored for five seconds.
+let authUndoTimer = 0;
+const authDescribe = entry => entry.prompt || '';
+function authRow(entry, kind) {
+  const row = document.createElement('div');
+  row.className = 'auth-row';
+  const text = document.createElement('div');
+  text.className = 'auth-row-text';
+  if (kind === 'global') {
+    const badge = document.createElement('span');
+    badge.className = 'auth-badge';
+    badge.textContent = t(entry.match === 'regex' ? 'Regular expression' : 'Exact match');
+    text.append(badge);
   }
-  for (const entry of entries) {
-    const row = document.createElement('details');
-    const title = document.createElement('summary');
-    const host = document.createElement('span');
-    host.className = 'saved-auth-host';
+  const question = document.createElement('strong');
+  question.textContent = authDescribe(entry);
+  question.title = question.textContent;
+  text.append(question);
+  if (kind === 'host') {
+    const host = document.createElement('small');
     host.textContent = entry.host;
-    const question = document.createElement('span');
-    question.className = 'saved-auth-question';
-    question.textContent = entry.prompt;
-    title.append(host, question);
-    const form = document.createElement('form');
-    const replacement = document.createElement('input');
-    replacement.type = 'password';
-    replacement.placeholder = t('New answer (optional)');
-    replacement.setAttribute('aria-label', t('New answer'));
-    replacement.autocomplete = 'off';
-    const save = document.createElement('button');
-    save.textContent = t('Save');
-    save.classList.add('primary');
-    const controls = document.createElement('div');
-    controls.className = 'actions';
-    const message = byId('saved-auth-message');
-    controls.append(button(t('Move to Global'), async () => {
-      try {
-        if (!await api['move-auth-reply-to-global'](entry.id)) return;
-        await Promise.all([renderSavedAuthReplies(), renderGlobalAuthRules()]);
-        message.textContent = t('Moved to Global PAM Rules');
-      } catch (error) { message.textContent = error.message; }
-    }));
-    controls.append(button(t('Remove'), async () => {
-      try {
-        await api['remove-auth-reply'](entry.id);
-        await renderSavedAuthReplies();
-        message.textContent = t('Answer removed');
-      } catch (error) { message.textContent = error.message; }
-    }), save);
-    form.append(passwordField(replacement), savedAnswerViewer('saved', entry, row), controls);
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      save.disabled = true;
-      try {
-        await api['update-auth-reply'](entry.id, replacement.value);
-        replacement.value = '';
-        row.open = false;
-        message.textContent = t('Answer updated');
-      } catch (error) { message.textContent = error.message; }
-      finally { save.disabled = false; }
-    });
-    row.append(title, form);
-    list.append(row);
+    text.append(host);
   }
-}
-
-function globalAuthEditor(entry = {}) {
-  const row = document.createElement('details');
-  const summary = document.createElement('summary');
-  summary.textContent = (entry.match === 'regex' ? 'Regex · ' : '') + (entry.prompt || t('New global rule'));
-  const form = document.createElement('form');
-  const match = document.createElement('select');
-  match.setAttribute('aria-label', t('Question matching'));
-  match.append(new Option(t('Exact match'), 'exact'), new Option(t('Regular expression'), 'regex'));
-  match.value = entry.match || 'exact';
-  const question = document.createElement('input');
-  question.setAttribute('aria-label', t('PAM question or pattern'));
-  const updatePlaceholder = () => {
-    question.placeholder = match.value === 'regex' ? t('Question pattern, e.g. ^OTP code.*:$') : t('Exact PAM question');
-  };
-  match.addEventListener('change', updatePlaceholder);
-  updatePlaceholder();
-  question.value = entry.prompt || '';
-  question.maxLength = 1000;
-  question.required = true;
-  const answer = document.createElement('input');
-  answer.type = 'password';
-  answer.placeholder = entry.id ? t('New answer (optional)') : t('Answer');
-  answer.setAttribute('aria-label', t('Global PAM answer'));
-  answer.autocomplete = 'off';
-  answer.required = !entry.id;
-  const controls = document.createElement('div');
-  controls.className = 'actions';
-  const message = byId('saved-auth-message');
-  const save = document.createElement('button');
-  save.textContent = t('Save');
-  save.classList.add('primary');
-  controls.append(button(t(entry.id ? 'Remove' : 'Cancel'), async () => {
-    try {
-      if (entry.id) await api['remove-global-auth-rule'](entry.id);
-      row.remove();
-    } catch (error) { message.textContent = error.message; }
-  }), save);
-  form.append(match, question, passwordField(answer));
-  if (entry.id) form.append(savedAnswerViewer('global', entry, row));
-  form.append(controls);
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    save.disabled = true;
-    try {
-      await api['save-global-auth-rule'](question.value, answer.value, entry.id, match.value);
-      answer.value = '';
-      await renderGlobalAuthRules();
-      message.textContent = t('Global rule saved');
-    } catch (error) { message.textContent = error.message; }
-    finally { save.disabled = false; }
-  });
-  row.append(summary, form);
+  const actions = document.createElement('div');
+  actions.className = 'auth-row-actions';
+  const menu = document.createElement('div');
+  menu.className = 'auth-menu';
+  menu.hidden = true;
+  const more = iconButton('more', 'More actions', () => { menu.hidden = !menu.hidden; });
+  more.setAttribute('aria-expanded', 'false');
+  more.addEventListener('click', () => more.setAttribute('aria-expanded', String(!menu.hidden)));
+  if (kind === 'host') menu.append(button(t('Move to All Hosts'), () => moveAuthReply(entry)));
+  menu.append(button(t('Delete'), () => deleteAuthEntry(kind, entry)));
+  actions.append(button(t('Edit'), () => openAuthEditor(kind, entry)), more, menu);
+  row.append(text, actions);
   return row;
 }
-function isAuthenticationVisible() {
-  return !byId('settings-authentication').hidden;
+function authEmpty(message) {
+  const empty = document.createElement('p');
+  empty.className = 'auth-empty';
+  empty.textContent = t(message);
+  return empty;
+}
+async function refreshAuthLists() {
+  await Promise.all([renderSavedAuthReplies(), renderGlobalAuthRules()]);
+}
+async function renderSavedAuthReplies(isCurrent = isAuthenticationVisible) {
+  const entries = await api['saved-auth-replies']();
+  if (!isCurrent()) return;
+  byId('saved-auth-list').replaceChildren(...(entries.length
+    ? entries.map(entry => authRow(entry, 'host'))
+    : [authEmpty('No saved answers. After a successful sign-in, choose Save Answer to add one here.')]));
 }
 async function renderGlobalAuthRules(isCurrent = isAuthenticationVisible) {
   const rules = await api['global-auth-rules']();
   if (!isCurrent()) return;
-  byId('global-auth-list').replaceChildren(...rules.map(globalAuthEditor));
+  byId('global-auth-list').replaceChildren(...(rules.length
+    ? rules.map(rule => authRow(rule, 'global'))
+    : [authEmpty('No rules yet. Add a rule to answer a question on every connection.')]));
 }
-byId('add-global-auth').addEventListener('click', () => {
-  const row = globalAuthEditor();
-  byId('global-auth-list').append(row);
-  row.open = true;
-  row.querySelector('input').focus();
-});
+async function moveAuthReply(entry) {
+  try {
+    if (await api['move-auth-reply-to-global'](entry.id)) await refreshAuthLists();
+  } catch (error) { byId('saved-auth-message').textContent = error.message; }
+}
+async function deleteAuthEntry(kind, entry) {
+  const message = byId('saved-auth-message');
+  // Keep the answer only long enough to restore a deleted global rule.
+  const answer = kind === 'global' ? await api['reveal-auth-answer']('global', entry.id).catch(() => null) : null;
+  try {
+    if (kind === 'global') await api['remove-global-auth-rule'](entry.id);
+    else await api['remove-auth-reply'](entry.id);
+  } catch (error) { message.textContent = error.message; return; }
+  await refreshAuthLists();
+  const undo = answer === null ? null : async () => {
+    await api['save-global-auth-rule'](entry.prompt, answer, undefined, entry.match || 'exact');
+    await refreshAuthLists();
+  };
+  showAuthUndo(t('Deleted'), undo);
+}
+function showAuthUndo(text, undo) {
+  const box = byId('auth-undo');
+  clearTimeout(authUndoTimer);
+  box.replaceChildren();
+  const label = document.createElement('span');
+  label.textContent = text;
+  box.append(label);
+  if (undo) box.append(button(t('Undo'), async () => { box.hidden = true; await undo(); }));
+  box.hidden = false;
+  authUndoTimer = setTimeout(() => { box.hidden = true; }, 5000);
+}
+// True when the test question matches the pattern, false when it does not, and null when the pattern is not valid.
+function authPatternMatches(pattern, sample) {
+  try {
+    const ignoreCase = pattern.startsWith('(?i)');
+    return new RegExp(ignoreCase ? pattern.slice(4) : pattern, ignoreCase ? 'i' : '').test(sample);
+  } catch { return null; }
+}
+function openAuthEditor(kind, entry) {
+  const dialog = byId('auth-editor-dialog');
+  const form = byId('auth-editor-form');
+  const isNew = !entry;
+  byId('auth-editor-title').textContent = kind === 'global'
+    ? t(isNew ? 'New Rule' : 'Edit Rule') : t('Edit Saved Answer');
+  form.replaceChildren();
+  const message = document.createElement('p');
+  message.className = 'error';
+  message.setAttribute('role', 'status');
+  const match = document.createElement('select');
+  match.setAttribute('aria-label', t('Question matching'));
+  match.append(new Option(t('Exact match'), 'exact'), new Option(t('Regular expression'), 'regex'));
+  match.value = entry?.match === 'regex' ? 'regex' : 'exact';
+  match.disabled = kind !== 'global';
+  const question = document.createElement('input');
+  question.value = entry?.prompt || '';
+  question.maxLength = 1000;
+  question.required = kind === 'global';
+  question.readOnly = kind !== 'global';
+  question.setAttribute('aria-label', t('PAM question or pattern'));
+  question.placeholder = match.value === 'regex' ? t('Question pattern, e.g. ^OTP code.*:$') : t('Exact PAM question');
+  const answer = document.createElement('input');
+  answer.type = 'password';
+  answer.autocomplete = 'off';
+  answer.required = isNew;
+  answer.placeholder = isNew ? t('Answer') : t('New answer (optional)');
+  answer.setAttribute('aria-label', t('Global PAM answer'));
+  const sample = document.createElement('input');
+  sample.placeholder = t('Test question');
+  sample.setAttribute('aria-label', t('Test question'));
+  const result = document.createElement('small');
+  result.setAttribute('aria-live', 'polite');
+  const updateTest = () => {
+    question.placeholder = match.value === 'regex' ? t('Question pattern, e.g. ^OTP code.*:$') : t('Exact PAM question');
+    if (match.value !== 'regex' || !sample.value) { result.textContent = ''; return; }
+    const outcome = authPatternMatches(question.value, sample.value);
+    result.textContent = outcome === null ? t('Not a valid pattern') : t(outcome ? 'Matches' : 'Does not match');
+  };
+  match.addEventListener('change', updateTest);
+  question.addEventListener('input', updateTest);
+  sample.addEventListener('input', updateTest);
+  const cancel = button(t('Cancel'), () => dialog.close());
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'primary';
+  save.textContent = t('Save');
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  actions.append(cancel, save);
+  const fields = kind === 'global'
+    ? [['Question matching', match], ['PAM question or pattern', question]]
+    : [['PAM question or pattern', question]];
+  for (const [label, control] of fields) {
+    const row = document.createElement('label');
+    row.textContent = t(label);
+    row.append(control);
+    form.append(row);
+  }
+  form.append(passwordField(answer));
+  if (kind === 'global') {
+    const test = document.createElement('label');
+    test.textContent = t('Test question');
+    test.append(sample, result);
+    form.append(test);
+  }
+  form.append(message, actions);
+  form.onsubmit = async event => {
+    event.preventDefault();
+    save.disabled = true;
+    try {
+      if (kind === 'global') {
+        if (match.value === 'regex' && authPatternMatches(question.value, '') === null) throw Error(t('Not a valid pattern'));
+        await api['save-global-auth-rule'](question.value, answer.value, entry?.id, match.value);
+      } else if (answer.value) {
+        await api['update-auth-reply'](entry.id, answer.value);
+      } else {
+        dialog.close();
+        return;
+      }
+      dialog.close();
+      await refreshAuthLists();
+      byId('saved-auth-message').textContent = t('Saved');
+    } catch (error) { message.textContent = error.message; }
+    finally { save.disabled = false; }
+  };
+  dialog.showModal();
+  (kind === 'global' ? question : answer).focus();
+}
+byId('add-global-auth').addEventListener('click', () => openAuthEditor('global'));
+byId('auth-editor-dialog').addEventListener('close', () => { byId('auth-editor-form').replaceChildren(); });
 
 const settingsPages = [...terminalDialog.querySelectorAll('[data-settings-page]')];
 function showSettingsPage(page) {
@@ -369,26 +391,134 @@ savedAuto.addEventListener('change', async () => {
     byId('saved-auth-message').textContent = error.message;
   } finally { savedAuto.disabled = false; }
 });
+// Shortcut settings: change a key by pressing it, reset it, and read key diagnostics.
+function formatAccelerator(accelerator) {
+  if (!accelerator) return '';
+  const parts = accelerator.split('+');
+  const key = parts.pop();
+  const symbols = { Control: '⌃', Alt: '⌥', Shift: '⇧', CmdOrCtrl: '⌘' };
+  const keys = { Up: '↑', Down: '↓', Left: '←', Right: '→' };
+  return parts.map(part => symbols[part] || part).sort((a, b) => ['⌃', '⌥', '⇧', '⌘'].indexOf(a) - ['⌃', '⌥', '⇧', '⌘'].indexOf(b)).join('') + (keys[key] || key);
+}
+// Builds the accelerator string for a key press, using the same rules as the main process.
+function acceleratorFromEvent(event) {
+  if (['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return null;
+  const parts = [];
+  if (event.metaKey) parts.push('CmdOrCtrl');
+  if (event.ctrlKey) parts.push('Control');
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+  const names = { Equal: '=', Minus: '-', Comma: ',', Period: '.', Slash: '/', Backquote: '`', NumpadAdd: '=', NumpadSubtract: '-' };
+  let key;
+  if (/^[\x21-\x7e]$/.test(event.key) && !/^[+_]$/.test(event.key)) key = /^[a-z]$/i.test(event.key) ? event.key.toUpperCase() : event.key;
+  else if (event.code.startsWith('Key')) key = event.code.slice(3);
+  else if (event.code.startsWith('Digit')) key = event.code.slice(5);
+  else if (event.key.startsWith('Arrow')) key = event.key.slice(5);
+  else if (/^F\d+$/.test(event.code)) key = event.code;
+  else key = names[event.code] ?? event.key;
+  return [...parts, key].join('+');
+}
+const shortcutErrors = {
+  'macOS reserves this shortcut.': 'macOS reserves this shortcut.',
+  'A shortcut needs a modifier key.': 'A shortcut needs a modifier key.',
+  'This key cannot be used.': 'This key cannot be used.',
+};
 async function renderShortcutPreferences() {
   const groups = await api['keyboard-shortcuts']();
   const list = byId('shortcuts-list');
   list.replaceChildren();
+  const message = byId('shortcut-message');
   for (const { title, shortcuts } of groups) {
     const heading = document.createElement('h3');
     heading.textContent = t(title);
-    const rows = document.createElement('dl');
-    for (const [label, accelerator] of shortcuts) {
+    const table = document.createElement('dl');
+    for (const item of shortcuts) {
       const term = document.createElement('dt');
-      term.textContent = t(label);
+      term.textContent = t(item.label);
       const definition = document.createElement('dd');
       const keys = document.createElement('kbd');
-      keys.textContent = accelerator ? accelerator.replace('CmdOrCtrl+', '⌘').replace('Shift+', '⇧').replace('Alt+', '⌥') : t('No shortcut');
+      keys.textContent = item.accelerator ? formatAccelerator(item.accelerator) : t('No shortcut');
       definition.append(keys);
-      rows.append(term, definition);
+      if (item.editable) {
+        definition.append(button(t('Change'), () => captureShortcut(item)));
+        if (item.custom) definition.append(button(t('Reset'), async () => {
+          await api['shortcut-reset'](item.id).catch(error => { message.textContent = error.message; });
+          await renderShortcutPreferences();
+        }));
+      } else {
+        term.title = t('Fixed');
+      }
+      table.append(term, definition);
     }
-    list.append(heading, rows);
+    list.append(heading, table);
+  }
+  const reset = button(t('Reset All to Defaults'), async () => {
+    await api['shortcut-reset']('*');
+    await renderShortcutPreferences();
+  });
+  list.append(reset);
+  const diagnostics = await api['shortcut-diagnostics']();
+  byId('shortcut-diagnostics').checked = diagnostics.enabled;
+}
+// Pressing a key sets the shortcut. Escape cancels, Delete clears it. While capturing, the app's own shortcuts do not run.
+// Only one capture runs at a time: starting another one cancels the previous, so a key cannot be saved twice.
+let cancelShortcutCapture = null;
+async function captureShortcut(item) {
+  cancelShortcutCapture?.();
+  const message = byId('shortcut-message');
+  message.textContent = t('Press keys… (Esc cancels, Delete clears)');
+  const stop = () => {
+    document.removeEventListener('keydown', onKey, true);
+    if (cancelShortcutCapture === stop) cancelShortcutCapture = null;
+    api['shortcut-capture'](false).catch(() => {});
+  };
+  const onKey = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'Escape') { stop(); message.textContent = ''; return; }
+    if (event.key === 'Backspace' || event.key === 'Delete') { stop(); save(''); return; }
+    const value = acceleratorFromEvent(event);
+    if (value) { stop(); save(value); }
+  };
+  cancelShortcutCapture = stop;
+  document.addEventListener('keydown', onKey, true);
+  await api['shortcut-capture'](true);
+  async function save(value, options = {}) {
+    try {
+      await api['shortcut-set'](item.id, value, options);
+      message.textContent = t('Shortcut saved');
+      await renderShortcutPreferences();
+    } catch (error) {
+      const text = error.message.replace(/^Error invoking remote method '[^']+': Error: /, '');
+      const conflict = /^CONFLICT:([a-z-]+)$/.exec(text);
+      if (conflict) {
+        const other = (await api['keyboard-shortcuts']()).flatMap(group => group.shortcuts).find(entry => entry.id === conflict[1]);
+        if (window.confirm(`${t('This key is already used by')} ${t(other?.label || '')}. ${t('Replace it?')}`)) return save(value, { ...options, replace: true });
+        message.textContent = '';
+        return;
+      }
+      if (text === 'EDITING') {
+        if (window.confirm(t('This shortcut is used for editing. Use it anyway?'))) return save(value, { ...options, allowEditing: true });
+        message.textContent = '';
+        return;
+      }
+      if (text.startsWith('FIXED:')) {
+        message.textContent = `${t('This key is fixed for')} ${t(text.slice(6))}.`;
+        return;
+      }
+      message.textContent = t(shortcutErrors[text] || text);
+    }
   }
 }
+byId('shortcut-diagnostics').addEventListener('change', event => {
+  api['shortcut-diagnostics'](event.currentTarget.checked).catch(showError);
+});
+byId('shortcut-log').addEventListener('click', async () => {
+  const { lines } = await api['shortcut-diagnostics']();
+  const log = byId('shortcut-log-output');
+  log.textContent = lines.length ? lines.join('\n') : t('No key events recorded yet.');
+  log.hidden = false;
+});
 terminalForm.addEventListener('submit', async event => {
   event.preventDefault();
   const invalid = [...terminalForm.elements].find(control => control.willValidate && !control.validity.valid);

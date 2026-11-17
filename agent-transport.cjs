@@ -10,6 +10,38 @@ const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { problem } = require('./agent-service.cjs');
 
 const limit = 16 * 1024 * 1024;
+
+// Maps OpenSSH's own failure lines to a stable code. A server banner is printed by the same OpenSSH process, so only
+// lines in OpenSSH's own message forms count.
+const failureRules = [
+  ['HOST_KEY_CHANGED', /REMOTE HOST IDENTIFICATION HAS CHANGED/, 'hostkey', 'The server host key changed. Confirm the change before you trust it again.'],
+  ['HOST_KEY_UNKNOWN', /Host key verification failed|No .* host key is known/, 'hostkey', 'Connect once in PromeFTP and trust the host key.'],
+  ['DNS_FAILED', /Could not resolve hostname/, 'connect', 'Check the host name.'],
+  ['HOST_UNREACHABLE', /No route to host|Network is unreachable/, 'connect', 'Check the network or VPN.'],
+  ['CONNECT_TIMEOUT', /Connection timed out|Operation timed out/, 'connect', 'Check firewalls and the port.'],
+  ['CONNECTION_REFUSED', /Connection refused/, 'connect', 'Check that sshd is running and the port is correct.'],
+  ['PROXY_FAILED', /ProxyCommand|ProxyJump/, 'connect', 'Check ProxyJump or ProxyCommand.'],
+  // A handshake reset looks the same whether the server, a firewall, or a jump host caused it, so it stays generic.
+  ['CONNECTION_FAILED', /kex_exchange_identification|Connection closed by UNKNOWN/, 'connect', 'The server closed the connection during the handshake. Check the port, access limits, and firewall, and ProxyJump if you use it.'],
+  ['AUTH_FAILED', /Permission denied \(|Too many authentication failures/, 'auth', 'Check the key, password, or PAM answers.'],
+  ['SFTP_SUBSYSTEM_FAILED', /subsystem request failed|Received message too long/, 'subsystem', 'Check the sftp-server setting and login shell output such as echo in .bashrc.'],
+];
+// The message forms OpenSSH prints for its own failures. A bare "Connection refused" in a banner does not match.
+// OpenSSH prints "user@host: Permission denied (...)." for a failed login, and "Received disconnect from host port n:2: ..."
+// or "Disconnected from host port n" when sshd drops the connection (for example after too many attempts).
+const sshOwnLine = /^(ssh: |@.*(WARNING: |REMOTE HOST IDENTIFICATION)|[^\s:]+@[^\s:]+: Permission denied \(|Permission denied \(|Host key verification failed\.|REMOTE HOST IDENTIFICATION HAS CHANGED|Received disconnect from \S+ port \d+:\d+: |Disconnected from |kex_exchange_identification: |subsystem request failed on channel|Received message too long|Connection closed by (UNKNOWN|\d))/;
+// Keeps the last 20 lines of OpenSSH output, with secrets masked, for the app's own diagnostics view.
+function scrubLines(lines) {
+  return lines.slice(-20).map(line => line.slice(0, 200).replace(/((?:password|passcode|otp|token|secret)[^:\n]*:\s*).*/i, '$1***'));
+}
+function classifySshFailure(lines, { exit = null, stage = 'connect' } = {}) {
+  const own = lines.filter(line => sshOwnLine.test(line));
+  // Rules are checked in order, so the most specific cause wins even when OpenSSH prints a generic line after it.
+  for (const [code, pattern, ruleStage, hint] of failureRules) {
+    if (own.some(line => pattern.test(line))) return { code, stage: ruleStage, hint, exit };
+  }
+  return { code: 'CONNECTION_FAILED', stage, hint: 'See the activity log for details.', exit };
+}
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 function eligibilityReason(p) {
@@ -37,6 +69,15 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       triggers: (state().terminalTriggers || []).filter(t => !t.scope || t.scope === scope)
         .map(({ id, name }) => ({ id, name })),
     };
+  }
+  // Agent connections never store or ask about new keys. Only a fingerprint the user trusted in the app is accepted.
+  function hostKeyDecision(prompt, scope) {
+    const info = openssh.parseHostKeyPrompt(prompt);
+    if (!info?.fingerprint) return { code: 'HOST_KEY_UNKNOWN' };
+    const saved = [`host:${info.host}`, scope].filter(Boolean).map(key => state().trustedHostKeys?.[key]).filter(Boolean);
+    if (saved.includes(info.fingerprint)) return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
+    return { code: saved.length ? 'HOST_KEY_CHANGED' : 'HOST_KEY_UNKNOWN',
+      detail: { host: info.host, fingerprint: info.fingerprint, ...(saved.length && { trusted: saved[0] }) } };
   }
   function validateGrant(value, p) {
     const choices = catalog(p);
@@ -70,17 +111,37 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
     let connection;
     let authenticated = false;
     const answered = new Set();
+    // OpenSSH output stays inside the app. It is scanned for the failure code and never streamed to a client.
+    const output = [];
+    let stage = 'connect';
     const onEvent = (event, value) => {
       if (signal.aborted) return;
+      if (event === 'data') {
+        output.push(...stripVTControlCharacters(String(value)).split(/\r?\n/).map(line => line.trim()).filter(Boolean));
+        if (output.length > 200) output.splice(0, output.length - 200);
+        return;
+      }
       if (event === 'ready') { authenticated = true; notify(event, { endpoint }); return; }
       if (event === 'closed' || event === 'prompt-clear') { notify(event, value); return; }
-      if (event === 'error') { notify(event, 'CONNECTION_FAILED'); return; }
+      if (event === 'error') {
+        const exit = Number(/\((\d+)\)/.exec(String(value))?.[1]) || null;
+        notify('error', { ...classifySshFailure(output, { exit, stage }), log: scrubLines(output) });
+        return;
+      }
       if (event !== 'prompt') return;
+      if (!authenticated) stage = value.hostKey ? 'hostkey' : 'auth';
       const handle = async () => {
         check();
         if (value.hostKey) {
-          notify('error', 'HOST_KEY_REJECTED');
-          connection?.answer(value.id, 'no');
+          const decision = hostKeyDecision(value.prompt, scope);
+          if (decision.code) {
+            notify('error', { code: decision.code, stage: 'hostkey', hint: failureRules.find(rule => rule[0] === decision.code)?.[3],
+              exit: null, detail: decision.detail, log: scrubLines(output) });
+            connection?.answer(value.id, 'no');
+          } else {
+            notify('hostkey.pinned', { host: decision.host, fingerprint: decision.fingerprint });
+            connection?.answer(value.id, decision.answer);
+          }
           return;
         }
         if (!authenticated && value.targetProcess && value.canRemember && state().useStoredAuthOnConnect !== false) {
@@ -125,7 +186,7 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
     }
     const auditPassword = () => notify('auth.rule', 'saved-password');
     connection = await openssh.start(config, mode === 'ssh' ? 'exec' : mode, {}, onEvent, [],
-      'yes', false, password, auditPassword, true);
+      'ask', false, password, auditPassword, true);
     if (signal.aborted) connection.close();
     return connection;
   }
@@ -201,4 +262,4 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
   }
   return { eligible, eligibilityReason, resolve, command, catalog, validateGrant, connect, approve, run, download };
 }
-module.exports = { createTransport };
+module.exports = { createTransport, classifySshFailure, scrubLines };

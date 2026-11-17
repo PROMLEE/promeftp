@@ -14,8 +14,7 @@ Select the client and a saved bookmark. Agent connections follow that bookmark's
 OpenSSH configuration, including aliases, configured SSH files, `Include`,
 `ProxyJump`, and `ProxyCommand`. `ProxyCommand` can start a local process when
 the agent opens a connection. Confirm aliases and proxy routes resolve to the
-intended server. Destination and jump-host keys must already be trusted by
-OpenSSH; configure and verify them through a regular desktop connection first.
+intended server. Agent connections use the host keys you trusted in PromeFTP. Connect to a server once in PromeFTP and confirm its fingerprint; the agent accepts that same key. ProxyJump routes are not verified in this release. If the server's key changes, the agent connection is refused until you trust the new key in PromeFTP. PromeFTP never stores a new key on an agent's behalf and never changes your `~/.ssh/known_hosts`.
 
 ## Grant a bookmark
 

@@ -59,6 +59,9 @@ const icons = {
   network: 'M3 5h18v5H3z M3 14h18v5H3z M6 7.5h.01M6 16.5h.01',
   link: 'm10 14 4-4m-6 7-2 2a3 3 0 0 1-4-4l5-5a3 3 0 0 1 4 0m5-3 2-2a3 3 0 0 1 4 4l-5 5a3 3 0 0 1-4 0',
   pause: 'M8 5v14M16 5v14',
+  info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-11v5.5m0-8.5h.01',
+  key: 'M15 7a4 4 0 1 0-4 4l-7 7v3h3v-2h2v-2h2l2.2-2.2A4 4 0 0 0 15 7zm1.5-.5h.01',
+  compare: 'M3 5h7v14H3z M14 5h7v14h-7z M10 9h4m-1.5-1.5L14 9l-1.5 1.5M14 15h-4m1.5-1.5L10 15l1.5 1.5',
   play: 'M7 5l11 7-11 7z',
   check: 'm5 12.5 4.5 4.5L19 7.5',
   alert: 'M12 3 2.5 20h19zM12 10v4.5m0 3h.01',
@@ -103,42 +106,97 @@ function passwordField(field, showHint = 'Show answer', hideHint = 'Hide answer'
   return wrap;
 }
 
-// Small "i" button that reveals a one-to-two sentence explanation on hover, focus or click.
-let infoTipCount = 0;
+// Info tips: one shared layer in the top layer (above dialogs, never clipped by overflow).
+// Hover or keyboard focus shows a tip after a short delay; a click pins it; outside click, Escape, scrolling, resizing and window blur close it.
+// Only one tip is open at a time.
+let tipLayer;
+let tipState = null; // { trigger, pinned }
+let tipTimer = 0;
+function tooltipLayer() {
+  if (!tipLayer) {
+    tipLayer = document.createElement('div');
+    tipLayer.id = 'tooltip-layer';
+    tipLayer.setAttribute('popover', 'manual');
+    tipLayer.setAttribute('role', 'tooltip');
+    tipLayer.addEventListener('mouseenter', () => clearTimeout(tipTimer));
+    tipLayer.addEventListener('mouseleave', () => scheduleTipClose());
+    document.body.append(tipLayer);
+  }
+  return tipLayer;
+}
+function placeTooltip(trigger) {
+  const layer = tooltipLayer();
+  const anchor = trigger.getBoundingClientRect();
+  const width = layer.offsetWidth;
+  const height = layer.offsetHeight;
+  const vw = document.documentElement.clientWidth;
+  const vh = window.innerHeight;
+  let top = anchor.bottom + 6;
+  if (top + height > vh - 8) top = Math.max(8, anchor.top - height - 6);
+  const left = Math.min(Math.max(8, anchor.left + anchor.width / 2 - width / 2), vw - width - 8);
+  layer.style.left = `${Math.round(left)}px`;
+  layer.style.top = `${Math.round(top)}px`;
+}
+function showTip(trigger, pinned) {
+  const layer = tooltipLayer();
+  if (tipState && tipState.trigger !== trigger) hideTip();
+  clearTimeout(tipTimer);
+  layer.textContent = t(trigger.dataset.tipText);
+  if (!layer.matches(':popover-open')) layer.showPopover();
+  placeTooltip(trigger);
+  tipState = { trigger, pinned: pinned || Boolean(tipState?.pinned && tipState.trigger === trigger) };
+  trigger.setAttribute('aria-expanded', String(tipState.pinned));
+  layer.id = 'tooltip-layer';
+  trigger.setAttribute('aria-describedby', layer.id);
+}
+function hideTip() {
+  clearTimeout(tipTimer);
+  if (tipLayer?.matches(':popover-open')) tipLayer.hidePopover();
+  if (tipState) tipState.trigger.setAttribute('aria-expanded', 'false');
+  tipState = null;
+}
+function scheduleTipClose() {
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(() => { if (!tipState?.pinned) hideTip(); }, 150);
+}
 function infoTip(text) {
-  const id = 'info-tip-' + (++infoTipCount);
   const wrap = document.createElement('span');
   wrap.className = 'info-tip';
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
+  // A span, not a button: a disabled fieldset disables its buttons, and the reason for a disabled field must stay readable.
+  const trigger = document.createElement('span');
+  trigger.setAttribute('role', 'button');
+  trigger.tabIndex = 0;
   trigger.className = 'info-tip-button';
-  trigger.textContent = 'i';
+  // Not data-tip: attachInfoTips selects [data-tip] and would turn every trigger into a new tip.
+  trigger.dataset.tipText = text;
   trigger.setAttribute('aria-label', t('More information'));
-  trigger.setAttribute('aria-describedby', id);
   trigger.setAttribute('aria-expanded', 'false');
-  const bubble = document.createElement('span');
-  bubble.id = id;
-  bubble.className = 'info-tip-bubble';
-  bubble.setAttribute('role', 'tooltip');
-  bubble.textContent = t(text);
-  if (typeof staticStrings !== 'undefined') staticStrings.push(() => { bubble.textContent = t(text); });
-  const setOpen = open => {
-    wrap.classList.toggle('open', open);
-    trigger.setAttribute('aria-expanded', String(open));
-  };
-  // Clicks inside a <label> must not toggle its control.
-  wrap.addEventListener('click', event => {
+  if (typeof staticStrings !== 'undefined') staticStrings.push(() => trigger.setAttribute('aria-label', t('More information')));
+  const svg = icon('info');
+  svg.setAttribute('stroke-width', '1.4');
+  trigger.append(svg);
+  let hoverTimer = 0;
+  trigger.addEventListener('mouseenter', () => {
+    clearTimeout(tipTimer);
+    hoverTimer = setTimeout(() => { if (!tipState?.pinned) showTip(trigger, false); }, 120);
+  });
+  trigger.addEventListener('mouseleave', () => { clearTimeout(hoverTimer); scheduleTipClose(); });
+  trigger.addEventListener('focus', () => { if (!tipState?.pinned) showTip(trigger, false); });
+  trigger.addEventListener('blur', () => { if (!tipState?.pinned) hideTip(); });
+  // A click pins the tip and must not toggle the control of an enclosing label.
+  trigger.addEventListener('click', event => {
     event.preventDefault();
     event.stopPropagation();
-    setOpen(!wrap.classList.contains('open'));
+    if (tipState?.trigger === trigger && tipState.pinned) hideTip();
+    else showTip(trigger, true);
   });
-  wrap.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || !wrap.classList.contains('open')) return;
-    event.stopPropagation();
-    setOpen(false);
+  trigger.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    trigger.click();
   });
-  wrap.addEventListener('focusout', event => { if (!wrap.contains(event.relatedTarget)) setOpen(false); });
-  wrap.append(trigger, bubble);
+  wrap.addEventListener('click', event => event.preventDefault());
+  wrap.append(trigger);
   return wrap;
 }
 // Turns every [data-tip] element under root into an info tip next to it.
@@ -151,8 +209,12 @@ function attachInfoTips(root = document) {
   for (const host of root.querySelectorAll('[data-tip]')) {
     const tip = infoTip(host.dataset.tip);
     host.removeAttribute('data-tip');
+    if (host.type === 'radio' || host.querySelector?.('input[type=radio]')) {
+      // Radio segments must stay clean: a tip inside one would sit in the option and could change its value.
+      console.warn('Info tip inside a radio label was moved to its group heading:', host);
+    }
     const label = host.tagName === 'LABEL' ? host : host.closest('label');
-    if (label) label.insertBefore(tip, labelControl(label));
+    if (label && !(host.type === 'radio')) label.insertBefore(tip, labelControl(label));
     else if (host.tagName === 'H3') host.append(tip);
     else {
       host.after(tip);
@@ -163,7 +225,15 @@ function attachInfoTips(root = document) {
     }
   }
 }
-document.addEventListener('click', event => {
-  if (event.target.closest?.('.info-tip')) return;
-  document.querySelectorAll('.info-tip.open').forEach(wrap => wrap.classList.remove('open'));
-});
+// A press or click outside the tip and its trigger closes a pinned tip.
+const closePinnedTipOutside = event => {
+  if (!tipState?.pinned) return;
+  if (event.target.closest?.('.info-tip-button') || event.target.closest?.('#tooltip-layer')) return;
+  hideTip();
+};
+document.addEventListener('pointerdown', closePinnedTipOutside);
+document.addEventListener('click', closePinnedTipOutside);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && tipState) hideTip(); });
+window.addEventListener('blur', () => hideTip());
+window.addEventListener('resize', () => { if (tipState) hideTip(); });
+document.addEventListener('scroll', () => { if (tipState) hideTip(); }, true);

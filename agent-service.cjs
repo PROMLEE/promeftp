@@ -9,7 +9,7 @@ const socketLimit = 16384;
 const idle = 10 * 60_000;
 const hash = value => createHash('sha256').update(value).digest('hex');
 const clean = value => String(value ?? '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 512);
-const problem = code => Object.assign(Error(code), { agentCode: code });
+const problem = (code, reason) => Object.assign(Error(code), { agentCode: code, ...(reason && { agentReason: reason }) });
 function socketDirectory(uid = process.getuid()) { return '/tmp/promeftp-agent-' + uid; }
 const fields = 'id, time, request, client, profile, session, operation, result, reason, detail';
 
@@ -18,6 +18,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
   const socketPath = path.join(dir, 'api.sock');
   const clients = new Set();
   const sessions = new Map();
+  const diagnostics = new Map();
   let server, starting, stopping, db;
   let storageFailed = false;
   const day = 86400000;
@@ -156,6 +157,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.endpoint = typeof value?.endpoint === 'string' ? value.endpoint : '';
         s.prompt = undefined;
         note(s, 'session.ready', 'success');
+        if (s.mode === 'sftp') resolveRoot(s);
       }
       if (event === 'prompt') {
         s.status = 'waiting_for_user';
@@ -168,14 +170,24 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.status = 'connecting';
       }
       if (event === 'auth.rule') audit(base(s, event, 'submitted', null, clean(value)));
-      if (event === 'error') note(s, 'session.error', 'failed', value === 'HOST_KEY_REJECTED' ? value : 'CONNECTION_FAILED');
-      if (event === 'closed') end(s, 'REMOTE_CLOSED');
+      if (event === 'hostkey.pinned') audit(base(s, event, 'success', null, JSON.stringify(value)));
+      if (event === 'error') {
+        // The first failure is the final reason. Later noise from the same OpenSSH exit is not recorded.
+        if (s.failure) return;
+        const failure = typeof value === 'string' ? { code: 'CONNECTION_FAILED', stage: 'connect' } : value;
+        s.failure = { code: failure.code || 'CONNECTION_FAILED', stage: failure.stage || 'connect', hint: failure.hint, exit: failure.exit ?? null };
+        // Only the classification is recorded and returned to clients. The raw log stays in memory for the app's own view.
+        if (failure.log) diagnostics.set(s.id, { time: Date.now(), log: failure.log });
+        if (diagnostics.size > 50) diagnostics.delete(diagnostics.keys().next().value);
+        note(s, 'session.error', 'failed', s.failure.code, JSON.stringify({ ...failure.detail, stage: s.failure.stage, exit: s.failure.exit, hint: s.failure.hint }));
+      }
+      if (event === 'closed') end(s, s.status === 'ready' ? 'REMOTE_CLOSED' : 'CONNECT_FAILED');
     };
     Promise.resolve().then(() => transport.connect(p, grant, mode, notify, () => current(s), s.controller.signal))
       .then(connection => { s.connection = connection; if (s.closed) connection.close(); })
       .catch(error => {
         if (s.closed) return;
-        note(s, 'session.error', 'failed', error.agentCode || 'CONNECTION_FAILED');
+        if (!s.failure) note(s, 'session.error', 'failed', error.agentCode || 'CONNECTION_FAILED');
         end(s, 'CONNECT_FAILED');
       });
     return s;
@@ -187,24 +199,47 @@ async function createAgentService({ directory, state, save, profiles, transport,
         /[\x00-\x1f\x7f]/.test(value) || value.split('/').some(part => part === '..' || part === '.')) throw problem('INVALID_PATH');
     return path.posix.normalize(value).replace(/\/$/, '') || '/';
   }
+  // The root may itself be a symbolic link (for example /tmp on macOS). It is resolved once when the session is ready.
+  function resolveRoot(s) {
+    const root = s.grant.root;
+    const channel = s.connection?.channel;
+    s.rootReady = channel ? sftpCall(channel, 'realpath', root).then(resolved => {
+      if (resolved !== root) note(s, 'session.root', 'success', null, JSON.stringify({ configured: root, resolved }));
+      return resolved;
+    }, () => root) : Promise.resolve(root);
+  }
+  const lstatOrReason = (channel, name) => sftpCall(channel, 'lstat', name).catch(error => {
+    throw error.code === 2 ? problem('PATH_NOT_ALLOWED', 'PATH_NOT_FOUND') : error;
+  });
+  // Paths outside the root are refused from the text alone, so the answer never depends on what the server holds.
+  // Inside the root, the path is mapped onto the resolved root and every component is checked for links.
   async function checkedPath(s, value) {
     const target = remotePath(value);
     const root = s.grant.root;
-    if (!inside(root, target)) throw problem('PATH_NOT_ALLOWED');
+    if (!inside(root, target)) throw problem('PATH_NOT_ALLOWED', 'PATH_OUTSIDE_ROOT');
     const channel = s.connection.channel;
-    const canonical = await sftpCall(channel, 'realpath', target);
-    if (canonical !== target) throw problem('PATH_NOT_ALLOWED');
+    const resolvedRoot = await (s.rootReady || Promise.resolve(root));
+    const mapped = path.posix.join(resolvedRoot, path.posix.relative(root, target));
     let name = '/';
-    let attrs = target === '/' ? await sftpCall(channel, 'lstat', '/') : null;
-    for (const part of target.split('/').filter(Boolean)) {
+    let attrs = null;
+    for (const part of mapped.split('/').filter(Boolean)) {
       name = path.posix.join(name, part);
-      attrs = await sftpCall(channel, 'lstat', name);
-      if (attrs.isSymbolicLink()) throw problem('PATH_NOT_ALLOWED');
+      attrs = await lstatOrReason(channel, name);
+      if (attrs.isSymbolicLink()) throw problem('PATH_NOT_ALLOWED', 'PATH_SYMLINK');
     }
+    attrs ??= await lstatOrReason(channel, '/');
     current(s);
     return { channel, attrs, target };
   }
 
+  // The classification of a session's failure, for clients: code, stage, hint and exit status only.
+  function failureOf(id, client) {
+    const row = db.prepare("SELECT reason, detail FROM events WHERE session=? AND client=? AND operation='session.error' ORDER BY id DESC LIMIT 1").get(id, client);
+    if (!row) return {};
+    let detail = {};
+    try { detail = JSON.parse(row.detail || '{}'); } catch { detail = {}; }
+    return { error: { code: row.reason, stage: detail.stage, hint: detail.hint, ...(Number.isInteger(detail.exit) && { exit: detail.exit }) } };
+  }
   function sessionEvents(id, client, after = 0) {
     if (!Number.isSafeInteger(after) || after < 0) throw problem('INVALID_REQUEST');
     return db.prepare(`SELECT id,time,request,operation,result,reason,detail FROM events
@@ -253,7 +288,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
           if (!ended) throw problem('SESSION_NOT_FOUND');
           event.session = params.session;
           work = method === 'events.list' ? () => sessionEvents(params.session, clientId, params.after)
-            : () => ({ session: params.session, status: 'closed', reason: ended.reason });
+            : () => ({ session: params.session, status: 'closed', reason: ended.reason, ...(failureOf(params.session, clientId)) });
         }
         const s = sessions.get(params.session);
         if (!work) {
@@ -296,7 +331,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
             } else {
               if (s.mode !== 'sftp' || (method === 'sftp.download' && !grant.download)) throw problem('ACCESS_DENIED');
               const target = remotePath(params.path);
-              if (!inside(grant.root, target)) throw problem('PATH_NOT_ALLOWED');
+              if (!inside(grant.root, target)) throw problem('PATH_NOT_ALLOWED', 'PATH_OUTSIDE_ROOT');
               event.detail = target;
               work = async () => {
                 const { channel, attrs } = await checkedPath(s, target);
@@ -338,7 +373,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
       const reason = error.agentCode || 'OPERATION_FAILED';
       if (started) finish(event, reason === 'TIMEOUT' ? 'unknown' : 'failed', reason);
       else audit({ ...event, result: 'denied', reason });
-      throw problem(reason);
+      throw problem(reason, error.agentReason);
     } finally {
       clearTimeout(timeout);
       if (activeSession) activeSession.inFlight = false;
@@ -377,7 +412,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
           throw problem('UNAUTHENTICATED');
         }
         response = { data: await execute(client, req, request) };
-      } catch (error) { response = { error: error.agentCode || 'INVALID_REQUEST' }; }
+      } catch (error) { response = { error: error.agentCode || 'INVALID_REQUEST', ...(error.agentReason && { reason: error.agentReason }) }; }
       socket.end(JSON.stringify({ version: protocol, request, ...response }) + '\n');
     });
   }
@@ -443,6 +478,10 @@ async function createAgentService({ directory, state, save, profiles, transport,
         prompts: [...sessions.values()].filter(s => s.prompt).map(s => ({ session: s.id, profile: s.profile, client: s.client, expires: s.authDeadline, ...s.prompt })),
       };
     },
+    // App-only view of OpenSSH output for a failed session. Never returned through the client API.
+    diagnostic(id) {
+      return diagnostics.get(id) || null;
+    },
     async enable(enabled) {
       if (typeof enabled !== 'boolean') throw problem('INVALID_REQUEST');
       if (enabled) { this.verify(); await listen(); }
@@ -470,6 +509,27 @@ async function createAgentService({ directory, state, save, profiles, transport,
       await save(g => { g.clients = (g.clients || []).filter(c => c.id !== id); });
       reconcile();
       audit({ client: id, operation: 'client.revoke', result: 'success' });
+    },
+    // Applies one grant to several bookmarks. PAM rules and triggers can be host-scoped, so for each bookmark only the ids
+    // that bookmark offers are kept; the rest are reported as skipped. Each bookmark is then checked again on its own.
+    async grantMany(clientId, ids, grant) {
+      const results = [];
+      for (const id of ids) {
+        const p = profileFor(id);
+        const choices = p && transport.eligible(p) ? transport.catalog(p) : { pam: [], triggers: [] };
+        const filtered = { ...grant };
+        const skipped = {};
+        for (const field of ['pam', 'triggers']) {
+          const requested = Array.isArray(grant[field]) ? grant[field] : [];
+          const allowed = new Set(choices[field].map(item => item.id));
+          filtered[field] = requested.filter(value => allowed.has(value));
+          if (filtered[field].length !== requested.length) skipped[field] = requested.length - filtered[field].length;
+        }
+        const note = Object.keys(skipped).length ? { skipped } : {};
+        try { await this.grant(clientId, id, filtered); results.push({ id, ok: true, ...note }); }
+        catch (error) { results.push({ id, ok: false, reason: error.agentCode || 'OPERATION_FAILED', ...note }); }
+      }
+      return results;
     },
     async grant(clientId, id, grant) {
       const p = profileFor(id);

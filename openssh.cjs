@@ -8,6 +8,43 @@ const askpass = require('./askpass.cjs');
 const { SFTP } = require('ssh2/lib/protocol/SFTP.js');
 
 const ssh = '/usr/bin/ssh';
+// OpenSSH splits option values on spaces unless each path is double-quoted.
+const sshQuote = value => '"' + value.replace(/["\\]/g, '\\$&') + '"';
+
+// Parses OpenSSH's host-key confirmation. Shared by the app prompt and the agent pinning check.
+// Returns { host, fingerprint, accept } or null when the text is not a host-key question.
+function parseHostKeyPrompt(prompt) {
+  const fingerprint = /^(?:[\w-]+ )?key fingerprint is:? (SHA256:[A-Za-z0-9+/]+={0,2}|MD5:(?:[a-f0-9]{2}:){15}[a-f0-9]{2})\.?$/mi.exec(prompt)?.[1];
+  const raw = /^The authenticity of host '(.+)' can't be established\.$/m.exec(prompt)?.[1];
+  if (!raw) return null;
+  const host = raw.replace(/ \([^()]+\)$/, '').toLowerCase();
+  const accept = fingerprint && prompt.endsWith('(yes/no/[fingerprint])?') ? fingerprint : 'yes';
+  return { host, fingerprint, accept };
+}
+// known_hosts lines name hosts as "host", "host,ip" or "[host]:port". Entries are compared as written, case-insensitively.
+function knownHostEntries(line) {
+  return line.split(' ')[0].split(',').map(entry => entry.toLowerCase());
+}
+// ssh-keygen understands hashed entries (HashKnownHosts yes) and [host]:port forms, so it is the matcher.
+const sshKeygen = '/usr/bin/ssh-keygen';
+async function knownHostsContains(file, host) {
+  if (!(await fs.access(file).then(() => true, () => false))) return false;
+  try {
+    await execute(sshKeygen, ['-F', host, '-f', file]);
+    return true;
+  } catch (error) {
+    if (error.code === 1) return false;
+    throw error;
+  }
+}
+// Removes every entry for a host, so a key the user re-trusted in the app replaces the stale one.
+async function forgetKnownHost(file, host) {
+  if (!(await knownHostsContains(file, host))) return false;
+  await execute(sshKeygen, ['-R', host, '-f', file]);
+  // ssh-keygen keeps a backup of the previous file; the agent's copy is not worth keeping.
+  await fs.rm(file + '.old', { force: true });
+  return true;
+}
 const execute = promisify(execFile);
 
 function configArgs(config, includeConfigPath = true) {
@@ -183,7 +220,7 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
       ['-N', '-o', 'RemoteCommand=none', '-o', 'PermitLocalCommand=no'];
     const restricted = agent ? [...(config.configPath ? ['-F', config.configPath] : []), '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no',
       '-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none', '-o', 'VerifyHostKeyDNS=no', '-o', 'UpdateHostKeys=no',
-      ...(config.knownHosts ? ['-o', 'UserKnownHostsFile=' + config.knownHosts] : [])] : [];
+      ...(config.knownHosts ? ['-o', 'UserKnownHostsFile=' + sshQuote(config.knownHosts) + ' ' + sshQuote('~/.ssh/known_hosts')] : [])] : [];
     terminal = pty.spawn(ssh, [...restricted, ...masterOptions, ...modeOptions, ...authOptions, ...configArgs(config, !agent), '--', config.host], {
       name: 'xterm-256color', cols: size.cols || 80, rows: size.rows || 24,
       cwd: os.homedir(), env: { ...process.env, ...auth?.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
@@ -235,4 +272,5 @@ function startLocal(size, notify) {
   };
 }
 
-module.exports = { aliases, effective, effectiveOutput, authEndpoint, inspectIdentityFile, start, startLocal };
+module.exports = { aliases, effective, effectiveOutput, authEndpoint, inspectIdentityFile, start, startLocal,
+  parseHostKeyPrompt, knownHostsContains, forgetKnownHost };

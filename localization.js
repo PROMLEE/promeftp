@@ -30,6 +30,68 @@ More information|자세히 보기|詳細|更多信息
 SFTP|SFTP|SFTP|SFTP
 SSH commands|SSH 명령|SSH コマンド|SSH 命令
 Authentication and triggers|인증과 트리거|認証とトリガー|身份验证和触发器
+This key is fixed for|이 키는 다음 기능에 고정되어 있습니다:|このキーは次の機能に固定されています：|此按键固定用于：
+PAM rules and triggers are per bookmark and were left out here.|PAM 규칙과 트리거는 북마크마다 다르므로 여기서는 제외했습니다.|PAM ルールとトリガーはブックマークごとに異なるため、ここでは除外しました。|PAM 规则和触发器因书签而异，此处已省略。
+Press keys… (Esc cancels, Delete clears)|키를 누르세요… (Esc 취소, Delete 해제)|キーを押してください…（Esc でキャンセル、Delete で解除）|请按下按键…（Esc 取消，Delete 清除）
+Shortcut saved|단축키를 저장했습니다|ショートカットを保存しました|快捷键已保存
+Change|변경|変更|更改
+Reset|기본값|初期値に戻す|恢复默认
+Reset All to Defaults|모두 기본값으로|すべて初期値に戻す|全部恢复默认
+Fixed|고정|固定|固定
+This shortcut is used for editing. Use it anyway?|편집에 쓰는 단축키입니다. 그래도 사용할까요?|編集に使われるショートカットです。それでも使用しますか？|此快捷键用于编辑。仍要使用吗？
+This key is already used by|이 키는 이미 다음 동작에 쓰입니다:|このキーは次の操作で使用されています：|此按键已被以下操作使用：
+Replace it?|바꿀까요?|置き換えますか？|要替换吗？
+macOS reserves this shortcut.|macOS가 예약한 단축키입니다.|macOS が予約しているショートカットです。|此快捷键由 macOS 保留。
+A shortcut needs a modifier key.|단축키에는 modifier 키가 하나 이상 필요합니다.|ショートカットには修飾キーが必要です。|快捷键需要一个修饰键。
+This key cannot be used.|이 키는 사용할 수 없습니다.|このキーは使用できません。|无法使用此按键。
+Key diagnostics|키 진단|キー診断|按键诊断
+View log|로그 보기|ログを表示|查看日志
+No key events recorded yet.|아직 기록된 키 이벤트가 없습니다.|まだキーイベントは記録されていません。|尚未记录按键事件。
+Move to All Hosts|모든 호스트로 이동|すべてのホストへ移動|移到所有主机
+Undo|실행 취소|取り消す|撤销
+Deleted|삭제했습니다|削除しました|已删除
+Edit Rule|규칙 편집|ルールを編集|编辑规则
+Edit Saved Answer|저장된 응답 편집|保存済みの応答を編集|编辑已保存的应答
+Matches|일치|一致|匹配
+Does not match|일치하지 않음|一致しません|不匹配
+Not a valid pattern|올바르지 않은 패턴|無効なパターン|无效的模式
+Test question|테스트할 질문|テストする質問|测试问题
+More actions|더 보기|その他の操作|更多操作
+No saved answers. After a successful sign-in, choose Save Answer to add one here.|저장된 응답이 없습니다. 로그인에 성공한 뒤 '응답 저장'을 누르면 여기에 추가됩니다.|保存済みの応答はありません。サインイン成功後に「応答を保存」を選ぶとここに追加されます。|暂无已保存的应答。登录成功后，选择“保存应答”即可在此添加。
+No rules yet. Add a rule to answer a question on every connection.|아직 규칙이 없습니다. 규칙을 추가하면 모든 연결에서 질문에 답합니다.|まだルールがありません。ルールを追加すると、すべての接続で質問に応答します。|暂无规则。添加规则后，每次连接都会应答问题。
+Permission preset|권한 프리셋|権限プリセット|权限预设
+Choose a preset|프리셋 선택|プリセットを選択|选择预设
+Read-only: browse the root|읽기 전용: 루트 둘러보기|読み取り専用: ルートを閲覧|只读：浏览根目录
+Browse and download|둘러보기와 다운로드|閲覧とダウンロード|浏览和下载
+Browse, download, and approved commands|둘러보기, 다운로드, 승인된 명령|閲覧、ダウンロード、承認済みコマンド|浏览、下载和已批准的命令
+Maximum allowed (review first)|최대 허용 (먼저 검토)|最大許可（先に確認）|最大允许（请先检查）
+Apply to all eligible bookmarks|적격한 모든 북마크에 적용|対象となるすべてのブックマークに適用|应用到所有符合条件的书签
+Give this client every permission?|이 클라이언트에 모든 권한을 줄까요?|このクライアントにすべての権限を与えますか？|要授予此客户端所有权限吗？
+This client gets browsing, downloads, approved commands, saved authentication and every rule and trigger, for|이 클라이언트는 둘러보기, 다운로드, 승인된 명령, 저장된 인증, 모든 규칙과 트리거를 다음 북마크에 대해 받습니다:|このクライアントは、閲覧、ダウンロード、承認済みコマンド、保存済み認証、すべてのルールとトリガーを次のブックマークに対して得ます：|此客户端将获得以下书签的浏览、下载、已批准命令、已保存认证以及所有规则和触发器：
+bookmark(s).|개의 북마크.|件のブックマーク。|个书签。
+bookmark(s)|북마크|ブックマーク|书签
+Skipped|건너뜀|スキップ|已跳过
+I understand the risks|위험을 이해했습니다|リスクを理解しました|我已了解风险
+Commands still need approval each time. SFTP writes and commands without approval are not available through this API.|명령은 매번 승인이 필요합니다. SFTP 쓰기와 승인 없는 명령은 이 API로 열 수 없습니다.|コマンドは毎回承認が必要です。SFTP の書き込みと承認なしのコマンドはこの API では利用できません。|命令每次仍需审批。此 API 不提供 SFTP 写入和无需审批的命令。
+Local agent access is off.|로컬 에이전트 접근이 꺼져 있습니다.|ローカルのエージェントアクセスはオフです。|本地代理访问已关闭。
+Turn On|켜기|オンにする|开启
+Register an agent client first.|먼저 에이전트 클라이언트를 등록하세요.|まずエージェントクライアントを登録してください。|请先注册代理客户端。
+Register Client|클라이언트 등록|クライアントを登録|注册客户端
+Choose the client that will receive this access.|이 권한을 받을 클라이언트를 선택하세요.|このアクセス権を受け取るクライアントを選んでください。|请选择要接收此访问权限的客户端。
+Choose Client|클라이언트 선택|クライアントを選択|选择客户端
+Choose a bookmark.|북마크를 선택하세요.|ブックマークを選んでください。|请选择书签。
+Choose Bookmark|북마크 선택|ブックマークを選択|选择书签
+This server's host key is not trusted yet. Connect to it once in PromeFTP to trust it.|이 서버의 호스트 키를 아직 신뢰하지 않았습니다. PromeFTP에서 한 번 연결해 신뢰하세요.|このサーバーのホストキーはまだ信頼されていません。PromeFTPで一度接続して信頼してください。|此服务器的主机密钥尚未受信任。请先在 PromeFTP 中连接一次以信任它。
+Show log|로그 보기|ログを表示|显示日志
+No log is kept for this session.|이 세션의 로그는 보관되지 않았습니다.|このセッションのログは保存されていません。|此会话未保留日志。
+Shows a question from a server that an agent session is waiting for you to answer. This section appears only when a request is waiting.|에이전트 세션이 서버 질문에 답을 기다릴 때 여기에 표시됩니다. 대기 중인 요청이 있을 때만 이 섹션이 보입니다.|エージェントセッションがサーバーの質問への回答を待っているときに表示されます。待機中のリクエストがあるときだけこのセクションが表示されます。|代理会话等待您回答服务器问题时会在此显示。仅在有待处理请求时显示此部分。
+Transfers finished|전송 완료|転送完了|传输完成
+Auth|인증|認証|认证
+Auth response rule|인증 응답 규칙|認証応答ルール|认证应答规则
+Authentication settings|인증 설정|認証設定|身份验证设置
+No matching snippets. Use + to add one.|일치하는 스니펫이 없습니다. +로 추가하세요.|一致するスニペットがありません。+ で追加してください。|没有匹配的代码片段。使用 + 添加。
+No snippets yet. Use + to add one.|아직 스니펫이 없습니다. +로 추가하세요.|まだスニペットがありません。+ で追加してください。|暂无代码片段。使用 + 添加。
+Snippet|스니펫|スニペット|代码片段
 Master switch. Turns on both all-host rules and per-host answers for connections. When it is off, neither is used.|마스터 스위치입니다. 켜면 모든 호스트 규칙과 호스트별 응답을 연결에 사용하고, 끄면 둘 다 사용하지 않습니다.|マスタースイッチです。オンにすると全ホスト向けルールとホストごとの応答を接続に使用し、オフにすると両方とも使用しません。|总开关。开启后连接会同时使用全局主机规则和按主机保存的应答；关闭后两者都不使用。
 Rules that answer prompts on every SSH and SFTP connection. Match the exact text or a regular expression.|모든 SSH·SFTP 연결의 질문에 응답하는 규칙입니다. 질문 문장을 정확히 일치시키거나 정규식을 사용합니다.|すべての SSH・SFTP 接続でプロンプトに応答するルールです。質問文を完全一致させるか、正規表現を使います。|在每个 SSH 和 SFTP 连接中应答提示的规则。可按完整文本或正则表达式匹配。
 Answers saved after a successful sign-in on one connection. They are used only for that host.|한 연결에서 로그인에 성공한 뒤 저장된 응답입니다. 해당 호스트에서만 사용합니다.|1 つの接続でサインインに成功した後に保存された応答です。そのホストにのみ使用します。|某个连接成功登录后保存的应答，仅用于该主机。
@@ -573,7 +635,16 @@ Copy Path|경로 복사|パスをコピー|复制路径
 Reveal in Finder|Finder에서 보기|Finderで表示|在 Finder 中显示
 Move to Trash|휴지통으로 이동|ゴミ箱に入れる|移到废纸篓
 Get Info|정보 가져오기|情報を見る|显示简介
-Choose columns|열 선택|列を選択|选择列`.trim().split('\n').map(line => {
+Choose columns|열 선택|列を選択|选择列
+..|..|..|..
+Authentication response|인증 응답|認証への応答|身份验证响应
+Bookmark changes saved|북마크 변경 사항을 저장했습니다|ブックマークの変更を保存しました|已保存书签更改
+Local to Remote|로컬 → 원격|ローカルからリモートへ|本地到远程
+New bookmark created|새 북마크를 만들었습니다|新しいブックマークを作成しました|已创建新书签
+Paste into terminal|터미널에 붙여넣기|ターミナルに貼り付け|粘贴到终端
+Reconnect the SFTP session before comparing.|비교하기 전에 SFTP를 다시 연결하세요.|比較する前に SFTP に再接続してください。|比较前请重新连接 SFTP。
+Remote to Local|원격 → 로컬|リモートからローカルへ|远程到本地
+`.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];
 }));
