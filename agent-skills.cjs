@@ -11,7 +11,15 @@ const agentTargets = {
   copilot: ['GitHub Copilot CLI', '.copilot/skills', '.github/skills'],
 };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const bundled = path.join(__dirname, 'agent-skills/promeftp/SKILL.md');
+// The app bundle has the skill under agent-skills/; the source tree has only the published copy under skills/.
+const bundledSkillPaths = [path.join(__dirname, 'agent-skills/promeftp/SKILL.md'), path.join(__dirname, 'skills/promeftp/SKILL.md')];
+async function readFirstSkill(paths) {
+  for (const file of paths) {
+    try { return await fs.readFile(file); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  throw Object.assign(Error('Bundled skill not found'), { code: 'ENOENT' });
+}
 const manifestURL = 'https://raw.githubusercontent.com/PROMLEE/promeftp/main/updates/agent-skills.json';
 
 async function detectAgents(home) {
@@ -45,7 +53,7 @@ async function packageFor(target, appVersion, publicKey) {
   let envelope;
   try { envelope = await fetchLimited(manifestURL, 65536); }
   catch (error) { if (error.agentCode) throw error; }
-  if (!envelope) return { bytes: await fs.readFile(bundled), version: appVersion };
+  if (!envelope) return { bytes: await readFirstSkill(bundledSkillPaths), version: appVersion };
   try {
     const { manifest, signature } = JSON.parse(envelope.toString());
     const payload = Buffer.from(manifest, 'base64');
@@ -53,7 +61,7 @@ async function packageFor(target, appVersion, publicKey) {
     if (!verify(null, payload, { key, format: 'der', type: 'spki' }, Buffer.from(signature,'base64'))) throw Error();
     const entry = JSON.parse(payload.toString()).packages.find(p => p.protocol === protocol && p.targets.includes(target) &&
       p.appVersion === appVersion && /^\d+\.\d+\.\d+$/.test(p.version) && /^[a-f0-9]{64}$/.test(p.sha256));
-    if (!entry) return { bytes: await fs.readFile(bundled), version: appVersion };
+    if (!entry) return { bytes: await readFirstSkill(bundledSkillPaths), version: appVersion };
     const root = 'https://raw.githubusercontent.com/PROMLEE/promeftp/v' + entry.release + '/';
     if (!/^\d+\.\d+\.\d+$/.test(entry.release) || entry.url !== root + 'skills/promeftp/SKILL.md') throw Error();
     const bytes = await fetchLimited(entry.url, 65536);
@@ -109,4 +117,4 @@ async function manageSkill({ target, action, base, project = false, appVersion, 
   } finally { await fs.rm(temporary, { force: true }); }
   return { version, sha256: hash, path: file };
 }
-module.exports = { manageSkill, agentTargets, detectAgents };
+module.exports = { manageSkill, agentTargets, detectAgents, bundledSkillPaths, readFirstSkill };
