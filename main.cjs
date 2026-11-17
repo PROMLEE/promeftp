@@ -11,13 +11,18 @@ const path = require('node:path');
 const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { translate, supportedLocale } = require('./localization.js');
-const { RE2 } = require('re2-wasm');
 const { createAgentService } = require('./agent-service.cjs');
 const { createTransport } = require('./agent-transport.cjs');
 const { manageSkill, agentTargets, detectAgents } = require('./agent-skills.cjs');
 const pathFavorites = require('./path-favorites.cjs');
 const { createTransferService } = require('./transfer-service.cjs');
 const directoryCompare = require('./directory-compare.cjs');
+const { normalizedAuthQuestion, globalPattern, matchesGlobalPattern } = require('./auth-rules.cjs');
+const stateRules = require('./state-rules.cjs');
+const { bookmarkFolderName, bookmarkFolderNames, workspaceName } = stateRules;
+const expandHome = value => stateRules.expandHome(value, app.getPath('home'));
+const profile = input => stateRules.profile(input, app.getPath('home'));
+const snippetScope = context => stateRules.snippetScope(context, app.getPath('home'));
 
 let window;
 let preferencesWindow;
@@ -35,6 +40,8 @@ let agent;
 let agentTransport;
 let agentStartupError;
 const sessions = new Map();
+// Local folder comparison stats at most this many entries at a time.
+const localStatConcurrency = 32;
 const statePath = () => path.join(app.getPath('userData'), 'profiles.json');
 
 function syncUpdateBusy() {
@@ -62,10 +69,6 @@ async function updateState(change) {
 }
 let stateWrites = Promise.resolve();
 
-function expandHome(value) {
-  const trimmed = value.trim();
-  return trimmed.startsWith('~/') ? path.join(app.getPath('home'), trimmed.slice(2)) : trimmed;
-}
 function editableConfigPath(file) {
   const defaultPath = path.join(app.getPath('home'), '.ssh', 'config');
   const requested = path.resolve(expandHome(file || '') || defaultPath);
@@ -73,26 +76,10 @@ function editableConfigPath(file) {
   if (!allowed.has(requested)) throw Error('Add this SSH config file to PromeFTP before editing it.');
   return requested;
 }
-function profile(input) {
-  const { label = '', host = '', hostname = '', port = null, username = '', keyPath = '', group = '', configPath = '', pam = false } = input;
-  const address = host.trim();
-  if (!address || address.startsWith('-') || /[\s\x00]/.test(address)) throw Error('Enter an SSH host or alias.');
-  if (port !== null && (!Number.isInteger(port) || port < 1 || port > 65535)) throw Error('Port must be between 1 and 65535.');
-  const override = input.usesAlias === true ? hostname.trim() : '';
-  if (override && (override.startsWith('-') || !/^[\p{L}\p{N}._:%-]+$/u.test(override))) {
-    throw Error('Enter a hostname or IP address.');
-  }
-  return {
-    ...(override && { hostname: override }),
-    label: label.trim() || address, host: address, port, username: username.trim(),
-    keyPath: expandHome(keyPath), group: group.trim(), configPath: expandHome(configPath), pam: Boolean(pam),
-    usesAlias: input.usesAlias === true,
-  };
-}
 
 const preferencesMethods = new Set([
   'appearance', 'application-info', 'preferences-data', 'save-preferences', 'open-config-from-preferences', 'close-preferences',
-  'keyboard-shortcuts', 'show-about', 'update-status', 'open-link', 'open-sponsors', 'open-project-license', 'open-license-notices', 'check-for-updates', 'set-automatic-updates',
+  'keyboard-shortcuts', 'update-status', 'open-link', 'open-sponsors', 'open-project-license', 'open-license-notices', 'check-for-updates', 'set-automatic-updates',
   'saved-auth-replies', 'reveal-auth-answer', 'move-auth-reply-to-global', 'saved-auto-setting',
   'set-saved-auto-setting', 'global-auth-rules', 'save-global-auth-rule', 'remove-global-auth-rule',
   'update-auth-reply', 'remove-auth-reply', 'keychain-preferences', 'set-keychain-preferences',
@@ -113,16 +100,6 @@ function tell(id, event, value) {
   if (window && !window.isDestroyed()) window.webContents.send('session', { id, event, value });
 }
 
-function bookmarkFolderNames(snapshot) {
-  return new Set([...(snapshot.bookmarkFolders || []), ...snapshot.profiles.map(entry => entry.group).filter(Boolean)]);
-}
-
-function bookmarkFolderName(value) {
-  const name = typeof value === 'string' ? value.trim() : '';
-  if (!name || name.length > 80) throw Error('Enter a folder name (1–80 characters).');
-  return name;
-}
-
 function favoriteScope(input) {
   if (input === 'local') return 'local';
   return pathFavorites.scopeFor(profile(input));
@@ -141,12 +118,6 @@ handle('sftp-favorites', async (id, legacy = []) => {
   if (!pathFavorites.list(state, scope).length && Array.isArray(legacy) && legacy.length) {
     await updateState(next => pathFavorites.migrate(next, scope, legacy));
   }
-  return pathFavorites.list(state, scope);
-});
-handle('save-sftp-favorites', async (id, items, manualOrder = false) => {
-  const scope = favoriteScope(id);
-  await updateState(next => pathFavorites.replace(next, scope, items, manualOrder === true));
-  emitFavorites(scope);
   return pathFavorites.list(state, scope);
 });
 handle('mutate-sftp-favorite', async (id, change) => {
@@ -273,11 +244,6 @@ handle('remove-history-item', id => updateState(next => {
   next.connectionHistory = (next.connectionHistory || []).filter(entry => entry.id !== id);
 }));
 
-function workspaceName(value) {
-  const name = typeof value === 'string' ? value.trim() : '';
-  if (!name || name.length > 80) throw Error('Enter a workspace name (1–80 characters).');
-  return name;
-}
 handle('workspaces', () => state.workspaces);
 handle('rename-workspace', (id, value) => {
   const name = workspaceName(value);
@@ -349,13 +315,6 @@ handle('confirm-remove-workspace', async id => {
   });
   return true;
 });
-function snippetScope(context) {
-  if (!context) return '';
-  if (context.mode === 'local') return 'local';
-  if (context.mode !== 'ssh') throw Error('Choose an SSH or local terminal.');
-  const { host, hostname, username, port, configPath } = profile(context.input);
-  return JSON.stringify(['ssh', host.toLowerCase(), hostname || '', username, port, configPath]);
-}
 handle('snippets', context => {
   const scope = snippetScope(context);
   return state.snippets.filter(snippet => !snippet.scope || snippet.scope === scope);
@@ -501,7 +460,6 @@ function openPreferences(page, legacyTerminal) {
 }
 handle('open-preferences', openPreferences);
 handle('close-preferences', () => preferencesWindow?.close());
-handle('show-about', () => openPreferences('about'));
 handle('update-status', () => ({ lastCheck: updater?.lastUpdateCheck() ?? null }));
 handle('preferences-data', () => ({
   locale: activeLocale(), language: state.language || 'system',
@@ -553,11 +511,6 @@ function setAutomaticUpdates(enabled) {
 handle('check-for-updates', checkForUpdates);
 handle('set-automatic-updates', setAutomaticUpdates);
 handle('appearance', () => nativeTheme.themeSource);
-handle('set-appearance', async appearance => {
-  if (!['system', 'light', 'dark'].includes(appearance)) throw Error('Choose a supported appearance.');
-  await updateState(next => { next.appearance = appearance; });
-  nativeTheme.themeSource = appearance;
-});
 handle('remove-snippet', id => updateState(next => {
   next.snippets = next.snippets.filter(snippet => snippet.id !== id);
 }));
@@ -583,10 +536,6 @@ handle('ssh-password-saved', async input => {
   if (!saved) return '';
   try { return await readAnswer(saved); }
   catch { return ''; }
-});
-handle('forget-ssh-password', async input => {
-  const scope = await sshPasswordScope(input);
-  await updateState(next => { if (next.sshPasswords) delete next.sshPasswords[scope]; });
 });
 
 function validAuthAnswer(value) {
@@ -639,18 +588,6 @@ function detailsWithoutKey(details) {
   return metadata;
 }
 
-const globalPatternCache = new WeakMap();
-function globalPattern(prompt) {
-  return new RE2(prompt, 'u');
-}
-function matchesGlobalPattern(rule, question) {
-  if (!globalPatternCache.has(rule)) {
-    try { globalPatternCache.set(rule, globalPattern(rule.prompt)); }
-    catch { globalPatternCache.set(rule, null); }
-  }
-  return globalPatternCache.get(rule)?.test(question) === true;
-}
-
 handle('reveal-auth-answer', async (kind, id) => {
   const entry = kind === 'global' ? state.globalAuthRules?.find(rule => rule.id === id)
     : kind === 'saved' && Object.hasOwn(state.authReplies || {}, id) ? state.authReplies[id] : undefined;
@@ -695,10 +632,6 @@ handle('update-auth-reply', async (id, value) => {
 handle('remove-auth-reply', id => updateState(next => {
   if (next.authReplies && Object.hasOwn(next.authReplies, id)) delete next.authReplies[id];
 }));
-
-function normalizedAuthQuestion(question) {
-  return question.replace(/^\([^\r\n)]{1,512}\) /, '');
-}
 
 handle('move-auth-reply-to-global', async id => {
   const entry = state.authReplies?.[id];
@@ -1309,15 +1242,27 @@ function compareEndpoint(input) {
   if (!input.path.startsWith('/') || input.path.split('/').includes('..')) throw Error('Remote comparison path must be absolute and normalized.');
   return { ...input, scope: pathFavorites.scopeFor(record.input), generation: record.generation };
 }
+// Runs fn over items with at most `limit` calls in flight. Results keep the order of items.
+async function mapLimited(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }));
+  return results;
+}
 function comparisonAdapter(endpoint) {
   if (endpoint.kind === 'local') return {
     join: (base, name) => path.join(base, name),
     async list(directory) {
       const rows = await fs.readdir(directory, { withFileTypes: true });
-      return Promise.all(rows.map(async row => {
+      return mapLimited(rows, localStatConcurrency, async row => {
         const attrs = await fs.lstat(path.join(directory, row.name));
         return { name: row.name, directory: attrs.isDirectory(), link: attrs.isSymbolicLink(), size: attrs.size, modifiedAt: attrs.mtimeMs };
-      }));
+      });
     },
   };
   const channel = sessions.get(endpoint.sessionId)?.connection?.channel;
@@ -1433,29 +1378,6 @@ handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', reques
   return ids;
 });
 
-handle('copy-remote', async (sourceId, sourcePath, targetId, targetDirectory) => {
-  const source = sessions.get(sourceId)?.connection?.channel;
-  const target = sessions.get(targetId)?.connection?.channel;
-  if (!source?.readdir || !target?.readdir || source === target) throw Error('Open two SFTP connections first.');
-  const name = path.posix.basename(sourcePath);
-  if (!validName(name)) throw Error('Invalid remote name.');
-  pendingWrites++;
-  syncUpdateBusy();
-  try {
-    const staging = await fs.mkdtemp(path.join(app.getPath('temp'), 'promeftp-copy-'));
-    try {
-      const item = path.join(staging, name);
-      await download(source, sourcePath, item);
-      if (sessions.get(targetId)?.connection?.channel !== target) throw Error('Destination disconnected.');
-      await upload(target, item, path.posix.join(targetDirectory, name));
-    } finally {
-      await fs.rm(staging, { recursive: true, force: true });
-    }
-  } finally {
-    pendingWrites--;
-    syncUpdateBusy();
-  }
-});
 handle('local-directory', async directory => {
   const result = await dialog.showOpenDialog(window, {
     title: 'Choose local folder', defaultPath: directory || app.getPath('home'), properties: ['openDirectory'],

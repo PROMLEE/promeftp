@@ -1,0 +1,8 @@
+{
+  "profiles": [
+    { "id": "00000000-0000-4000-8000-000000000001", "label": "Build host", "host": "build.example.invalid", "hostname": "", "port": 22, "username": "builder", "keyPath": "", "group": "Ops", "configPath": "", "pam": false },
+    { "id": "00000000-0000-4000-8000-000000000002", "label": "Staging", "host": "staging.example.invalid", "hostname": "", "port": 2222, "username": "deploy", "keyPath": "", "group": "Staging", "configPath": "", "pam": true },
+    { "id": "00000000-0000-4000-8000-000000000003", "label": "Edge", "host": "edge", "hostname": "192.0.2.10", "usesAlias": true, "port": null, "username": "", "keyPath": "", "group": "", "configPath": "", "pam": false }
+  ],
+  "bookmarkFolders": ["Archive"]
+}

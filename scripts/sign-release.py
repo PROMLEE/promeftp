@@ -104,7 +104,7 @@ def main():
 
 
 def make_agent_skill(tool, key_file, version, output):
-    skill = (ROOT / 'agent-skills/promeftp/SKILL.md').read_bytes()
+    skill = (ROOT / 'skills/promeftp/SKILL.md').read_bytes()
     target = output / 'skills/promeftp'
     target.mkdir(parents=True, exist_ok=True)
     (target / 'SKILL.md').write_bytes(skill)

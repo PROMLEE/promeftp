@@ -3184,8 +3184,7 @@ function transferRow(job) {
   const expanded = expandedTransfers.has(String(job.id));
   detail.hidden = !expanded;
   main.setAttribute('aria-expanded', String(expanded));
-  for (const line of [job.localPath, job.remotePath || job.sourcePath, job.progress?.total && `${formatFileSize(job.progress.bytes || 0)} / ${formatFileSize(job.progress.total)}`, job.error]) {
-    if (!line) continue;
+  for (const line of transferDetailLines(job)) {
     const text = document.createElement('div');
     text.textContent = line;
     detail.append(text);
@@ -3245,6 +3244,45 @@ function transferBatchRow(batchId, items) {
   row.append(transferStatusIcon(state), main, progressCell, metrics, actions);
   return row;
 }
+// Transfer rows are kept per job id. A kept row is patched in place while its structure (state, progress bar, error) is unchanged.
+const transferRowCache = new Map();
+function transferDetailLines(job) {
+  return [job.localPath, job.remotePath || job.sourcePath, job.progress?.total && `${formatFileSize(job.progress.bytes || 0)} / ${formatFileSize(job.progress.total)}`, job.error].filter(Boolean);
+}
+function transferRowStructure(job) {
+  return [job.state, job.progress?.total ? 'progress' : '', job.state === 'failed' && job.error ? 'error' : ''].join('|');
+}
+function updateTransferRow(row, job) {
+  const name = row.querySelector('.transfer-main strong');
+  name.textContent = job.label || job.id;
+  name.title = name.textContent;
+  const route = row.querySelector('.transfer-main small');
+  route.textContent = job.state === 'failed' && job.error ? job.error : transferRoute(job);
+  route.classList.toggle('transfer-error', job.state === 'failed');
+  if (job.progress?.total) {
+    const progress = row.querySelector('.transfer-progress progress');
+    progress.max = job.progress.total;
+    progress.value = Math.min(job.progress.bytes || 0, job.progress.total);
+    row.querySelector('.transfer-metrics').textContent = transferSpeedText(job.progress);
+  }
+  row.querySelector('.transfer-detail').replaceChildren(...transferDetailLines(job).map(line => {
+    const text = document.createElement('div');
+    text.textContent = line;
+    return text;
+  }));
+}
+function transferRowFor(job) {
+  const key = String(job.id);
+  const structure = transferRowStructure(job);
+  const cached = transferRowCache.get(key);
+  if (cached?.structure === structure) {
+    updateTransferRow(cached.element, job);
+    return cached.element;
+  }
+  const element = transferRow(job);
+  transferRowCache.set(key, { structure, element });
+  return element;
+}
 function renderTransferQueue(jobs) {
   let newlyFailed = 0;
   if (Array.isArray(jobs)) {
@@ -3263,16 +3301,18 @@ function renderTransferQueue(jobs) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(job);
   }
+  const liveIds = new Set(transferJobs.map(job => String(job.id)));
+  for (const key of transferRowCache.keys()) if (!liveIds.has(key)) transferRowCache.delete(key);
   list.replaceChildren();
   for (const [key, items] of groups) {
-    if (!items[0].batchId) { list.append(transferRow(items[0])); continue; }
+    if (!items[0].batchId) { list.append(transferRowFor(items[0])); continue; }
     const container = document.createElement('details');
     container.className = 'transfer-batch';
     container.dataset.batchId = String(key);
     container.open = openBatches.has(String(key)) || items.some(transferIsActive);
     const children = document.createElement('div');
     children.className = 'transfer-children';
-    children.append(...items.map(transferRow));
+    children.append(...items.map(transferRowFor));
     container.append(transferBatchRow(key, items), children);
     list.append(container);
   }

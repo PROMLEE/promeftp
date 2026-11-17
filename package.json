@@ -7,7 +7,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper && electron .",
-    "test": "node --test test/classify-ssh-failure.test.cjs test/i18n-keys.test.cjs"
+    "test": "node --test test/"
   },
   "type": "commonjs",
   "dependencies": {
