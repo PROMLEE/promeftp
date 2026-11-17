@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.5</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.5</link>
-      <pubDate>Mon, 16 Nov 2026 14:21:56 +0000</pubDate>
-      <sparkle:version>1.1.5</sparkle:version>
-      <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.6</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.6</link>
+      <pubDate>Tue, 17 Nov 2026 01:09:05 +0000</pubDate>
+      <sparkle:version>1.1.6</sparkle:version>
+      <sparkle:shortVersionString>1.1.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Snippets shortcut fix and documentation corrections&lt;/h2&gt;
-&lt;p&gt;Fix ⌘P in the application menu so it opens Snippets, correct the 1.1.4 notes, and improve the Quick Guide.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Fix ⌘P snippets in the menu&lt;/strong&gt;&lt;br&gt;⌘P opens Snippets from both the application menu and the SSH terminal. Terminal Triggers open from the SSH toolbar and no longer use ⌘P.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Correct the documentation&lt;/strong&gt;&lt;br&gt;The README, user guides, and LLM reference files describe the shortcut and the Terminal Triggers entry point accurately.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Improve the Quick Guide&lt;/strong&gt;&lt;br&gt;Add a transfer queue and folder compare section and match the reconnect message the app shows.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clarify shortcuts&lt;/strong&gt;&lt;br&gt;Preferences → Shortcuts shows a dash for actions without a keyboard shortcut.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Cleaner transfers, reliable shortcuts, and clearer settings&lt;/h2&gt;
+&lt;p&gt;The Transfers drawer stays out of the way, interrupted transfers survive a quit, ⌘P works with Korean input, and Preferences explain their options.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Quieter Transfers&lt;/strong&gt;&lt;br&gt;Finished transfers move to a searchable History tab. The drawer lists only running, failed, and interrupted work and closes by itself when everything succeeds.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Interrupted transfers are kept&lt;/strong&gt;&lt;br&gt;A transfer that was running when you quit is offered for retry at the next startup.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Shortcut fixes&lt;/strong&gt;&lt;br&gt;⌘P opens Snippets with Korean and other non-Latin input sources. ⌘⇧P is a second shortcut.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clearer Preferences&lt;/strong&gt;&lt;br&gt;Authentication, Agents, Terminal, and About gain plain-language options, inline errors, and info buttons.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Requires macOS 13 or later on Apple Silicon. Saved agent tokens remain local and are never written into skill files.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.5"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.6"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.5/PromeFTP-1.1.5-macos-arm64.zip" length="141014085" type="application/octet-stream" sparkle:edSignature="rOv4mqdjCbs8F+W8Oy6zu2QJUWSAYmMY3GBWF3p5R3mKDmboeQqCSShBNH5OpVZQROEWUZvPLd6OJ/vewu9wBg=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.6/PromeFTP-1.1.6-macos-arm64.zip" length="141027296" type="application/octet-stream" sparkle:edSignature="0z2KSWxzXJSSZqE90jetfNywwELsqsPJh18jAuAp5fLrbYZzihZPxLxtN3XMR0rR93fGOzPQNPMnpC48evKuAg=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: HGExlrSDn86cqa7gGtnZndiRe8U9QtTiKo6pHqBwXULX8uIWMeBylJ5mU11ngS1y32tEA8rWGZlz0IMZeuFODA==
-length: 2956
+edSignature: ZtDSouL8E0/OfHIwp8jLGTJ4r1JYQ2D/00MoRJO6G8dE8plXOR6RFi4dROKa4vjk+iV3egFPOKuoS/feCUzOAA==
+length: 3001
 -->
