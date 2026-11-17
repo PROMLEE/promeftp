@@ -5,6 +5,7 @@ const agentElement = name => byId('agent-' + name);
 const agentValue = name => agentElement(name).value;
 const agentChecked = name => agentElement(name).checked;
 const agentStatus = message => { agentElement('message').textContent = t(message); };
+const agentFieldErrors = { root: 'agent-root-error', task: 'agent-task-error', 'task-command': 'agent-task-command-error' };
 const tokenDialog = byId('agent-token-dialog');
 const tokenField = byId('agent-token-value');
 let tokenClientId;
@@ -67,7 +68,8 @@ function showAgentGrant() {
     (grant?.stale ? ' · ' + t('Save access again after a bookmark change.') : '') : '';
   agentElement('profile-summary').textContent = p && !p.eligible ? t(p.reason || 'Use a valid SSH host name or alias.') : t("Uses this bookmark's SSH settings.");
   agentElement('root').value = grant?.root || '';
-  agentElement('sftp').checked = grant?.sftp !== false;
+  agentElement('sftp').checked = grant ? grant.sftp !== false : false;
+  for (const field of Object.keys(agentFieldErrors)) setAgentFieldError(field, '');
   agentElement('download').checked = grant?.download === true;
   agentElement('saved-auth').checked = grant?.savedAuth === true;
   agentElement('approve-commands').checked = grant?.commandApproval === true;
@@ -80,7 +82,8 @@ function showAgentGrant() {
   updateAgentSftpFields();
 }
 function updateAgentSftpFields() {
-  for (const name of ['root', 'download']) agentElement(name).disabled = !agentChecked('sftp');
+  agentElement('sftp-fields').hidden = !agentChecked('sftp');
+  if (!agentChecked('sftp')) setAgentFieldError('root', '');
 }
 function renderAgentPrompts(prompts) {
   const list = agentElement('prompts');
@@ -180,19 +183,27 @@ async function refreshAgentHistory() {
   }));
   if (!rows.length) list.textContent = t('No matching activity.');
 }
-document.querySelectorAll('.agent-help-toggle').forEach(toggle => {
-  toggle.addEventListener('click', () => {
-    const detail = byId(toggle.getAttribute('aria-controls'));
-    detail.hidden = !detail.hidden;
-    toggle.setAttribute('aria-expanded', String(!detail.hidden));
-  });
-});
+attachInfoTips(byId('settings-agent'));
+// Error codes returned by the main process, written as sentences a user can act on.
+const agentCodeMessages = {
+  INVALID_PATH: 'Enter an absolute remote path that starts with /.',
+  INVALID_TASK: 'Use lowercase letters, numbers, hyphens, and underscores, up to 64 characters.',
+  PROFILE_NOT_ELIGIBLE: "This bookmark can't be used by agents. Check its SSH settings.",
+  ACCESS_DENIED: 'The bookmark changed after this page loaded. Choose it again and save.',
+  INVALID_REQUEST: 'Choose at least one permission: SFTP browsing, approved SSH commands, or a task.',
+};
+function agentErrorText(error) {
+  const text = String(error?.message || error);
+  const code = text.match(/([A-Z_]+)$/)?.[1];
+  if (code && agentCodeMessages[code]) return t(agentCodeMessages[code]);
+  return text.replace(/^Error invoking remote method '[^']*': (?:Error: )?/, '');
+}
 async function agentAction(work, full = true) {
   if (agentBusy) return;
   agentBusy = true;
   agentStatus('');
   try { await work(); await refreshAgents(full); }
-  catch (error) { agentStatus(error.message); }
+  catch (error) { agentStatus(agentErrorText(error)); }
   finally { agentBusy = false; }
 }
 function agentButton(name, work, full = true) {
@@ -202,9 +213,10 @@ agentElement('enabled').addEventListener('change', () => agentAction(async () =>
   try { await api['agent-enable'](agentChecked('enabled')); }
   catch (error) { agentElement('enabled').checked = !agentChecked('enabled'); throw error; }
 }));
-agentElement('client').addEventListener('change', showAgentGrant);
-agentElement('profile').addEventListener('change', showAgentGrant);
+agentElement('client').addEventListener('change', () => { setGrantStatus(''); showAgentGrant(); });
+agentElement('profile').addEventListener('change', () => { setGrantStatus(''); showAgentGrant(); });
 agentElement('sftp').addEventListener('change', updateAgentSftpFields);
+for (const field of Object.keys(agentFieldErrors)) agentElement(field).addEventListener('input', () => setAgentFieldError(field, ''));
 agentButton('register', async () => {
   if (!agentValue('client-name').trim()) throw Error(t('Enter a client name.'));
   const result = await api['agent-register'](agentValue('client-name').trim());
@@ -216,16 +228,67 @@ agentButton('register', async () => {
 agentButton('revoke', () => api['agent-revoke'](agentValue('client')));
 agentButton('clear-token', () => api['agent-clear-token']());
 const selectedIds = field => [...agentElement(field).selectedOptions].map(option => option.value);
-agentButton('save-grant', () => {
+function setGrantStatus(message, ok = false) {
+  const status = agentElement('grant-status');
+  status.textContent = message;
+  status.classList.toggle('error', Boolean(message) && !ok);
+  status.classList.toggle('ok', ok);
+}
+function setAgentFieldError(field, message) {
+  const input = agentElement(field);
+  const error = byId(agentFieldErrors[field]);
+  error.textContent = message ? t(message) : '';
+  error.hidden = !message;
+  input.setAttribute('aria-invalid', String(Boolean(message)));
+  return message ? input : undefined;
+}
+// Checks the same rules the main process enforces, so each problem is shown next to its field.
+function checkAgentGrant() {
+  const name = agentValue('task').trim();
+  const command = agentValue('task-command').trim();
+  const sftp = agentChecked('sftp');
+  const pairMessage = 'Enter a task name and a fixed command together.';
+  const root = agentValue('root').trim();
+  const rootOk = root.startsWith('/') && !/[\x00-\x1f\x7f]/.test(root) && !root.split('/').some(part => part === '.' || part === '..');
+  const rootProblem = sftp && !rootOk ? 'To allow SFTP browsing, enter a remote path that starts with /.' : '';
+  const taskProblem = name && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(name)
+    ? 'Use lowercase letters, numbers, hyphens, and underscores, up to 64 characters.' : '';
+  const invalid = [
+    setAgentFieldError('root', rootProblem),
+    setAgentFieldError('task', taskProblem || (command && !name ? pairMessage : '')),
+    setAgentFieldError('task-command', name && !command ? pairMessage : ''),
+  ].find(Boolean);
+  if (invalid) { invalid.focus(); return false; }
+  const hasTask = Boolean(name && command && !taskProblem);
+  if (!sftp && !hasTask && !agentChecked('approve-commands')) {
+    setGrantStatus(t(agentCodeMessages.INVALID_REQUEST), false);
+    return false;
+  }
+  return true;
+}
+function agentGrantFields() {
   const name = agentValue('task').trim();
   const command = agentValue('task-command');
-  return api['agent-grant'](agentValue('client'), agentValue('profile'), {
+  return {
     root: agentValue('root').trim(), sftp: agentChecked('sftp'), download: agentChecked('download'), savedAuth: agentChecked('saved-auth'),
     commandApproval: agentChecked('approve-commands'), pam: selectedIds('pam'), triggers: selectedIds('triggers'),
     ...(name || command ? { task: { name, command } } : {}),
-  });
-});
-agentButton('remove-grant', () => api['agent-grant'](agentValue('client'), agentValue('profile'), null));
+  };
+}
+async function saveAgentGrant(remove) {
+  if (agentBusy || (!remove && !checkAgentGrant())) return;
+  agentBusy = true;
+  setGrantStatus('');
+  try {
+    await api['agent-grant'](agentValue('client'), agentValue('profile'), remove ? null : agentGrantFields());
+    await refreshAgents();
+    setGrantStatus(t(remove ? 'Access removed' : 'Access saved') + ' · ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), true);
+  } catch (error) {
+    setGrantStatus(t('Save failed') + ': ' + agentErrorText(error), false);
+  } finally { agentBusy = false; }
+}
+agentElement('save-grant').addEventListener('click', () => saveAgentGrant(false));
+agentElement('remove-grant').addEventListener('click', () => saveAgentGrant(true));
 function skill(action) {
   return api['agent-skill']({ target: agentValue('skill-engine'), action, project: agentValue('skill-scope') === 'project',
     automatic: agentChecked('skill-auto') });

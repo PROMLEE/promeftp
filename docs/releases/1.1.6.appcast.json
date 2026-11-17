@@ -1,0 +1,11 @@
+{
+  "heading": "Cleaner transfers, reliable shortcuts, and clearer settings",
+  "summary": "The Transfers drawer stays out of the way, interrupted transfers survive a quit, ⌘P works with Korean input, and Preferences explain their options.",
+  "changes": [
+    ["Quieter Transfers", "Finished transfers move to a searchable History tab. The drawer lists only running, failed, and interrupted work and closes by itself when everything succeeds."],
+    ["Interrupted transfers are kept", "A transfer that was running when you quit is offered for retry at the next startup."],
+    ["Shortcut fixes", "⌘P opens Snippets with Korean and other non-Latin input sources. ⌘⇧P is a second shortcut."],
+    ["Clearer Preferences", "Authentication, Agents, Terminal, and About gain plain-language options, inline errors, and info buttons."]
+  ],
+  "notice": "Requires macOS 13 or later on Apple Silicon. Saved agent tokens remain local and are never written into skill files."
+}

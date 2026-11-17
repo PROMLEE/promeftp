@@ -1207,6 +1207,7 @@ async function download(channel, remote, local, replace = false, depth = 0, sign
 }
 transferQueue = createTransferService({
   file: path.join(app.getPath('userData'), 'sftp-transfer-queue.json'),
+  historyFile: path.join(app.getPath('userData'), 'sftp-transfer-history.jsonl'),
   emit: jobs => { if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-jobs', value: jobs }); },
   onBusy: busy => { queuedTransferBusy = busy; syncUpdateBusy(); },
   execute: async (job, signal, progress) => {
@@ -1242,6 +1243,7 @@ transferQueue = createTransferService({
   },
 });
 handle('transfer-list', () => transferQueue.list());
+handle('transfer-history', (query, limit) => transferQueue.history(typeof query === 'string' ? query.slice(0, 200) : '', Math.min(Number(limit) || 300, 500)));
 function enqueueTransfer(input) {
   const source = sessions.get(input?.sessionId);
   if (!source || source.mode !== 'sftp') throw Error('Open the source SFTP connection first.');
@@ -1595,7 +1597,7 @@ const preferencesShortcut = ['Preferences…', 'CmdOrCtrl+,', 'preferences'];
 handle('keyboard-shortcuts', () => [
   { title: 'App', shortcuts: [...fileShortcuts, preferencesShortcut] },
   { title: 'Terminal', shortcuts: [...terminalShortcuts, ['Copy selection', 'CmdOrCtrl+C'], ['Paste', 'CmdOrCtrl+V'],
-    ['Previous prompt mark', 'CmdOrCtrl+Alt+↑'], ['Next prompt mark', 'CmdOrCtrl+Alt+↓']] },
+    ['Previous prompt mark', 'CmdOrCtrl+Alt+↑'], ['Next prompt mark', 'CmdOrCtrl+Alt+↓'], ['Snippets (alternate key)', 'CmdOrCtrl+Shift+P']] },
 ]);
 
 function buildApplicationMenu() {
@@ -1800,9 +1802,14 @@ app.whenReady().then(async () => {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || !input.meta || input.control || input.alt) return;
-    const command = input.key.toLowerCase() === 'p' && !input.shift ? 'snippets'
-      : ['+', '='].includes(input.key) ? 'zoom-in'
-      : input.key === '-' ? 'zoom-out' : input.key === '0' ? 'zoom-reset' : '';
+    // A Latin character wins, so Dvorak, Colemak, AZERTY and German layouts keep their own letters and symbols.
+    // Non-Latin input sources (Korean, Japanese, Russian) report a non-Latin key, so the physical key is used instead.
+    const typed = /^[\x21-\x7e]$/.test(input.key) ? input.key.toLowerCase() : '';
+    const physical = { KeyP: 'p', Equal: '=', NumpadAdd: '+', Minus: '-', NumpadSubtract: '-', Digit0: '0' }[input.code] || '';
+    const shortcut = typed || physical;
+    const command = shortcut === 'p' ? 'snippets'
+      : ['+', '='].includes(shortcut) ? 'zoom-in'
+      : shortcut === '-' ? 'zoom-out' : shortcut === '0' ? 'zoom-reset' : '';
     if (!command) return;
     event.preventDefault();
     window.webContents.send('command', command);

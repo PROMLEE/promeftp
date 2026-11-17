@@ -45,28 +45,31 @@
         <label class="settings-row">Terminal opacity <span class="range-value"><input name="opacity" type="range" min="55" max="100" step="5"><output id="opacity-value">100%</output></span></label>
         <p class="settings-note">Lower values reveal your desktop wallpaper through the terminal.</p>
         <h3>Scrollback</h3>
-        <label class="settings-check"><input name="unlimited" type="checkbox" aria-describedby="scrollback-help">Unlimited scrollback</label>
-        <label class="settings-row">Line limit<input name="scrollback" type="number" min="100" max="100000" step="100" required></label>
-        <p class="settings-note" id="scrollback-help">Keeps output in memory for the current session. Long sessions can use more memory.</p>
+        <div class="segmented" role="radiogroup" aria-label="Scrollback">
+          <label><input name="scrollbackMode" type="radio" value="limit"><span>Limit</span></label>
+          <label data-tip="Output is never discarded, so memory keeps growing while a session stays open."><input name="scrollbackMode" type="radio" value="unlimited"><span>Unlimited</span></label>
+        </div>
+        <label class="settings-row" id="scrollback-limit-row">Line limit<input name="scrollback" type="number" min="100" max="100000" step="100" required></label>
+        <p class="settings-note" id="scrollback-help">Keeps the newest lines in memory. Older lines are discarded at the limit. Output is cleared when the session closes.</p>
         <h3>Keyboard</h3>
         <label class="settings-check"><input name="optionMeta" type="checkbox">Use Option as Meta</label>
       </section>
     </form>
     <section id="settings-authentication" role="tabpanel" aria-labelledby="settings-tab-authentication" data-settings-panel="authentication" hidden>
       <h3>Authentication Storage</h3>
+      <label class="settings-check"><input id="pam-keychain" type="checkbox" data-tip="Master switch. Turns on both all-host rules and per-host answers for connections. When it is off, neither is used.">Use saved authentication</label>
       <label class="settings-check"><input id="openssh-keychain" type="checkbox">Allow OpenSSH to use Keychain</label>
-      <label class="settings-check"><input id="pam-keychain" type="checkbox">Load saved PAM answers on connect</label>
       <p class="settings-note">Saved passwords and answers are stored unencrypted in your local profile file. macOS account permissions restrict access.</p>
       <div id="pam-controls">
-        <div class="global-auth-heading"><h3>Global PAM Rules</h3><button type="button" id="add-global-auth">Add Rule</button></div>
+        <div class="global-auth-heading"><h3 data-tip="Rules that answer prompts on every SSH and SFTP connection. Match the exact text or a regular expression.">All-Host Rules</h3><button type="button" id="add-global-auth">Add Rule</button></div>
         <p class="settings-note">Rules apply to all SSH and SFTP connections.</p>
         <details class="pam-regex-help">
           <summary>Regex examples</summary>
           <p><code>^Password:$</code> matches the whole question. <code>\n</code> matches a line break in one question. <code>(?i)</code> ignores case.</p>
         </details>
         <div id="global-auth-list"></div>
-        <h3>Saved Answers</h3>
-        <label class="settings-check"><input id="saved-auto" type="checkbox">Send saved answers automatically</label>
+        <h3 data-tip="Answers saved after a successful sign-in on one connection. They are used only for that host.">Per-Host Answers</h3>
+        <label class="settings-check"><input id="saved-auto" type="checkbox" data-tip="On: send the saved answer right away. Off: fill the field and wait for you to press Send.">Send saved answers automatically</label>
         <div id="saved-auth-list"></div>
         <p id="saved-auth-message" role="status"></p>
       </div>
@@ -76,7 +79,7 @@
     </section>
     <section id="settings-agent" role="tabpanel" aria-labelledby="settings-tab-agent" data-settings-panel="agent" hidden>
       <div class="agent-section">
-        <label class="settings-check"><input id="agent-enabled" type="checkbox">Enable local agent access</label>
+        <label class="settings-check" data-tip="Lets AI agents on this Mac connect through the PromeFTP CLI."><input id="agent-enabled" type="checkbox">Enable local agent access</label>
         <p class="settings-note" id="agent-cli-path"></p>
         <p id="agent-message" class="settings-note" role="status"></p>
       </div>
@@ -86,30 +89,42 @@
       </section>
       <section class="agent-section">
         <h3>Agent clients</h3>
-        <div class="agent-controls"><input id="agent-client-name" placeholder="Client name" aria-label="Client name" maxlength="80"><button id="agent-register" type="button">Register &amp; Copy Token</button></div>
-        <div class="agent-controls"><select id="agent-client" aria-label="Agent client"></select><button id="agent-revoke" type="button">Revoke Client</button></div>
-        <div class="agent-help-row"><span class="settings-note">Token is shown once.</span><button class="agent-help-toggle" type="button" aria-label="Token help" aria-expanded="false" aria-controls="agent-token-help">?</button></div>
-        <p class="settings-note agent-help-detail" id="agent-token-help" hidden>Saving stores the plain-text token in a local 0600 file. PromeFTP CLI reads it automatically; the token is never written into skill files.<br>Forget saved token removes the local copy. Revoking its client also removes the saved token.<br>Without saving, copy the token before closing and provide it as <code>PROMEFTP_AGENT_TOKEN</code>. If lost, revoke and register the client again.</p>
-        <div class="agent-controls"><span class="settings-note" id="agent-saved-token-status" hidden>Saved token for installed skills. The CLI reads it automatically.</span><button id="agent-clear-token" type="button" hidden>Forget saved token</button></div>
+        <div class="agent-controls"><input id="agent-client-name" placeholder="Client name" aria-label="Client name" maxlength="80"><button id="agent-register" type="button" data-tip="Each client gets its own token. The token is shown only once.">Register &amp; Copy Token</button></div>
+        <div class="agent-controls"><select id="agent-client" aria-label="Agent client"></select><button id="agent-revoke" type="button" data-tip="Revokes this client's token and all of its bookmark permissions.">Revoke Client</button></div>
+        <div class="agent-controls"><span class="settings-note" id="agent-saved-token-status" hidden>Saved token for installed skills. The CLI reads it automatically.</span><button id="agent-clear-token" type="button" hidden data-tip="Deletes the local token file that the CLI reads automatically.">Forget saved token</button></div>
       </section>
       <section class="agent-section">
         <h3>Bookmark access</h3>
-        <select id="agent-profile" aria-label="Bookmark"></select>
-        <div class="agent-help-row"><span class="settings-note" id="agent-profile-summary">Uses this bookmark's SSH settings.</span><button class="agent-help-toggle" type="button" aria-label="SSH connection help" aria-expanded="false" aria-controls="agent-profile-help">?</button></div>
-        <p class="settings-note agent-help-detail" id="agent-profile-help" hidden>OpenSSH aliases, Include, ProxyJump, and ProxyCommand are honored.<br>Target and jump host keys must be trusted. ProxyCommand may start a local process.<br>PAM login strings like account@host@account@host are accepted as SSH usernames.</p>
+        <select id="agent-profile" aria-label="Bookmark" data-tip="Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump. ProxyCommand may start a local process."></select>
+        <p class="settings-note" id="agent-profile-summary">Uses this bookmark's SSH settings.</p>
         <p class="settings-note" id="agent-endpoint"></p>
-        <fieldset id="agent-grant-fields">
-          <label class="settings-check"><input id="agent-sftp" type="checkbox" checked>Allow SFTP browsing</label>
-          <label>Remote directory<input id="agent-root" placeholder="/srv/releases"></label>
-          <label class="settings-check"><input id="agent-download" type="checkbox">Allow downloads</label>
-          <label class="settings-check"><input id="agent-saved-auth" type="checkbox">Use saved authentication</label>
-          <label class="settings-check"><input id="agent-approve-commands" type="checkbox">Allow SSH commands with approval</label>
-          <label>Optional task name<input id="agent-task" placeholder="service-status" maxlength="64"></label>
-          <label>Fixed SSH command<input id="agent-task-command" maxlength="1024"></label>
-          <label>PAM rules<select id="agent-pam" multiple size="2"></select></label>
-          <label>Notification triggers<select id="agent-triggers" multiple size="2"></select></label>
+        <fieldset id="agent-grant-fields" class="agent-groups">
+          <fieldset class="agent-group">
+            <legend>SFTP</legend>
+            <label class="settings-check"><input id="agent-sftp" type="checkbox" data-tip="Allows listing and file information only, inside the folder you choose. Files cannot be changed.">Allow SFTP browsing</label>
+            <div id="agent-sftp-fields" hidden>
+              <label>Remote directory<input id="agent-root" placeholder="/srv/releases" data-tip="The top folder the agent can see. It must start with /." aria-describedby="agent-root-error"></label>
+              <p class="field-error" id="agent-root-error" role="alert" hidden></p>
+              <label class="settings-check"><input id="agent-download" type="checkbox" data-tip="Downloads files up to 16 MiB each into PromeFTP's private staging folder.">Allow downloads</label>
+            </div>
+          </fieldset>
+          <fieldset class="agent-group">
+            <legend>SSH commands</legend>
+            <label class="settings-check"><input id="agent-approve-commands" type="checkbox" data-tip="Each command the agent requests runs only after you approve it in a confirmation window.">Allow SSH commands with approval</label>
+            <label>Optional task name<input id="agent-task" placeholder="service-status" maxlength="64" data-tip="One command that can run without approval, identified by a name the agent uses." aria-describedby="agent-task-error"></label>
+            <p class="field-error" id="agent-task-error" role="alert" hidden></p>
+            <label>Fixed SSH command<input id="agent-task-command" maxlength="1024" aria-describedby="agent-task-command-error"></label>
+            <p class="field-error" id="agent-task-command-error" role="alert" hidden></p>
+          </fieldset>
+          <fieldset class="agent-group">
+            <legend>Authentication and triggers</legend>
+            <label class="settings-check"><input id="agent-saved-auth" type="checkbox" data-tip="Uses the saved PAM responses for this host when the agent connects.">Use saved authentication</label>
+            <label data-tip="Choose the host-wide PAM rules the agent connection may use.">PAM rules<select id="agent-pam" multiple size="2"></select></label>
+            <label data-tip="Reports matching output to the agent as an event. It never sends an automatic reply.">Notification triggers<select id="agent-triggers" multiple size="2"></select></label>
+          </fieldset>
         </fieldset>
         <div class="agent-controls"><button id="agent-save-grant" type="button" class="primary">Save Access</button><button id="agent-remove-grant" type="button">Remove Access</button></div>
+        <p id="agent-grant-status" class="settings-note" role="status" aria-live="polite"></p>
       </section>
       <section class="agent-section">
         <h3>Install a skill</h3>
@@ -121,7 +136,7 @@
       <section class="agent-section">
         <h3>Activity history</h3>
         <p class="settings-note" id="agent-history-count" aria-live="polite"></p>
-        <div class="agent-retention-controls"><label for="agent-days">Retention (days)<input id="agent-days" type="number" min="1" max="90"></label><button id="agent-save-days" type="button" class="primary">Save Retention</button></div>
+        <div class="agent-retention-controls"><label for="agent-days" data-tip="Keeps activity for 1–90 days. Commands and passwords are never recorded.">Retention (days)<input id="agent-days" type="number" min="1" max="90"></label><button id="agent-save-days" type="button" class="primary">Save Retention</button></div>
         <div class="agent-filters">
           <label>Client<select id="agent-filter-client"></select></label>
           <label>Bookmark<select id="agent-filter-profile"></select></label>
@@ -137,28 +152,30 @@
     </section>
     <section id="settings-about" role="tabpanel" aria-labelledby="settings-tab-about" data-settings-panel="about" hidden>
       <div class="about-identity">
-        <img src="application-icon.png" width="54" height="54" alt="">
-        <div><h3>PromeFTP</h3><p class="settings-note">SSH and SFTP for macOS, by Promlee.</p></div>
+        <img src="application-icon.png" width="72" height="72" alt="">
+        <h3>PromeFTP</h3>
+        <p class="settings-note about-tagline">SSH and SFTP in one macOS workspace.</p>
+        <div class="about-version">
+          <span id="preferences-version"></span>
+          <button id="preferences-copy-info" type="button">Copy</button>
+        </div>
       </div>
-      <p class="settings-note" id="preferences-version"></p>
-      <p class="settings-note" id="preferences-platform"></p>
-      <div id="preferences-updates">
-        <h3>Software Updates</h3>
+      <section id="preferences-updates" class="about-card" aria-labelledby="preferences-updates-title">
+        <h3 id="preferences-updates-title">Updates</h3>
+        <div class="about-update-row">
+          <p class="settings-note" id="preferences-last-check" aria-live="polite"></p>
+          <button id="preferences-check" type="button">Check Now</button>
+        </div>
         <label class="settings-check"><input id="preferences-automatic" type="checkbox">Install updates automatically</label>
         <p class="settings-note">Installation waits for active sessions and pending writes.</p>
-        <p class="settings-note" id="preferences-last-check" aria-live="polite"></p>
-      </div>
-      <div class="about-links">
-        <button id="preferences-check" type="button">Check for Updates…</button>
-        <button type="button" data-about-link="releases">Release Notes</button>
-        <button type="button" data-about-link="blob/main/docs/USAGE.md">User Guide</button>
-        <button type="button" data-about-link="">GitHub</button>
-        <button id="preferences-sponsors" type="button">Support Development…</button>
-      </div>
-      <h3>Licenses</h3>
-      <p class="settings-note">MIT · © 2026 Promlee · Electron (MIT) · xterm.js (MIT)</p>
-      <button id="preferences-project-license" type="button">PromeFTP License…</button>
-      <button id="preferences-license-notices" type="button">Third-party licenses…</button>
+      </section>
+      <nav class="about-links" aria-label="Links">
+        <button class="link-button" type="button" data-about-link="releases">Release Notes</button><span aria-hidden="true">·</span>
+        <button class="link-button" type="button" data-about-link="blob/main/docs/USAGE.md">User Guide</button><span aria-hidden="true">·</span>
+        <button class="link-button" type="button" data-about-link="">GitHub</button><span aria-hidden="true">·</span>
+        <button id="preferences-sponsors" class="link-button" type="button">Support Development…</button>
+      </nav>
+      <p class="about-legal">© 2026 Promlee · <button id="preferences-project-license" class="link-button" type="button">MIT License</button> · <button id="preferences-license-notices" class="link-button" type="button">Open source notices</button></p>
     </section>
   </div>
   <footer class="settings-footer">

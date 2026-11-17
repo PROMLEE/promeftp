@@ -121,9 +121,33 @@
       </div>
       <p id="message" role="status"></p>
     </form>
-    <dialog id="compare-dialog" class="compare-dialog"><form method="dialog"><header><strong data-i18n="Folder comparison">Folder comparison</strong><button value="cancel" data-i18n-title="Close" aria-label="Close">×</button></header><div class="compare-progress" role="status"><span id="compare-progress-count"></span> <button id="compare-cancel" type="button" data-i18n="Cancel comparison">Cancel comparison</button></div><p id="compare-summary"></p><label class="compare-conflict"><span data-i18n="When a destination file exists">When a destination file exists</span><select id="compare-conflict-policy"><option value="ask" data-i18n="Ask each time">Ask each time</option><option value="skip" data-i18n="Skip existing">Skip existing</option><option value="replace" data-i18n="Replace existing">Replace existing</option><option value="keep-both" data-i18n="Keep both">Keep both</option></select></label><p id="compare-error" role="alert" hidden></p><div class="compare-heading"><input id="compare-select-all" type="checkbox" aria-label="Select all" data-i18n-title="Select all"><span data-i18n="Name">Name</span><span data-i18n="Difference">Difference</span><button id="compare-details" type="button" aria-pressed="false" data-i18n="Show details">Show details</button></div><div id="compare-rows"></div><footer><button value="cancel" data-i18n="Cancel">Cancel</button><button id="compare-apply" type="button" class="primary" data-i18n="Queue selected">Queue selected</button></footer></form></dialog>
-    <dialog id="transfer-conflict-dialog"><form method="dialog"><h3 id="transfer-conflict-title"></h3><p id="transfer-conflict-detail"></p><div class="transfer-conflict-actions"><button type="button" data-conflict-choice="skip" data-i18n="Skip">Skip</button><button type="button" data-conflict-choice="replace" data-i18n="Replace">Replace</button><button type="button" data-conflict-choice="keep-both" data-i18n="Keep both">Keep Both</button></div></form></dialog>
-    <section id="transfer-drawer" hidden><header><strong data-i18n="Transfers">Transfers</strong><button id="transfer-toggle" type="button">−</button></header><p id="transfer-message" role="alert" hidden></p><div id="transfer-list"></div></section>
+    <dialog id="compare-dialog" class="compare-dialog" data-blocking><form method="dialog"><header><strong data-i18n="Folder comparison">Folder comparison</strong><button value="cancel" data-i18n-title="Close" aria-label="Close">×</button></header><div class="compare-progress" role="status"><span id="compare-progress-count"></span> <button id="compare-cancel" type="button" data-i18n="Cancel comparison">Cancel comparison</button></div><p id="compare-summary"></p><label class="compare-conflict"><span data-i18n="When a destination file exists">When a destination file exists</span><select id="compare-conflict-policy"><option value="ask" data-i18n="Ask each time">Ask each time</option><option value="skip" data-i18n="Skip existing">Skip existing</option><option value="replace" data-i18n="Replace existing">Replace existing</option><option value="keep-both" data-i18n="Keep both">Keep both</option></select></label><p id="compare-error" role="alert" hidden></p><div class="compare-heading"><input id="compare-select-all" type="checkbox" aria-label="Select all" data-i18n-title="Select all"><span data-i18n="Name">Name</span><span data-i18n="Difference">Difference</span><button id="compare-details" type="button" aria-pressed="false" data-i18n="Show details">Show details</button></div><div id="compare-rows"></div><footer><button value="cancel" data-i18n="Cancel">Cancel</button><button id="compare-apply" type="button" class="primary" data-i18n="Queue selected">Queue selected</button></footer></form></dialog>
+    <dialog id="transfer-conflict-dialog" data-blocking><form method="dialog"><h3 id="transfer-conflict-title"></h3><p id="transfer-conflict-detail"></p><div class="transfer-conflict-actions"><button type="button" data-conflict-choice="skip" data-i18n="Skip">Skip</button><button type="button" data-conflict-choice="replace" data-i18n="Replace">Replace</button><button type="button" data-conflict-choice="keep-both" data-i18n="Keep both">Keep Both</button></div></form></dialog>
+    <section id="transfer-drawer" hidden aria-label="Transfers">
+      <header>
+        <strong data-i18n="Transfers">Transfers</strong>
+        <div class="transfer-tabs" role="tablist">
+          <button id="transfer-tab-live" type="button" role="tab" aria-selected="true" data-i18n="Active">Active</button>
+          <button id="transfer-tab-history" type="button" role="tab" aria-selected="false" data-i18n="History">History</button>
+        </div>
+        <small id="transfer-summary"></small>
+        <div class="transfer-header-actions">
+          <button id="transfer-clear-failed" type="button" hidden data-i18n="Clear failed">Clear failed</button>
+          <button id="transfer-toggle" type="button" data-i18n-title="Hide transfers" aria-label="Hide transfers" title="Hide transfers">−</button>
+        </div>
+      </header>
+      <p id="transfer-message" role="alert" hidden></p>
+      <div id="transfer-list" role="list"></div>
+      <div id="transfer-history" hidden>
+        <input id="transfer-history-search" type="search" placeholder="Search history" aria-label="Search history">
+        <div id="transfer-history-list"></div>
+      </div>
+    </section>
+    <aside id="transfer-banner" class="transfer-banner" role="status" hidden>
+      <span id="transfer-banner-text"></span>
+      <button id="transfer-banner-retry" type="button" data-i18n="Retry">Retry</button>
+      <button id="transfer-banner-dismiss" type="button" data-i18n="Dismiss">Dismiss</button>
+    </aside>
   </section>
 </main>
 <dialog id="config-dialog">
@@ -204,7 +228,7 @@
   <input id="guide-search" type="search" placeholder="Search guide" aria-label="Search guide">
   <div id="guide-sections" class="guide-sections"></div>
 </dialog>
-<dialog id="name-dialog">
+<dialog id="name-dialog" data-blocking>
   <form method="dialog">
     <label><span id="name-label">Name</span><input id="entry-name" required></label>
     <div class="actions"><button id="cancel-name" type="button">Cancel</button><button type="submit" value="ok" class="primary">Done</button></div>

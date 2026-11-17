@@ -58,6 +58,10 @@ const icons = {
   chevron: 'm8 5 7 7-7 7',
   network: 'M3 5h18v5H3z M3 14h18v5H3z M6 7.5h.01M6 16.5h.01',
   link: 'm10 14 4-4m-6 7-2 2a3 3 0 0 1-4-4l5-5a3 3 0 0 1 4 0m5-3 2-2a3 3 0 0 1 4 4l-5 5a3 3 0 0 1-4 0',
+  pause: 'M8 5v14M16 5v14',
+  play: 'M7 5l11 7-11 7z',
+  check: 'm5 12.5 4.5 4.5L19 7.5',
+  alert: 'M12 3 2.5 20h19zM12 10v4.5m0 3h.01',
 };
 const svgNS = 'http://www.w3.org/2000/svg';
 function icon(name) {
@@ -98,3 +102,68 @@ function passwordField(field, showHint = 'Show answer', hideHint = 'Hide answer'
   wrap.append(field, eye);
   return wrap;
 }
+
+// Small "i" button that reveals a one-to-two sentence explanation on hover, focus or click.
+let infoTipCount = 0;
+function infoTip(text) {
+  const id = 'info-tip-' + (++infoTipCount);
+  const wrap = document.createElement('span');
+  wrap.className = 'info-tip';
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'info-tip-button';
+  trigger.textContent = 'i';
+  trigger.setAttribute('aria-label', t('More information'));
+  trigger.setAttribute('aria-describedby', id);
+  trigger.setAttribute('aria-expanded', 'false');
+  const bubble = document.createElement('span');
+  bubble.id = id;
+  bubble.className = 'info-tip-bubble';
+  bubble.setAttribute('role', 'tooltip');
+  bubble.textContent = t(text);
+  if (typeof staticStrings !== 'undefined') staticStrings.push(() => { bubble.textContent = t(text); });
+  const setOpen = open => {
+    wrap.classList.toggle('open', open);
+    trigger.setAttribute('aria-expanded', String(open));
+  };
+  // Clicks inside a <label> must not toggle its control.
+  wrap.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(!wrap.classList.contains('open'));
+  });
+  wrap.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !wrap.classList.contains('open')) return;
+    event.stopPropagation();
+    setOpen(false);
+  });
+  wrap.addEventListener('focusout', event => { if (!wrap.contains(event.relatedTarget)) setOpen(false); });
+  wrap.append(trigger, bubble);
+  return wrap;
+}
+// Turns every [data-tip] element under root into an info tip next to it.
+// A tip on a field inside a label belongs to the label: it sits beside the label text, before a text field or after a checkbox.
+function attachInfoTips(root = document) {
+  const labelControl = label => {
+    const control = label.querySelector('input:not([type=checkbox]):not([type=radio]), select, textarea');
+    return control && control.parentElement === label ? control : null;
+  };
+  for (const host of root.querySelectorAll('[data-tip]')) {
+    const tip = infoTip(host.dataset.tip);
+    host.removeAttribute('data-tip');
+    const label = host.tagName === 'LABEL' ? host : host.closest('label');
+    if (label) label.insertBefore(tip, labelControl(label));
+    else if (host.tagName === 'H3') host.append(tip);
+    else {
+      host.after(tip);
+      // A tip that belongs to a control hides with it.
+      const sync = () => { tip.hidden = host.hidden; };
+      sync();
+      new MutationObserver(sync).observe(host, { attributes: true, attributeFilter: ['hidden'] });
+    }
+  }
+}
+document.addEventListener('click', event => {
+  if (event.target.closest?.('.info-tip')) return;
+  document.querySelectorAll('.info-tip.open').forEach(wrap => wrap.classList.remove('open'));
+});

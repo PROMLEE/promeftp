@@ -53,7 +53,7 @@ SSH와 SFTP는 모두 macOS의 `/usr/bin/ssh`를 사용합니다. 호스트 키 
 
 ## 스니펫
 
-사이드바의 **Snippets**에서 자주 쓰는 명령과 이름을 저장합니다. **All sessions**는 모든 터미널에 표시하고, **This connection**은 현재 연결과 같은 설정으로 다시 연결할 때 표시합니다. 검색 후 방향키와 Return 또는 **Paste into terminal**로 선택한 터미널에 명령을 넣습니다. **⌘P**는 스니펫 목록을 엽니다. 터미널 트리거는 도구막대의 트리거 버튼에서 엽니다. 단축키 목록은 **Preferences → Shortcuts**에서 확인할 수 있습니다.
+사이드바의 **Snippets**에서 자주 쓰는 명령과 이름을 저장합니다. **All sessions**는 모든 터미널에 표시하고, **This connection**은 현재 연결과 같은 설정으로 다시 연결할 때 표시합니다. 검색 후 방향키와 Return 또는 **Paste into terminal**로 선택한 터미널에 명령을 넣습니다. **⌘P**(또는 **⌘⇧P**)는 스니펫 목록을 엽니다. 한글 입력 상태에서도 동작합니다. 터미널 트리거는 도구막대의 트리거 버튼에서 엽니다. 단축키 목록은 **Preferences → Shortcuts**에서 확인할 수 있습니다.
 
 ## SSH 호스트 키 확인
 

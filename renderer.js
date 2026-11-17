@@ -1080,6 +1080,7 @@ function reconnect(session) {
   session.observer?.disconnect();
   session.terminal?.dispose();
   sessions.delete(session.id);
+  refreshTransferBanner();
   pane.replaceChildren();
   return start(input, mode, { tabRecord, pane, fileLayout, local: localDirectory, remote: remoteDirectory });
 }
@@ -1090,6 +1091,7 @@ function validColor(value) {
 function pickColor(current, onPick) {
   const dialog = document.createElement('dialog');
   dialog.className = 'color-picker-dialog';
+  dialog.dataset.blocking = '';
   const form = document.createElement('form');
   form.method = 'dialog';
   const title = document.createElement('h3');
@@ -1421,6 +1423,7 @@ function makeTab(input, mode, options) {
 function closeSession(session) {
   api.disconnect(session.id).catch(() => {});
   sessions.delete(session.id);
+  refreshTransferBanner();
   session.fileLayout?.connections.delete(session);
   session.fileLayout?.refreshLocalControls?.();
   session.observer?.disconnect();
@@ -1722,6 +1725,7 @@ api.onSession(({ id, event, value }) => {
   }
   if (event === 'ready') {
     session.ready = true;
+    refreshTransferBanner();
     status(session, 'Connected');
     if (session.mode === 'sftp') {
       session.area.hidden = true;
@@ -1737,6 +1741,7 @@ api.onSession(({ id, event, value }) => {
     session.auth.replaceChildren();
     session.prompts.clear();
     session.ready = false;
+    refreshTransferBanner();
     if (session.mode === 'ssh' || session.mode === 'sftp') showReconnect(session);
     else status(session, 'Disconnected');
     session.refreshFileControls?.();
@@ -1965,18 +1970,23 @@ function setupTerminal(session, label) {
 
   terminal.attachCustomKeyEventHandler(event => {
     if (event.type !== 'keydown' || !event.metaKey) return true;
-    const key = event.key.toLowerCase();
-    if (key === 'p' && !event.shiftKey && !event.altKey) {
+    // A Latin character wins, so Dvorak, Colemak and AZERTY keep their own letters.
+    // Non-Latin input sources (Korean, Japanese, Russian) fall back to the physical key.
+    const typed = /^[\x21-\x7e]$/.test(event.key) ? event.key.toLowerCase() : '';
+    const physical = event.code?.startsWith('Key') ? event.code.slice(3).toLowerCase() : '';
+    const letter = ['p', 'c', 'v'].includes(typed || physical) ? (typed || physical) : '';
+    if (letter === 'p' && !event.altKey && !event.ctrlKey) {
       event.preventDefault();
       event.stopPropagation();
-      showSnippets(session);
+      openSnippetsFromShortcut(session);
       return false;
     }
-    if (!['c', 'v'].includes(key) && !(event.altKey && ['arrowup', 'arrowdown'].includes(key))) return true;
+    const key = event.key.toLowerCase();
+    if (!letter && !(event.altKey && ['arrowup', 'arrowdown'].includes(key))) return true;
     event.preventDefault();
     event.stopPropagation();
-    if (key === 'c' && terminal.hasSelection()) api['write-clipboard'](terminal.getSelection()).catch(() => {});
-    if (key === 'v') api['read-clipboard']().then(text => terminal.paste(text)).catch(() => {});
+    if (letter === 'c' && terminal.hasSelection()) api['write-clipboard'](terminal.getSelection()).catch(() => {});
+    if (letter === 'v') api['read-clipboard']().then(text => terminal.paste(text)).catch(() => {});
     if (key === 'arrowup' || key === 'arrowdown') jump(key === 'arrowup' ? -1 : 1);
     return false;
   });
@@ -2227,7 +2237,9 @@ function setupFiles(session) {
   dragPane.draggable = true;
   dragPane.addEventListener('dragstart', event => dragStart(event, session));
   dragPane.addEventListener('dragend', clearLayoutDrag);
-  leading.append(dragPane, activity, iconButton('transfer', 'Compare folders', () => showFolderCompare(session, layout, remote)));
+  const transfers = iconButton('transfer', 'Transfers', toggleTransferDrawer);
+  transfers.classList.add('transfer-toolbar-button');
+  leading.append(dragPane, activity, transfers, iconButton('tree', 'Compare folders', () => showFolderCompare(session, layout, remote)));
   remote.element.querySelector('.file-heading').prepend(leading);
   let busy = false;
   let localRequest = 0;
@@ -2574,6 +2586,7 @@ function setupFiles(session) {
       await api['transfer-enqueue'](job);
     }
     status(session, `${entries.length} transfer job${entries.length === 1 ? '' : 's'} queued.`);
+    showTransferDrawer();
   }
 
   function navigate(side, target) {
@@ -3048,7 +3061,7 @@ async function showFolderCompare(session, layout, remote) {
         const jobs = await api['compare-apply'](plan.id, selected, byId('compare-conflict-policy').value, applyRequest);
         dialog.close();
         if (jobs.length) {
-          transferDrawer.hidden = false;
+          showTransferDrawer();
           renderTransferQueue(await api['transfer-list']());
           status(session, `${jobs.length} transfer jobs queued.`);
         }
@@ -3060,106 +3073,316 @@ async function showFolderCompare(session, layout, remote) {
     };
   } catch (error) { status(session, error.message, true); }
 }
+// The drawer lists only queued, running, paused, failed and interrupted work.
+// Finished transfers leave the queue and are kept in the History tab.
+const transferActiveStates = ['queued', 'running', 'paused', 'waiting-auth', 'waiting-conflict'];
+const transferStateIcons = { queued: 'history', running: 'refresh', paused: 'pause', 'waiting-auth': 'alert', 'waiting-conflict': 'alert', failed: 'alert', interrupted: 'alert', completed: 'check', skipped: 'check', cancelled: 'close' };
+const transferTracker = new Map(); // job id -> { batchId, state: 'active' | 'failed' | 'interrupted' | 'done' }
+const expandedTransfers = new Set();
+let transferOpen = false;
+let transferView = 'active';
+let transferCollapseTimer = 0;
+// The startup banner lists only transfers that were unfinished when PromeFTP launched.
+// undefined: not decided yet; null: finished or dismissed for this run; Set: ids still waiting for retry or removal.
+let transferStartupIds;
+let transferHistoryTimer = 0;
+const transferIsActive = job => transferActiveStates.includes(job.state);
+// Returns how many jobs failed since the last snapshot, so the user hears about them with the drawer closed.
+function trackTransfers(jobs) {
+  let newlyFailed = 0;
+  const present = new Set(jobs.map(job => job.id));
+  for (const [id, entry] of transferTracker) {
+    if (present.has(id)) continue;
+    // A job that leaves the queue while active has finished (or was cancelled).
+    if (entry.state === 'active') entry.state = 'done';
+    else transferTracker.delete(id);
+  }
+  for (const job of jobs) {
+    const state = transferIsActive(job) ? 'active' : job.state === 'failed' ? 'failed' : 'interrupted';
+    if (state === 'failed' && transferTracker.get(job.id)?.state === 'active') newlyFailed += 1;
+    transferTracker.set(job.id, { batchId: job.batchId || '', state });
+  }
+  return newlyFailed;
+}
+// When the last active transfer ends, report the result and close the drawer if nothing failed.
+function finishTransferRun() {
+  const entries = [...transferTracker.values()];
+  if (entries.some(entry => entry.state === 'active')) return;
+  const finished = entries.filter(entry => entry.state === 'done').length;
+  if (!finished) return;
+  const failed = entries.filter(entry => entry.state === 'failed').length;
+  for (const [id, entry] of transferTracker) if (entry.state === 'done') transferTracker.delete(id);
+  const session = sessions.get(active);
+  if (session) status(session, `${finished} ${t('transfers finished')}${failed ? ` · ${failed} ${t('Failed')}` : ''}`, failed > 0);
+  if (!failed && transferOpen) transferCollapseTimer = setTimeout(hideTransferDrawer, 4000);
+}
+function showTransferDrawer() {
+  clearTimeout(transferCollapseTimer);
+  transferOpen = true;
+  renderTransferQueue(transferJobs);
+}
+function hideTransferDrawer() {
+  clearTimeout(transferCollapseTimer);
+  transferOpen = false;
+  renderTransferQueue(transferJobs);
+}
+function toggleTransferDrawer() {
+  if (transferOpen) hideTransferDrawer();
+  else showTransferDrawer();
+}
+function transferRoute(job) {
+  if (job.operation.startsWith('mkdir-')) return t('Create folder');
+  return `${job.sourceName || (job.operation === 'upload' ? t('Local') : t('Remote'))} → ${job.targetName || (job.operation === 'download' ? t('Local') : t('Remote'))}`;
+}
+function transferStatusIcon(state) {
+  const mark = document.createElement('span');
+  mark.className = `transfer-status state-${state}`;
+  mark.title = t(state);
+  mark.setAttribute('role', 'img');
+  mark.setAttribute('aria-label', t(state));
+  mark.append(icon(transferStateIcons[state] || 'history'));
+  return mark;
+}
+function transferSpeedText(progress) {
+  if (!progress?.speed) return '—';
+  const remaining = Math.max(0, Math.ceil((progress.total - (progress.bytes || 0)) / progress.speed));
+  return `${formatFileSize(progress.speed)}/s · ${remaining}s`;
+}
+function transferRow(job) {
+  const row = document.createElement('article');
+  row.className = 'transfer-row';
+  row.dataset.state = job.state;
+  const main = document.createElement('div');
+  main.className = 'transfer-main';
+  main.tabIndex = 0;
+  const name = document.createElement('strong');
+  name.textContent = job.label || job.id;
+  name.title = name.textContent;
+  const route = document.createElement('small');
+  route.textContent = job.state === 'failed' && job.error ? job.error : transferRoute(job);
+  route.classList.toggle('transfer-error', job.state === 'failed');
+  main.append(name, route);
+  const progressCell = document.createElement('div');
+  progressCell.className = 'transfer-progress';
+  const metrics = document.createElement('div');
+  metrics.className = 'transfer-metrics';
+  if (job.progress?.total) {
+    const progress = document.createElement('progress');
+    progress.max = job.progress.total;
+    progress.value = Math.min(job.progress.bytes || 0, job.progress.total);
+    progress.setAttribute('aria-label', t('Transfer progress'));
+    progressCell.append(progress);
+    metrics.textContent = transferSpeedText(job.progress);
+  }
+  const actions = document.createElement('div');
+  actions.className = 'transfer-actions';
+  const action = (iconName, hint, control) => {
+    const element = iconButton(iconName, hint, () => runTransferControl('transfer-control', job.id, control));
+    element.dataset.transferFocus = `job:${job.id}:${control}`;
+    return element;
+  };
+  if (['queued', 'running'].includes(job.state)) actions.append(action('pause', 'Pause transfer', 'pause'));
+  if (job.state === 'paused') actions.append(action('play', 'Resume transfer', 'resume'));
+  if (['queued', 'running', 'paused', 'waiting-conflict'].includes(job.state)) actions.append(action('close', 'Cancel transfer', 'cancel'));
+  if (['failed', 'interrupted'].includes(job.state)) actions.append(action('refresh', 'Retry', 'retry'), action('close', 'Remove from list', 'clear'));
+  const detail = document.createElement('div');
+  detail.className = 'transfer-detail';
+  const expanded = expandedTransfers.has(String(job.id));
+  detail.hidden = !expanded;
+  main.setAttribute('aria-expanded', String(expanded));
+  for (const line of [job.localPath, job.remotePath || job.sourcePath, job.progress?.total && `${formatFileSize(job.progress.bytes || 0)} / ${formatFileSize(job.progress.total)}`, job.error]) {
+    if (!line) continue;
+    const text = document.createElement('div');
+    text.textContent = line;
+    detail.append(text);
+  }
+  const toggle = () => {
+    const open = detail.hidden;
+    detail.hidden = !open;
+    main.setAttribute('aria-expanded', String(open));
+    if (open) expandedTransfers.add(String(job.id)); else expandedTransfers.delete(String(job.id));
+  };
+  main.addEventListener('click', toggle);
+  main.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); } });
+  row.append(transferStatusIcon(job.state), main, progressCell, metrics, actions, detail);
+  return row;
+}
+function transferBatchRow(batchId, items) {
+  const members = [...transferTracker.values()].filter(entry => entry.batchId === String(batchId));
+  const total = Math.max(members.length, items.length);
+  const done = members.filter(entry => entry.state === 'done').length;
+  const failedCount = items.filter(job => job.state === 'failed').length;
+  const activeCount = items.filter(transferIsActive).length;
+  const state = failedCount ? 'failed' : activeCount ? (items.find(transferIsActive)?.state || 'queued') : 'interrupted';
+  const row = document.createElement('summary');
+  row.className = 'transfer-row transfer-batch-row';
+  row.dataset.state = state;
+  row.dataset.transferFocus = `batch:${batchId}`;
+  const main = document.createElement('div');
+  main.className = 'transfer-main';
+  const title = document.createElement('strong');
+  title.textContent = items[0].batchLabel || t('Folder comparison batch');
+  title.title = title.textContent;
+  const count = document.createElement('small');
+  count.textContent = [`${done} / ${total} ${t('completed')}`, failedCount && `${failedCount} ${t('Failed')}`].filter(Boolean).join(' · ');
+  main.append(title, count);
+  const progressCell = document.createElement('div');
+  progressCell.className = 'transfer-progress';
+  const progress = document.createElement('progress');
+  progress.max = total || 1;
+  progress.value = done;
+  progress.setAttribute('aria-label', t('Transfer progress'));
+  progressCell.append(progress);
+  const metrics = document.createElement('div');
+  metrics.className = 'transfer-metrics';
+  metrics.textContent = `${done} / ${total}`;
+  const actions = document.createElement('div');
+  actions.className = 'transfer-actions';
+  const batchAction = (iconName, hint, control) => {
+    const element = iconButton(iconName, hint, () => runTransferControl('transfer-batch-control', String(batchId), control));
+    element.dataset.transferFocus = `batch:${batchId}:${control}`;
+    element.addEventListener('click', event => event.stopPropagation());
+    return element;
+  };
+  if (items.some(job => ['queued', 'running'].includes(job.state))) actions.append(batchAction('pause', 'Pause batch', 'pause'));
+  if (items.some(job => job.state === 'paused')) actions.append(batchAction('play', 'Resume batch', 'resume'));
+  if (items.some(job => ['queued', 'running', 'paused', 'waiting-conflict'].includes(job.state))) actions.append(batchAction('close', 'Cancel batch', 'cancel'));
+  if (failedCount) actions.append(batchAction('refresh', 'Retry failed', 'retry'));
+  row.append(transferStatusIcon(state), main, progressCell, metrics, actions);
+  return row;
+}
 function renderTransferQueue(jobs) {
-  transferJobs = Array.isArray(jobs) ? jobs : [];
+  let newlyFailed = 0;
+  if (Array.isArray(jobs)) {
+    transferJobs = jobs;
+    newlyFailed = trackTransfers(jobs);
+  }
   const list = byId('transfer-list');
   if (!list) return;
   const scrollTop = transferDrawer.scrollTop;
   const focusedControl = document.activeElement?.matches?.('[data-transfer-focus]') ? document.activeElement : document.activeElement?.closest?.('[data-transfer-focus]');
   const focusKey = focusedControl?.dataset.transferFocus || '';
   const openBatches = new Set([...list.querySelectorAll('.transfer-batch[open]')].map(node => node.dataset.batchId));
-  const openDetails = new Set([...list.querySelectorAll('.transfer-detail[open]')].map(node => node.dataset.jobId));
-  list.replaceChildren();
-  const activeStates = ['queued', 'running', 'paused', 'waiting-auth', 'waiting-conflict'];
-  const activeJobs = transferJobs.filter(job => activeStates.includes(job.state));
-  const failedJobs = transferJobs.filter(job => ['failed', 'interrupted'].includes(job.state));
-  const finishedJobs = transferJobs.filter(job => !activeStates.includes(job.state) && !['failed', 'interrupted'].includes(job.state)).slice(-40);
-  const visible = [...finishedJobs, ...failedJobs, ...activeJobs].reverse();
-  const allGroups = new Map();
-  for (const job of transferJobs) {
-    const key = job.batchId || job.id;
-    if (!allGroups.has(key)) allGroups.set(key, []);
-    allGroups.get(key).push(job);
-  }
   const groups = new Map();
-  for (const job of visible) {
+  for (const job of transferJobs) {
     const key = job.batchId || job.id;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(job);
   }
-  for (const [batchId, items] of groups) {
-    const batch = items.length > 1 || items[0].batchId;
-    const container = batch ? document.createElement('details') : document.createElement('div');
-    container.className = batch ? 'transfer-batch' : 'transfer-single';
-    if (batch) {
-      container.dataset.batchId = String(batchId);
-      container.open = openBatches.has(String(batchId)) || (!list.dataset.initialized && items.some(job => activeStates.includes(job.state)));
-      const summary = document.createElement('summary');
-      summary.dataset.transferFocus = `batch:${batchId}`;
-      const title = document.createElement('strong'); title.textContent = items[0].batchLabel || t('Folder comparison batch'); title.title = title.textContent;
-      const allItems = allGroups.get(batchId) || items;
-      const completeCount = allItems.filter(job => job.state === 'completed').length;
-      const skippedCount = allItems.filter(job => job.state === 'skipped').length;
-      const failedCount = allItems.filter(job => ['failed','interrupted'].includes(job.state)).length;
-      const aggregate = document.createElement('small'); aggregate.textContent = [`${completeCount} / ${allItems.length} ${t('completed')}`, skippedCount && `${skippedCount} ${t('skipped')}`, failedCount && `${failedCount} ${t('failed')}`].filter(Boolean).join(' · ');
-      const current = allItems.find(job => job.state === 'failed') || allItems.find(job => job.state === 'interrupted') || allItems.find(job => job.state === 'running') || allItems.find(job => activeStates.includes(job.state)) || allItems[0];
-      const state = document.createElement('span'); state.className = `transfer-state state-${current.state}`; state.textContent = t(current.state);
-      const batchControls = document.createElement('span'); batchControls.className = 'transfer-controls';
-      const batchAction = (action, label) => { const control = button(t(label), async event => { event?.preventDefault?.(); event?.stopPropagation?.(); await runTransferControl('transfer-batch-control', String(batchId), action); }); control.dataset.transferFocus = `batch:${batchId}:${action}`; control.addEventListener('click', event => event.stopPropagation()); return control; };
-      if (allItems.some(job => ['queued','running'].includes(job.state))) batchControls.append(batchAction('pause', 'Pause batch'));
-      if (allItems.some(job => ['queued','running','paused','waiting-conflict'].includes(job.state))) batchControls.append(batchAction('cancel', 'Cancel batch'));
-      if (allItems.some(job => ['failed','interrupted'].includes(job.state))) batchControls.append(batchAction('retry', 'Retry failed'));
-      if (allItems.some(job => job.state === 'paused')) batchControls.append(batchAction('resume', 'Resume batch'));
-      summary.append(title, aggregate, ...(failedCount ? [] : [state]), batchControls); container.append(summary);
-    }
-    for (const job of items) {
-      const row = document.createElement('article'); row.className = 'transfer-row';
-      const primary = document.createElement('div'); primary.className = 'transfer-primary';
-      const name = document.createElement('strong'); name.textContent = job.label || job.id; name.title = job.label || job.id;
-      const route = document.createElement('small'); route.textContent = job.operation.startsWith('mkdir-') ? t('Create folder') : `${job.sourceName || (job.operation === 'upload' ? 'Local' : 'Remote')} → ${job.targetName || (job.operation === 'download' ? 'Local' : 'Remote')}`;
-      const state = document.createElement('span'); state.className = `transfer-state state-${job.state}`; state.textContent = t(job.state);
-      primary.append(name, route, state); row.append(primary);
-      let metrics;
-      if (job.progress?.total) {
-        const progress = document.createElement('progress'); progress.max = job.progress.total; progress.value = Math.min(job.progress.bytes || 0, job.progress.total); progress.setAttribute('aria-label', t('Transfer progress')); row.append(progress);
-        metrics = document.createElement('div');
-        const remaining = job.progress.speed > 0 ? Math.max(0, Math.ceil((job.progress.total - (job.progress.bytes || 0)) / job.progress.speed)) : null;
-        metrics.textContent = `${formatFileSize(job.progress.bytes || 0)} / ${formatFileSize(job.progress.total)} · ${job.progress.speed ? `${formatFileSize(job.progress.speed)}/s` : '—'}${remaining !== null ? ` · ${remaining}s` : ''}`;
-      }
-      const controls = document.createElement('div'); controls.className = 'transfer-controls';
-      const actionButton = (action, label) => { const control = button(t(label), () => runTransferControl('transfer-control', job.id, action)); control.dataset.transferControl = action; control.dataset.jobId = String(job.id); control.dataset.transferFocus = `job:${job.id}:${action}`; return control; };
-      if (['failed', 'interrupted'].includes(job.state)) controls.append(actionButton('retry', 'Retry'));
-      const canCancel = ['queued', 'running', 'paused', 'waiting-conflict'].includes(job.state);
-      const canPause = ['queued', 'running'].includes(job.state);
-      if (canCancel && job.state !== 'paused') controls.append(actionButton('cancel', 'Cancel transfer'));
-      if (job.state === 'paused') controls.append(actionButton('resume', 'Resume'));
-      const canClear = ['completed', 'failed', 'cancelled', 'skipped', 'interrupted'].includes(job.state);
-      row.append(controls);
-      if (metrics || canClear || canCancel || job.error || job.localPath || job.remotePath || job.sourcePath) {
-        const detail = document.createElement('details'); detail.className = 'transfer-detail';
-        detail.dataset.jobId = String(job.id);
-        detail.open = openDetails.has(String(job.id));
-        const summary = document.createElement('summary'); summary.textContent = t('Details'); summary.dataset.transferFocus = `detail:${job.id}`; detail.append(summary);
-        for (const value of [job.localPath, job.remotePath || job.sourcePath, job.error].filter(Boolean)) { const line = document.createElement('div'); line.textContent = value; line.title = value; detail.append(line); }
-        if (metrics) detail.append(metrics);
-        if (canPause) detail.append(actionButton('pause', 'Pause'));
-        if (job.state === 'paused') detail.append(actionButton('cancel', 'Cancel transfer'));
-        if (canClear) detail.append(actionButton('clear', 'Clear'));
-        row.append(detail);
-      }
-      container.append(row);
-    }
+  list.replaceChildren();
+  for (const [key, items] of groups) {
+    if (!items[0].batchId) { list.append(transferRow(items[0])); continue; }
+    const container = document.createElement('details');
+    container.className = 'transfer-batch';
+    container.dataset.batchId = String(key);
+    container.open = openBatches.has(String(key)) || items.some(transferIsActive);
+    const children = document.createElement('div');
+    children.className = 'transfer-children';
+    children.append(...items.map(transferRow));
+    container.append(transferBatchRow(key, items), children);
     list.append(container);
   }
-  list.dataset.initialized = 'true';
+  const activeCount = transferJobs.filter(transferIsActive).length;
+  const failedCount = transferJobs.filter(job => job.state === 'failed').length;
+  const interruptedCount = transferJobs.filter(job => job.state === 'interrupted').length;
+  byId('transfer-summary').textContent = [`${activeCount} ${t('Active')}`, failedCount && `${failedCount} ${t('Failed')}`,
+    interruptedCount && `${interruptedCount} ${t('interrupted')}`].filter(Boolean).join(' · ');
+  refreshTransferBanner();
+  byId('transfer-clear-failed').hidden = !failedCount;
+  // The toolbar badge counts unfinished work; a red badge means something needs the user's attention.
+  const attentionCount = transferJobs.filter(job => ['failed', 'interrupted'].includes(job.state)).length;
+  for (const button of document.querySelectorAll('.transfer-toolbar-button')) {
+    button.dataset.count = activeCount + attentionCount ? String(activeCount + attentionCount) : '';
+    button.classList.toggle('has-failed', attentionCount > 0);
+  }
+  if (newlyFailed) {
+    const session = sessions.get(active);
+    if (session) status(session, `${newlyFailed} ${t('Failed')}`, true);
+  }
   if (focusKey) [...list.querySelectorAll('[data-transfer-focus]')].find(node => node.dataset.transferFocus === focusKey)?.focus({ preventScroll: true });
   transferDrawer.scrollTop = scrollTop;
-  transferDrawer.hidden = transferJobs.length === 0;
+  transferDrawer.hidden = !transferOpen;
   const height = transferDrawer.hidden ? 0 : Math.min(transferDrawer.scrollHeight || 220, Math.round(workspace.clientHeight * 0.38));
   workspace.style.setProperty('--transfer-drawer-height', `${height}px`);
+  if (Array.isArray(jobs)) finishTransferRun();
 }
-api['transfer-list']().then(renderTransferQueue).catch(() => {});
-byId('transfer-toggle').addEventListener('click', () => { transferDrawer.classList.toggle('collapsed'); renderTransferQueue(transferJobs); });
+function setTransferView(view) {
+  transferView = view;
+  byId('transfer-tab-live').setAttribute('aria-selected', String(view === 'active'));
+  byId('transfer-tab-history').setAttribute('aria-selected', String(view === 'history'));
+  byId('transfer-list').hidden = view !== 'active';
+  byId('transfer-history').hidden = view !== 'history';
+  if (view === 'history') loadTransferHistory().catch(showError);
+}
+async function loadTransferHistory() {
+  const query = byId('transfer-history-search').value;
+  const rows = await api['transfer-history'](query, 300);
+  const list = byId('transfer-history-list');
+  list.replaceChildren(...rows.map(entry => {
+    const row = document.createElement('article');
+    row.className = 'transfer-history-row';
+    row.dataset.state = entry.state;
+    const main = document.createElement('div');
+    main.className = 'transfer-main';
+    const name = document.createElement('strong');
+    name.textContent = entry.label || entry.id;
+    name.title = name.textContent;
+    const route = document.createElement('small');
+    route.textContent = entry.error || transferRoute(entry);
+    route.classList.toggle('transfer-error', entry.state === 'failed');
+    main.append(name, route);
+    const meta = document.createElement('div');
+    meta.className = 'transfer-metrics';
+    meta.textContent = `${t(entry.state)} · ${new Date(entry.finishedAt || entry.createdAt).toLocaleString()}`;
+    row.append(transferStatusIcon(entry.state), main, meta);
+    return row;
+  }));
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.className = 'transfer-empty';
+    empty.textContent = t(query.trim() ? 'No matching transfers.' : 'No transfers yet.');
+    list.append(empty);
+  }
+}
+// Recomputed when the queue or the SFTP connection changes, so the retry button appears once SFTP is connected.
+function refreshTransferBanner() {
+  const banner = byId('transfer-banner');
+  // While the drawer is open it lists these transfers with their own retry and remove buttons, so the banner steps aside.
+  if (!transferStartupIds || transferOpen) { banner.hidden = true; return; }
+  const remaining = transferJobs.filter(job => transferStartupIds.has(job.id) && ['interrupted', 'failed'].includes(job.state)).length;
+  // Once every startup transfer has been retried or removed, the banner never returns during this run.
+  if (!remaining) { transferStartupIds = null; banner.hidden = true; return; }
+  const sftpReady = [...sessions.values()].some(item => item.mode === 'sftp' && item.ready);
+  byId('transfer-banner-text').textContent = `${t('Unfinished transfers')}: ${remaining}` + (sftpReady ? '' : ` · ${t('Reconnect SFTP, then retry.')}`);
+  byId('transfer-banner-retry').hidden = !sftpReady;
+  banner.hidden = false;
+}
+function showTransferBanner(jobs) {
+  if (transferStartupIds !== undefined) return;
+  const ids = jobs.filter(job => ['interrupted', 'failed'].includes(job.state)).map(job => job.id);
+  transferStartupIds = ids.length ? new Set(ids) : null;
+  refreshTransferBanner();
+}
+byId('transfer-banner-retry').addEventListener('click', async () => {
+  byId('transfer-banner').hidden = true;
+  try {
+    for (const job of transferJobs.filter(item => ['interrupted', 'failed'].includes(item.state))) await api['transfer-control'](job.id, 'retry');
+  } catch (error) { showTransferError(error); }
+  showTransferDrawer();
+});
+byId('transfer-banner-dismiss').addEventListener('click', () => { transferStartupIds = null; byId('transfer-banner').hidden = true; });
+byId('transfer-clear-failed').addEventListener('click', async () => {
+  for (const job of transferJobs.filter(item => item.state === 'failed')) await runTransferControl('transfer-control', job.id, 'clear');
+});
+byId('transfer-tab-live').addEventListener('click', () => setTransferView('active'));
+byId('transfer-tab-history').addEventListener('click', () => setTransferView('history'));
+byId('transfer-history-search').addEventListener('input', () => {
+  clearTimeout(transferHistoryTimer);
+  transferHistoryTimer = setTimeout(() => loadTransferHistory().catch(showError), 150);
+});
+// The queue must be rendered first: the banner counts from the rendered list.
+api['transfer-list']().then(jobs => { renderTransferQueue(jobs); showTransferBanner(jobs); }).catch(() => {});
+byId('transfer-toggle').addEventListener('click', hideTransferDrawer);
 const workspaceDialog = byId('workspaces-dialog');
 const workspaceForm = byId('workspace-form');
 const workspaceMessage = byId('workspace-message');
@@ -3641,6 +3864,12 @@ function showSnippets(session) {
     snippetSearch.focus();
   }).catch(showError);
 }
+// Snippets opens as a modal on top of any open dialog, so an unsaved editor is never closed.
+// Prompts that wait for a decision (name, conflict, compare, color) keep the shortcut out.
+function openSnippetsFromShortcut(session) {
+  if (document.querySelector('dialog[open][data-blocking]')) return;
+  showSnippets(session);
+}
 byId('rail-snippets').addEventListener('click', () => showSnippets(sessions.get(active)));
 byId('close-snippets').addEventListener('click', () => snippetDialog.close());
 snippetForm.addEventListener('submit', async event => {
@@ -3660,10 +3889,7 @@ api.onCommand(command => {
   const session = sessions.get(active);
   if (command === 'new-host') { byId('new-host').click(); return; }
   if (command === 'local') { byId('rail-local').click(); return; }
-  if (command === 'snippets') {
-    if (!document.querySelector('dialog[open]') || snippetDialog.open) showSnippets(session);
-    return;
-  }
+  if (command === 'snippets') { openSnippetsFromShortcut(session); return; }
   if (command === 'triggers') { showTriggers(session); return; }
   if (command === 'open-config') { byId('rail-config').click(); return; }
   if (command === 'preferences') { openPreferences(); return; }

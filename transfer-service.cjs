@@ -1,8 +1,13 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+// Finished jobs leave the queue and are written to the history log.
+const finishedStates = new Set(['completed', 'skipped', 'cancelled']);
+// Failed jobs stay in the queue until the user retries or clears them.
 const terminal = new Set(['completed', 'failed', 'cancelled', 'skipped', 'interrupted']);
-function createTransferService({ file, execute, emit, onBusy = () => {} }) {
+const historyLimit = 500;
+const historyDays = 30;
+function createTransferService({ file, historyFile, execute, emit, onBusy = () => {} }) {
   const jobs = new Map();
   const controllers = new Map();
   const workers = new Map();
@@ -13,25 +18,73 @@ function createTransferService({ file, execute, emit, onBusy = () => {} }) {
   let stopping = false;
   let lastProgressEmit = 0;
   let writes = Promise.resolve();
+  let historyWrites = Promise.resolve();
+  let historyAppends = 0;
   const persist = () => {
     writes = writes.then(async () => {
       const temp = file + '.tmp';
-      await fs.writeFile(temp, JSON.stringify({ version: 1, jobs: [...jobs.values()].map(({ cancel, active, progressSample, ...job }) => job) }), { mode: 0o600 });
+      await fs.writeFile(temp, JSON.stringify({ version: 2, jobs: [...jobs.values()].map(({ cancel, active, progressSample, shutdown, ...job }) => job) }), { mode: 0o600 });
       await fs.rename(temp, file);
     });
     return writes;
   };
-  const snapshot = () => [...jobs.values()].map(({ cancel, active, progressSample, ...job }) => ({ ...job }));
+  const snapshot = () => [...jobs.values()].map(({ cancel, active, progressSample, shutdown, ...job }) => ({ ...job }));
   const publish = async job => { await persist(); emit(snapshot(), job && { ...job }); };
+  const historyRecord = job => ({
+    id: job.id, operation: job.operation, state: job.state, label: job.label, batchLabel: job.batchLabel,
+    sourceName: job.sourceName, targetName: job.targetName, localPath: job.localPath, remotePath: job.remotePath,
+    createdAt: job.createdAt, finishedAt: job.finishedAt || Date.now(), error: job.error,
+    bytes: job.progress?.bytes, total: job.progress?.total,
+  });
+  async function readHistory() {
+    let text = '';
+    try { text = await fs.readFile(historyFile, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    return text.split('\n').filter(Boolean).flatMap(line => {
+      try { return [JSON.parse(line)]; } catch { return []; }
+    });
+  }
+  async function trimHistory() {
+    const entries = await readHistory();
+    const cutoff = Date.now() - historyDays * 86_400_000;
+    const kept = entries.filter(entry => (entry.finishedAt || 0) >= cutoff).slice(-historyLimit);
+    if (kept.length === entries.length) return;
+    const temp = historyFile + '.tmp';
+    await fs.writeFile(temp, kept.map(entry => JSON.stringify(entry) + '\n').join(''), { mode: 0o600 });
+    await fs.rename(temp, historyFile);
+  }
+  const trimSoon = () => {
+    historyWrites = historyWrites.then(trimHistory).catch(error => console.error('Could not trim transfer history:', error.message));
+  };
+  const recordHistory = job => {
+    if (!historyFile) return;
+    const line = JSON.stringify(historyRecord(job)) + '\n';
+    historyAppends += 1;
+    historyWrites = historyWrites.then(async () => {
+      await fs.appendFile(historyFile, line, { mode: 0o600 });
+      if (historyAppends % 50 === 0) await trimHistory();
+    }).catch(error => console.error('Could not write transfer history:', error.message));
+  };
+  // Moves a finished job out of the queue; failed jobs are only logged.
+  const settle = job => {
+    if (job.state === 'failed') recordHistory(job);
+    if (!finishedStates.has(job.state)) return;
+    recordHistory(job);
+    jobs.delete(job.id);
+  };
   async function start() {
+    let migrated = false;
     try {
       const saved = JSON.parse(await fs.readFile(file, 'utf8'));
       for (const job of saved.jobs || []) {
+        // Version 1 kept finished jobs in the queue file; move them to the history log.
+        if (finishedStates.has(job.state)) { recordHistory(job); migrated = true; continue; }
         if (['running', 'queued', 'waiting-conflict'].includes(job.state)) job.state = 'interrupted';
         job.active = false;
         jobs.set(job.id, job);
       }
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (migrated) await persist();
+    if (historyFile) trimSoon();
     emit(snapshot());
   }
   const endpointKeys = job => [...new Set([job.connectionScope || job.sessionId, job.operation === 'remote-copy' ? (job.targetScope || job.targetSessionId) : null].filter(Boolean).map(String))];
@@ -84,10 +137,13 @@ function createTransferService({ file, execute, emit, onBusy = () => {} }) {
       if (result?.skippedCount) job.skippedCount = result.skippedCount;
       job.finishedAt = Date.now(); job.error = undefined;
     } catch (error) {
-      job.state = job.cancel ? 'cancelled' : 'failed'; job.finishedAt = Date.now(); job.error = String(error.message || error).slice(0, 500);
+      const stoppedByQuit = job.shutdown && !controller.signal.committed;
+      job.state = job.cancel ? 'cancelled' : stoppedByQuit ? 'interrupted' : 'failed'; job.finishedAt = Date.now();
+      job.error = stoppedByQuit ? 'PromeFTP quit before this transfer finished.' : String(error.message || error).slice(0, 500);
     } finally {
       occupied.delete(job.id); ready.delete(job.id);
       job.active = false; controllers.delete(job.id); keys.forEach(key => activeEndpoints.delete(key));
+      settle(job);
       await publish(job); workers.delete(job.id); onBusy(workers.size > 0); void pump();
     }
   }
@@ -106,6 +162,13 @@ function createTransferService({ file, execute, emit, onBusy = () => {} }) {
   return {
     start,
     list: snapshot,
+    async history(query = '', limit = 300) {
+      if (!historyFile) return [];
+      await historyWrites;
+      const needle = String(query || '').trim().toLowerCase();
+      return (await readHistory()).reverse().filter(entry => !needle || [entry.label, entry.batchLabel, entry.sourceName, entry.targetName,
+        entry.localPath, entry.remotePath, entry.error, entry.operation, entry.state].some(value => String(value || '').toLowerCase().includes(needle))).slice(0, limit);
+    },
     async enqueue(input) {
       if (!input || !['upload', 'download', 'remote-copy', 'mkdir-local', 'mkdir-remote'].includes(input.operation)) throw Error('Invalid transfer request.');
       const job = { ...input, id: randomUUID(), state: 'queued', createdAt: Date.now(), attempt: 0 };
@@ -123,9 +186,10 @@ function createTransferService({ file, execute, emit, onBusy = () => {} }) {
       else if (action === 'resume' && job.state === 'paused') job.state = job.active ? 'running' : 'queued';
       else if (action === 'clear' && terminal.has(job.state)) jobs.delete(id);
       else throw Error('Unsupported transfer action.');
+      if (!job.active && finishedStates.has(job.state)) settle(job);
       await publish(job); void pump(); return snapshot();
     },
-    async stop() { stopping = true; for (const job of jobs.values()) if (job.active) { job.cancel = true; controllers.get(job.id)?.abort(); } await Promise.allSettled([...workers.values()]); await writes; },
+    async stop() { stopping = true; for (const job of jobs.values()) if (job.active) { job.shutdown = true; controllers.get(job.id)?.abort(); } await Promise.allSettled([...workers.values()]); await writes; await historyWrites; },
   };
 }
 module.exports = { createTransferService };

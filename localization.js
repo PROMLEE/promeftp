@@ -12,6 +12,66 @@ Terminal|터미널|ターミナル|终端
 Authentication|인증|認証|身份验证
 Shortcuts|단축키|ショートカット|快捷键
 No shortcut|단축키 없음|ショートカットなし|无快捷键
+Lets AI agents on this Mac connect through the PromeFTP CLI.|이 Mac의 AI 에이전트가 PromeFTP CLI로 연결할 수 있게 합니다.|この Mac の AI エージェントが PromeFTP CLI で接続できるようにします。|允许此 Mac 上的 AI 代理通过 PromeFTP CLI 连接。
+Each client gets its own token. The token is shown only once.|에이전트마다 별도 토큰을 발급합니다. 토큰은 한 번만 표시됩니다.|クライアントごとに専用のトークンを発行します。トークンは一度だけ表示されます。|每个客户端都会获得独立的令牌，且令牌只显示一次。
+Deletes the local token file that the CLI reads automatically.|CLI가 자동으로 읽던 로컬 토큰 파일을 삭제합니다.|CLI が自動で読み取るローカルのトークンファイルを削除します。|删除 CLI 自动读取的本地令牌文件。
+Revokes this client's token and all of its bookmark permissions.|이 클라이언트의 토큰과 모든 북마크 권한을 취소합니다.|このクライアントのトークンとすべてのブックマーク権限を取り消します。|撤销此客户端的令牌及其所有书签权限。
+Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump. ProxyCommand may start a local process.|이 북마크의 OpenSSH 설정(alias, ProxyJump 포함)으로 연결합니다. ProxyCommand는 로컬 프로세스를 시작할 수 있습니다.|このブックマークの OpenSSH 設定（エイリアスと ProxyJump を含む）で接続します。ProxyCommand はローカルプロセスを起動する場合があります。|使用此书签的 OpenSSH 设置（包括别名和 ProxyJump）连接。ProxyCommand 可能会启动本地进程。
+Allows listing and file information only, inside the folder you choose. Files cannot be changed.|지정한 폴더 아래에서만 목록 조회와 파일 정보 확인을 허용합니다. 파일은 수정할 수 없습니다.|選んだフォルダー内でのみ一覧表示とファイル情報の確認を許可します。ファイルの変更はできません。|仅允许在所选文件夹内列出文件和查看文件信息，不能修改文件。
+The top folder the agent can see. It must start with /.|에이전트가 볼 수 있는 최상위 폴더입니다. /로 시작해야 합니다.|エージェントが参照できる最上位のフォルダーです。/ で始まる必要があります。|代理可以查看的顶层文件夹，必须以 / 开头。
+Downloads files up to 16 MiB each into PromeFTP's private staging folder.|파일당 16 MiB까지 PromeFTP 전용 임시 폴더로 내려받습니다.|1 ファイルあたり 16 MiB まで、PromeFTP 専用の一時フォルダーにダウンロードします。|每个文件最大 16 MiB，下载到 PromeFTP 的专用暂存文件夹。
+Uses the saved PAM responses for this host when the agent connects.|에이전트가 연결할 때 이 호스트에 저장된 PAM 응답을 사용합니다.|エージェントの接続時に、このホストに保存された PAM 応答を使用します。|代理连接时使用此主机已保存的 PAM 应答。
+Each command the agent requests runs only after you approve it in a confirmation window.|에이전트가 요청한 명령은 확인 창에서 승인해야 실행됩니다.|エージェントが要求したコマンドは、確認ウィンドウで承認された場合にのみ実行されます。|代理请求的每条命令都必须在确认窗口中审批后才会执行。
+One command that can run without approval, identified by a name the agent uses.|승인 없이 실행할 수 있는 명령 하나를 에이전트가 쓰는 이름으로 등록합니다.|承認なしで実行できるコマンドを 1 つ、エージェントが使う名前で登録します。|注册一条无需审批即可运行的命令，并为其指定代理使用的名称。
+Choose the host-wide PAM rules the agent connection may use.|에이전트 연결에서 사용할 수 있는 모든 호스트 PAM 규칙을 고릅니다.|エージェント接続で使用できる全ホスト向け PAM ルールを選びます。|选择代理连接可以使用的全局主机 PAM 规则。
+Reports matching output to the agent as an event. It never sends an automatic reply.|일치하는 출력을 이벤트로 에이전트에 알립니다. 자동 응답은 보내지 않습니다.|一致した出力をイベントとしてエージェントに通知します。自動応答は送信しません。|将匹配的输出以事件形式通知代理，且从不自动回复。
+Keeps activity for 1–90 days. Commands and passwords are never recorded.|활동 기록을 1–90일 보관합니다. 명령 내용과 비밀번호는 기록하지 않습니다.|アクティビティを 1～90 日間保存します。コマンドとパスワードは記録しません。|活动记录保留 1–90 天。从不记录命令和密码。
+More information|자세히 보기|詳細|更多信息
+SFTP|SFTP|SFTP|SFTP
+SSH commands|SSH 명령|SSH コマンド|SSH 命令
+Authentication and triggers|인증과 트리거|認証とトリガー|身份验证和触发器
+Master switch. Turns on both all-host rules and per-host answers for connections. When it is off, neither is used.|마스터 스위치입니다. 켜면 모든 호스트 규칙과 호스트별 응답을 연결에 사용하고, 끄면 둘 다 사용하지 않습니다.|マスタースイッチです。オンにすると全ホスト向けルールとホストごとの応答を接続に使用し、オフにすると両方とも使用しません。|总开关。开启后连接会同时使用全局主机规则和按主机保存的应答；关闭后两者都不使用。
+Rules that answer prompts on every SSH and SFTP connection. Match the exact text or a regular expression.|모든 SSH·SFTP 연결의 질문에 응답하는 규칙입니다. 질문 문장을 정확히 일치시키거나 정규식을 사용합니다.|すべての SSH・SFTP 接続でプロンプトに応答するルールです。質問文を完全一致させるか、正規表現を使います。|在每个 SSH 和 SFTP 连接中应答提示的规则。可按完整文本或正则表达式匹配。
+Answers saved after a successful sign-in on one connection. They are used only for that host.|한 연결에서 로그인에 성공한 뒤 저장된 응답입니다. 해당 호스트에서만 사용합니다.|1 つの接続でサインインに成功した後に保存された応答です。そのホストにのみ使用します。|某个连接成功登录后保存的应答，仅用于该主机。
+On: send the saved answer right away. Off: fill the field and wait for you to press Send.|켜면 저장된 응답을 바로 보냅니다. 끄면 입력란만 채우고 보내기를 기다립니다.|オン：保存済みの応答をすぐに送信します。オフ：入力欄に入れて送信ボタンを待ちます。|开启：立即发送已保存的应答。关闭：仅填入输入框，等待您点击发送。
+Output is never discarded, so memory keeps growing while a session stays open.|출력을 버리지 않으므로 세션을 열어 두는 동안 메모리 사용량이 계속 늘어납니다.|出力を破棄しないため、セッションを開いたままにするとメモリ使用量が増え続けます。|输出不会被丢弃，因此会话保持打开时内存会持续增长。
+Keeps the newest lines in memory. Older lines are discarded at the limit. Output is cleared when the session closes.|최근 줄을 메모리에 보관합니다. 한도를 넘으면 오래된 줄부터 버립니다. 세션을 닫으면 출력이 지워집니다.|最新の行をメモリに保持します。上限に達すると古い行から破棄します。セッションを閉じると出力は消去されます。|在内存中保留最新的行。达到上限时丢弃最旧的行。关闭会话后输出会被清除。
+All-Host Rules|모든 호스트 규칙|全ホスト向けルール|全局主机规则
+Per-Host Answers|호스트별 응답|ホストごとの応答|按主机的应答
+Limit|제한|制限|限制
+Unlimited|무제한|無制限|无限制
+Copied|복사됨|コピーしました|已复制
+Check Now|지금 확인|今すぐ確認|立即检查
+MIT License|MIT 라이선스|MIT ライセンス|MIT 许可证
+Open source notices|오픈소스 고지|オープンソースの告知|开源许可声明
+SSH and SFTP in one macOS workspace.|SSH와 SFTP를 하나의 macOS 작업 공간에서|SSH と SFTP を 1 つの macOS ワークスペースで|在一个 macOS 工作区中使用 SSH 和 SFTP
+Updates|업데이트|アップデート|更新
+transfers finished|전송 완료|件の転送が完了|个传输已完成
+Active|진행 중|進行中|进行中
+Failed|실패|失敗|失败
+Clear failed|실패 항목 지우기|失敗を消去|清除失败项
+Hide transfers|전송 목록 접기|転送リストを隠す|隐藏传输列表
+Search history|기록 검색|履歴を検索|搜索历史记录
+Dismiss|닫기|閉じる|关闭
+Interrupted transfers|중단된 전송|中断された転送|已中断的传输
+Unfinished transfers|완료되지 않은 전송|未完了の転送|未完成的传输
+Output stays in memory while the session is open and is never discarded. Closing the session clears it.|세션을 여는 동안 출력이 메모리에 남고 버려지지 않습니다. 세션을 닫으면 출력이 지워집니다.|セッションを開いている間、出力はメモリに保持され、破棄されません。セッションを閉じると出力は消去されます。|会话打开期间输出保留在内存中且不会被丢弃。关闭会话后输出会被清除。
+Reconnect SFTP, then retry.|SFTP를 다시 연결한 뒤 재시도하세요.|SFTP に再接続してから再試行してください。|请重新连接 SFTP 后重试。
+No transfers yet.|아직 전송 기록이 없습니다.|まだ転送の履歴はありません。|暂无传输记录。
+No matching transfers.|일치하는 전송이 없습니다.|一致する転送はありません。|没有匹配的传输。
+Pause transfer|전송 일시 정지|転送を一時停止|暂停传输
+Resume transfer|전송 계속|転送を再開|继续传输
+Access saved|접근 권한을 저장했습니다|アクセス権を保存しました|访问权限已保存
+Access removed|접근 권한을 삭제했습니다|アクセス権を削除しました|已移除访问权限
+Save failed|저장 실패|保存に失敗しました|保存失败
+To allow SFTP browsing, enter a remote path that starts with /.|SFTP를 허용하려면 /로 시작하는 경로를 입력하세요.|SFTP 参照を許可するには、/ で始まるリモートパスを入力してください。|要允许 SFTP 浏览，请输入以 / 开头的远程路径。
+Use lowercase letters, numbers, hyphens, and underscores, up to 64 characters.|소문자·숫자·-·_만 사용하고 64자 이내로 입력하세요.|小文字、数字、-、_ のみを使い、64 文字以内で入力してください。|仅可使用小写字母、数字、- 和 _，最多 64 个字符。
+Enter a task name and a fixed command together.|작업 이름과 고정 명령을 함께 입력하세요.|タスク名と固定コマンドを両方入力してください。|请同时输入任务名称和固定命令。
+Enter an absolute remote path that starts with /.|/로 시작하는 원격 경로를 입력하세요.|/ で始まるリモートパスを入力してください。|请输入以 / 开头的远程路径。
+This bookmark can't be used by agents. Check its SSH settings.|이 북마크는 에이전트에 사용할 수 없습니다. SSH 설정을 확인하세요.|このブックマークはエージェントで使用できません。SSH 設定を確認してください。|此书签无法供代理使用，请检查其 SSH 设置。
+The bookmark changed after this page loaded. Choose it again and save.|이 페이지를 연 뒤 북마크가 바뀌었습니다. 북마크를 다시 고른 뒤 저장하세요.|このページを開いた後にブックマークが変わりました。もう一度選んで保存してください。|打开此页面后书签已更改。请重新选择后保存。
+Choose at least one permission: SFTP browsing, approved SSH commands, or a task.|권한을 하나 이상 고르세요: SFTP 탐색, 승인 후 SSH 명령, 또는 작업.|少なくとも 1 つの権限を選んでください：SFTP 参照、承認済み SSH コマンド、またはタスク。|请至少选择一项权限：SFTP 浏览、需审批的 SSH 命令或任务。
+Snippets (alternate key)|스니펫 (대체 키)|スニペット (代替キー)|代码片段（备用键）
 About PromeFTP|PromeFTP 정보|PromeFTP について|关于 PromeFTP
 Guide|가이드|ガイド|指南
 Quick Guide|빠른 가이드|クイックガイド|快速指南

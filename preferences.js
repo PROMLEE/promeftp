@@ -218,11 +218,21 @@ byId('preferences-project-license').addEventListener('click', () => api['open-pr
 byId('preferences-license-notices').addEventListener('click', () => api['open-license-notices']().then(error => {
   if (error) showError(error);
 }).catch(showError));
+let aboutCopyText = '';
 function renderAbout(info) {
-  byId('preferences-version').textContent = t('Version') + ' ' + info.version + ' · ' + t('Build') + ' ' + info.build;
-  byId('preferences-platform').textContent = (info.architecture === 'arm64' ? 'Apple Silicon' : info.architecture)
-    + ' · macOS ' + info.systemVersion;
+  const architecture = info.architecture === 'arm64' ? 'Apple Silicon' : info.architecture;
+  byId('preferences-version').textContent = `${t('Version')} ${info.version} (${architecture})`;
+  // Bug reports need the version, build, macOS release and CPU type in one paste.
+  aboutCopyText = `PromeFTP ${info.version} (${info.build}) · macOS ${info.systemVersion} · ${info.architecture}`;
 }
+byId('preferences-copy-info').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  try {
+    await api['write-clipboard'](aboutCopyText);
+    button.textContent = t('Copied');
+    setTimeout(() => { button.textContent = t('Copy'); }, 1500);
+  } catch (error) { showError(error); }
+});
 let aboutInfo;
 async function refreshUpdateStatus() {
   if (!aboutInfo || aboutInfo.automatic === null) return;
@@ -264,13 +274,18 @@ function renderFontChoices(fonts, preferred) {
 }
 function refreshTerminalControls() {
   byId('custom-font-row').hidden = fontSelect.value !== '';
-  terminalForm.elements.scrollback.disabled = terminalForm.elements.unlimited.checked;
+  const unlimited = terminalForm.elements.scrollbackMode.value === 'unlimited';
+  terminalForm.elements.scrollback.disabled = unlimited;
+  byId('scrollback-limit-row').hidden = unlimited;
+  byId('scrollback-help').textContent = t(unlimited
+    ? 'Output stays in memory while the session is open and is never discarded. Closing the session clears it.'
+    : 'Keeps the newest lines in memory. Older lines are discarded at the limit. Output is cleared when the session closes.');
   byId('opacity-value').value = terminalForm.elements.opacity.value + '%';
   byId('terminal-font-preview').style.fontFamily = terminalFont(selectedFont());
 }
 customFont.addEventListener('input', refreshTerminalControls);
 fontSelect.addEventListener('change', refreshTerminalControls);
-terminalForm.elements.unlimited.addEventListener('change', refreshTerminalControls);
+for (const radio of terminalForm.elements.scrollbackMode) radio.addEventListener('change', refreshTerminalControls);
 terminalForm.elements.opacity.addEventListener('input', refreshTerminalControls);
 
 async function initializePreferences() {
@@ -289,7 +304,8 @@ async function initializePreferences() {
   updateAutomatic.checked = info.automatic === true;
   for (const key of ['size', 'scrollback']) terminalForm.elements[key].value = terminalPreferences[key];
   terminalForm.elements.opacity.value = terminalPreferences.opacity;
-  for (const key of ['optionMeta', 'unlimited']) terminalForm.elements[key].checked = terminalPreferences[key];
+  terminalForm.elements.optionMeta.checked = terminalPreferences.optionMeta;
+  terminalForm.elements.scrollbackMode.value = terminalPreferences.unlimited ? 'unlimited' : 'limit';
   refreshTerminalControls();
   openPage(settings.page);
 }
@@ -303,6 +319,10 @@ api.onCommand(command => {
   if (command === 'preferences-agent') openPage('agent');
 });
 const keychainControls = { openssh: byId('openssh-keychain'), pam: byId('pam-keychain') };
+// The master switch dims the rules and answers it governs.
+function refreshAuthControls() { byId('pam-controls').classList.toggle('dimmed', !keychainControls.pam.checked); }
+keychainControls.pam.addEventListener('change', refreshAuthControls);
+attachInfoTips(document);
 for (const [kind, control] of Object.entries(keychainControls)) {
   control.addEventListener('change', async () => {
     control.disabled = true;
@@ -333,6 +353,7 @@ async function refreshPamPreferences() {
     if (isCurrent()) {
       savedAuto.checked = automatic;
       for (const [kind, control] of Object.entries(keychainControls)) control.checked = keychain[kind];
+      refreshAuthControls();
     }
   } catch (error) {
     if (isCurrent()) message.textContent = error.message;
@@ -376,7 +397,8 @@ terminalForm.addEventListener('submit', async event => {
     invalid.reportValidity();
     return;
   }
-  const { size, scrollback, unlimited, optionMeta, appearance, language } = terminalForm.elements;
+  const { size, scrollback, scrollbackMode, optionMeta, appearance, language } = terminalForm.elements;
+  const unlimited = scrollbackMode.value === 'unlimited';
   const actions = [...byId('settings-actions').querySelectorAll('button')];
   for (const control of actions) control.disabled = true;
   try {
@@ -386,8 +408,8 @@ terminalForm.addEventListener('submit', async event => {
       terminal: {
         font: selectedFont(),
         size: Number(size.value),
-        scrollback: unlimited.checked ? terminalPreferences.scrollback : Number(scrollback.value),
-        unlimited: unlimited.checked,
+        scrollback: unlimited ? terminalPreferences.scrollback : Number(scrollback.value),
+        unlimited,
         optionMeta: optionMeta.checked,
         opacity: Number(terminalForm.elements.opacity.value),
       },
