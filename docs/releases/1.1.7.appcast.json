@@ -1,0 +1,12 @@
+{
+  "heading": "Clearer agent connection errors and shortcut settings",
+  "summary": "Agent connections use the host keys you trusted, report the reason when a connection fails, and the shortcut settings are easier to change.",
+  "changes": [
+    ["Trusted host keys work for agents", "An agent connects with the host keys you trusted in PromeFTP instead of reporting an unknown key."],
+    ["Specific connection errors", "A failed connection reports the cause, such as a wrong key, a changed host key, a refused connection, or a DNS failure, with a short hint."],
+    ["Faster agent grants", "Permission presets, including an allow-everything preset, speed up granting a bookmark. Access stays limited to the scope you choose."],
+    ["Editable shortcuts", "Every shortcut can be changed, and a key diagnostic shows what your keyboard sends. Default shortcuts are unchanged."],
+    ["Clearer authentication rules", "Rules and saved answers are listed by host, and the rule editor is redesigned."]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
