@@ -807,9 +807,6 @@ async function showHostKeyPrompt(id, record, config, value) {
   }
   const remember = () => updateState(next => {
     (next.trustedHostKeys ??= {})[scope] = fingerprint;
-  }).then(() => {
-    // Agent connections use the same trust, so a stale key left in their file must go.
-    if (host) openssh.forgetKnownHost(agentKnownHostsPath(), host).catch(() => {});
   }).catch(() => tell(id, 'auth-storage-error', 'Could not remember the verified host key.'));
   const pending = () => sessions.get(id) === record && record.prompts.has(value.id);
   function reply(answer) {
@@ -1699,8 +1696,8 @@ function confirmAgentHostKey({ profile: bookmark, host, fingerprint, previous, s
         detail: [`${localized('Bookmark')}: ${bookmark.label || bookmark.host}`,
           `${localized('SSH target')}: ${user ? user + '@' : ''}${target}:${port}`,
           `${localized('New fingerprint')}: ${fingerprint}`,
-          ...(previous ? [`${localized('Previous fingerprint')}: ${previous}`,
-            `${localized('Source')}: ${source === 'app' ? 'PromeFTP' : '~/.ssh/known_hosts'}`] : []),
+          ...(previous ? [`${localized('Previous fingerprint')}: ${previous}`] : []),
+          ...(source ? [`${localized('Source')}: ${{ app: 'PromeFTP', agent: 'PromeFTP (agent)', user_known_hosts: '~/.ssh/known_hosts' }[source] || source}`] : []),
           '', localized('Trust this key only after you verify its fingerprint with the server administrator.')].join('\n'),
         buttons: [localized('Cancel'), localized('Trust and Connect')], defaultId: 0, cancelId: 0, noLink: true,
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]),
@@ -1736,13 +1733,21 @@ function confirmAgentHostKey({ profile: bookmark, host, fingerprint, previous, s
     entry.result.then(result => { leave(); resolve(result); }, () => { leave(); resolve(false); });
   });
 }
+// Automatic trust from an agent grant. It is stored in the agent's own state, never in the app's trusted host keys.
+function trustAgentHostKey(host, fingerprint) {
+  return updateState(next => {
+    (((next.agent ??= {}).trustedHostKeys ??= {})['host:' + host] = fingerprint);
+  });
+}
 async function initializeAgent() {
   const directory = path.join(app.getPath('userData'), 'agent');
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  // Earlier versions kept an agent known_hosts file. Each connection now has its own, so the old file is removed.
+  await Promise.all(['', '.old'].map(suffix => fs.rm(agentKnownHostsPath() + suffix, { force: true })));
   agentTransport = createTransport({
     directory, state: () => state, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope,
-    approve: approveAgentCommand, knownHosts: agentKnownHostsPath(),
-    profile, userKnownHosts: path.join(os.homedir(), '.ssh', 'known_hosts'), confirmHostKey: confirmAgentHostKey,
+    approve: approveAgentCommand, profile, userKnownHosts: path.join(os.homedir(), '.ssh', 'known_hosts'),
+    confirmHostKey: confirmAgentHostKey, trustHostKey: trustAgentHostKey,
   });
   agent = await createAgentService({
     directory, state: () => state, profiles: () => state.profiles, transport: agentTransport, sftpCall,
@@ -1754,11 +1759,11 @@ async function initializeAgent() {
 }
 let detectedAgents;
 handle('agent-diagnostic', id => getAgent().diagnostic(typeof id === 'string' ? id : ''));
-// Whether the server's host key was trusted in the app or is already in a known_hosts file the agent reads.
+// Whether the server's host key is trusted: by the app, by an agent grant, or by a known_hosts file on this Mac.
 async function profileTrusted(p) {
   const key = (p.port && Number(p.port) !== 22 ? `[${p.host}]:${p.port}` : p.host).toLowerCase();
-  if (state.trustedHostKeys?.['host:' + key]) return true;
-  const files = [agentKnownHostsPath(), path.join(os.homedir(), '.ssh', 'known_hosts')];
+  if (state.trustedHostKeys?.['host:' + key] || state.agent?.trustedHostKeys?.['host:' + key]) return true;
+  const files = [path.join(os.homedir(), '.ssh', 'known_hosts'), '/etc/ssh/ssh_known_hosts'];
   return (await Promise.all(files.map(file => openssh.knownHostFingerprints(file, key).catch(() => []))))
     .some(fingerprints => fingerprints.length > 0);
 }

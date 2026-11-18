@@ -130,6 +130,8 @@
           <fieldset class="agent-group">
             <legend>Authentication and triggers</legend>
             <label class="settings-check"><input id="agent-saved-auth" type="checkbox" data-tip="Uses the saved PAM responses for this host and all-host PAM rules when the agent connects. The PAM rules list is ignored while this is on.">Use saved authentication</label>
+            <label>Trust host keys automatically<select id="agent-host-key-trust"><option value="off">Off (ask me)</option><option value="new">New keys only</option><option value="changed">New and changed keys</option></select></label>
+            <p id="agent-host-key-trust-warning" class="settings-note error" role="note" hidden></p>
             <label data-tip="Choose the host-wide PAM rules the agent connection may use. Ignored while saved authentication is on.">PAM rules<select id="agent-pam" multiple size="2"></select></label>
             <label data-tip="Reports matching output to the agent as an event. It never sends an automatic reply.">Notification triggers<select id="agent-triggers" multiple size="2"></select></label>
           </fieldset>
@@ -141,6 +143,13 @@
             <p class="settings-note">Commands still need approval each time. SFTP writes and commands without approval are not available through this API.</p>
             <label class="settings-check"><input id="agent-maximum-ack" type="checkbox">I understand the risks</label>
             <div class="actions"><button id="agent-maximum-cancel" type="button" autofocus>Cancel</button><button id="agent-maximum-save" type="button" class="primary" disabled>Save Access</button></div>
+          </div>
+        </dialog>
+        <dialog id="agent-host-key-dialog" aria-labelledby="agent-host-key-title">
+          <div class="agent-maximum-form">
+            <h3 id="agent-host-key-title">Trust changed host keys automatically?</h3>
+            <p class="settings-note error" id="agent-host-key-detail"></p>
+            <div class="actions"><button id="agent-host-key-cancel" type="button" autofocus>Cancel</button><button id="agent-host-key-confirm" type="button" class="primary">Turn On</button></div>
           </div>
         </dialog>
         <div class="agent-controls"><button id="agent-save-grant" type="button" class="primary">Save Access</button><button id="agent-remove-grant" type="button">Remove Access</button></div>

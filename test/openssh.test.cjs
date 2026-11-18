@@ -1,13 +1,13 @@
 // Characterization tests for the pure parsers in openssh.cjs. Functions that start ssh, ssh-keygen or a PTY are not called here.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseHostKeyPrompt, authEndpoint, parseKeygenFingerprints, knownHostFingerprints, agentRestrictedOptions } = require('../openssh.cjs');
+const { parseHostKeyPrompt, authEndpoint, parseKeygenFingerprints, parseKeygenEntries, knownHostFingerprints, agentRestrictedOptions } = require('../openssh.cjs');
 
 const question = "Are you sure you want to continue connecting (yes/no/[fingerprint])?";
 
 test('a host key question with a fingerprint is accepted by fingerprint', () => {
   const prompt = `The authenticity of host 'example.invalid (203.0.113.5)' can't be established.\nED25519 key fingerprint is SHA256:abcDEF+/09=.\n${question}`;
-  assert.deepEqual(parseHostKeyPrompt(prompt), { host: 'example.invalid', fingerprint: 'SHA256:abcDEF+/09=', accept: 'SHA256:abcDEF+/09=' });
+  assert.deepEqual(parseHostKeyPrompt(prompt), { host: 'example.invalid', fingerprint: 'SHA256:abcDEF+/09=', accept: 'SHA256:abcDEF+/09=', keyType: 'ED25519' });
 });
 
 test('the host name is lowercased and the address in parentheses is removed', () => {
@@ -17,7 +17,7 @@ test('the host name is lowercased and the address in parentheses is removed', ()
 
 test('without the fingerprint question the answer is yes', () => {
   const prompt = "The authenticity of host 'example.invalid' can't be established.\nECDSA key fingerprint is SHA256:xyz.";
-  assert.deepEqual(parseHostKeyPrompt(prompt), { host: 'example.invalid', fingerprint: 'SHA256:xyz', accept: 'yes' });
+  assert.deepEqual(parseHostKeyPrompt(prompt), { host: 'example.invalid', fingerprint: 'SHA256:xyz', accept: 'yes', keyType: 'ECDSA' });
 });
 
 test('an MD5 fingerprint is recognised', () => {
@@ -97,4 +97,42 @@ test('agentRestrictedOptions adds the config file first and escapes quotes in th
 
 test('agentRestrictedOptions refuses to run without the agent known_hosts file', () => {
   assert.throws(() => agentRestrictedOptions({ configPath: '' }), /own known_hosts file/);
+});
+
+test('parseHostKeyPrompt gives the key type in upper case, or an empty string when the question names none', () => {
+  const rsa = `The authenticity of host 'example.invalid' can't be established.\nrsa key fingerprint is SHA256:r1.\n${question}`;
+  assert.equal(parseHostKeyPrompt(rsa).keyType, 'RSA');
+  const ecdsa = `The authenticity of host 'example.invalid' can't be established.\nECDSA key fingerprint is SHA256:e1.\n${question}`;
+  assert.equal(parseHostKeyPrompt(ecdsa).keyType, 'ECDSA');
+  const none = "The authenticity of host 'example.invalid' can't be established.";
+  assert.equal(parseHostKeyPrompt(none).keyType, '');
+});
+
+test('parseKeygenEntries reads type and fingerprint from the parenthesized layout', () => {
+  assert.deepEqual(parseKeygenEntries('256 SHA256:abc example.invalid (ED25519)\n# Host x found: line 3'),
+    [{ fingerprint: 'SHA256:abc', type: 'ED25519' }]);
+  assert.deepEqual(parseKeygenEntries(''), []);
+});
+
+test('parseKeygenEntries reads the type from the layout ssh-keygen -F prints on this Mac', () => {
+  const output = '# Host example.invalid found: line 1 \nexample.invalid ED25519 SHA256:2x4rVmPgLrZC3BCyj4QvzB6Q+6EznY3lUyA/oa5tnZg\n';
+  assert.deepEqual(parseKeygenEntries(output),
+    [{ fingerprint: 'SHA256:2x4rVmPgLrZC3BCyj4QvzB6Q+6EznY3lUyA/oa5tnZg', type: 'ED25519' }]);
+});
+
+test('the agent options also turn off the system-wide known_hosts file', () => {
+  const args = agentRestrictedOptions({ configPath: '', knownHosts: '/x/k' });
+  assert.ok(args.includes('GlobalKnownHostsFile=/dev/null'));
+  assert.equal(args.join(' ').includes('.ssh'), false);
+});
+
+test('knownHostKeyEntries: a missing file has no entries, but a directory is a read failure', async () => {
+  const { knownHostKeyEntries } = require('../openssh.cjs');
+  assert.deepEqual(await knownHostKeyEntries('/var/empty-promeftp-test/known_hosts', 'example.invalid'), []);
+  const dir = await require('node:fs/promises').mkdtemp(require('node:path').join(require('node:os').tmpdir(), 'promeftp-kh-'));
+  try {
+    await assert.rejects(knownHostKeyEntries(dir, 'example.invalid'), /not a regular file/);
+  } finally {
+    await require('node:fs/promises').rm(dir, { recursive: true, force: true });
+  }
 });

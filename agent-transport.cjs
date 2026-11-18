@@ -73,6 +73,27 @@ const NO_PROMPT_IN_APP = 'PromeFTP signed in without a prompt (likely ssh-agent)
 // Only the lines that decide where OpenSSH connects. Other settings change how a login is authenticated, not where.
 const targetLines = endpoint => endpoint.split('\n').filter(line => /^(hostname|user|port|proxyjump|proxycommand) /.test(line)).join('\n');
 const sameTarget = (a, b) => targetLines(a) === targetLines(b);
+// Decides what a host key is, from the trust sources in order: app value, agent value, then the user's known_hosts
+// files (read only). Only the first source that has entries is compared. A key of another type than the question's
+// is not treated as the same key, so it is classed as changed, never as new.
+// A user or system file that could not be read is not "no entry": the key is judged as changed, with no previous key,
+// so it is never trusted automatically in 'new' mode.
+function classifyHostKey({ fingerprint, keyType = '', app = [], agent = [], user = [], unreadable = false }) {
+  if (app.length) return app.includes(fingerprint) ? { kind: 'trusted', source: 'app' }
+    : { kind: 'changed', previous: app[0], source: 'app' };
+  if (agent.length) return agent.includes(fingerprint) ? { kind: 'trusted', source: 'agent' }
+    : { kind: 'changed', previous: agent[0], source: 'agent' };
+  const sameType = keyType ? user.filter(entry => entry.type === keyType) : user;
+  if (sameType.some(entry => entry.fingerprint === fingerprint)) return { kind: 'trusted', source: 'user_known_hosts' };
+  if (!user.length && !unreadable) return { kind: 'new' };
+  const previous = (sameType[0] ?? user[0])?.fingerprint;
+  return { kind: 'changed', ...(previous && { previous }), source: 'user_known_hosts' };
+}
+// The automatic trust each grant mode allows. 'off' never trusts without asking. 'new' accepts only a key never seen.
+// 'changed' also accepts a key that differs from the trusted one or is of a new type.
+function autoTrustAllowed(mode, kind) {
+  return mode === 'changed' ? kind !== 'trusted' : mode === 'new' ? kind === 'new' : false;
+}
 
 function eligibilityReason(p) {
   if (!/^[\w][\w.:%-]*$/.test(p.host)) return 'Use a valid SSH host name or alias.';
@@ -91,8 +112,8 @@ function command(value) {
   return value;
 }
 
-function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope, directory, approve, knownHosts,
-  profile, userKnownHosts, confirmHostKey, ssh = openssh }) {
+function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope, directory, approve,
+  profile, userKnownHosts, systemKnownHosts = '/etc/ssh/ssh_known_hosts', confirmHostKey, trustHostKey, ssh = openssh }) {
   // The same normalization as the app, so the endpoint, the scope and the reply key match what the app computes.
   function normalized(input) {
     try { return profile(input); }
@@ -106,42 +127,43 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
         .map(({ id, name }) => ({ id, name })),
     };
   }
-  // Keys the user trusted for a host: the app's values, and otherwise the user's own known_hosts file (read only).
+  // The trust sources for a host, in the order classifyHostKey uses them. Each source is read only. A file that cannot be
+  // read is recorded in unreadable, so a failed read is never mistaken for a file with no entry.
   async function trustedFor(host, scope) {
     const app = [`host:${host}`, scope].filter(Boolean).map(key => state().trustedHostKeys?.[key]).filter(Boolean);
-    const user = await ssh.knownHostFingerprints(userKnownHosts, host).catch(() => []);
-    return { app, user };
+    const agent = [state().agent?.trustedHostKeys?.[`host:${host}`]].filter(Boolean);
+    const unreadable = [];
+    const readEntries = async file => {
+      try { return await ssh.knownHostKeyEntries(file, host); }
+      catch { unreadable.push(file); return []; }
+    };
+    const user = [...await readEntries(userKnownHosts), ...await readEntries(systemKnownHosts)];
+    return { app, agent, user, unreadable: unreadable.length > 0 };
   }
-  // The fingerprints that count as trusted for a host. An app value replaces ~/.ssh entirely, both when deciding a
-  // connection and when cleaning the agent's file. ~/.ssh is only the trust source when the app has no value.
-  const trustOf = ({ app, user }) => (app.length ? app : user);
-  // A key that matches the trusted set is accepted. Any other key is never accepted without the user's confirmation in the app.
-  async function hostKeyDecision(prompt, { scope, profile: bookmark, endpoint, signal }) {
+  // A key that is trusted is accepted. A key the grant's mode allows is trusted automatically and recorded. Any other key
+  // goes to the user's confirmation in the app.
+  async function hostKeyDecision(prompt, { scope, profile: bookmark, endpoint, signal, mode = 'off' }) {
     const info = ssh.parseHostKeyPrompt(prompt);
     if (!info?.fingerprint) return { code: 'HOST_KEY_UNKNOWN' };
-    const trust = await trustedFor(info.host, scope);
-    const trusted = trustOf(trust);
-    if (trusted.includes(info.fingerprint)) return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
-    const previous = trusted[0];
-    const source = trust.app.length ? 'app' : 'user_known_hosts';
-    const detail = { host: info.host, fingerprint: info.fingerprint, ...(previous && { trusted: previous, source }) };
-    if (!confirmHostKey) return { code: previous ? 'HOST_KEY_CHANGED' : 'HOST_KEY_UNKNOWN', detail };
+    const verdict = classifyHostKey({ fingerprint: info.fingerprint, keyType: info.keyType, ...(await trustedFor(info.host, scope)) });
+    if (verdict.kind === 'trusted') return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
+    const { previous, source, kind } = verdict;
+    const detail = { host: info.host, fingerprint: info.fingerprint,
+      ...(kind === 'changed' && { ...(previous && { trusted: previous }), source }) };
+    if (autoTrustAllowed(mode, kind)) {
+      if (signal?.aborted) return { code: 'HOST_KEY_UNCONFIRMED', detail };
+      // A failure to record the key does not stop this connection. The audit event says it was not saved.
+      const saved = await Promise.resolve().then(() => trustHostKey(info.host, info.fingerprint)).then(() => true, () => false);
+      return { answer: info.accept, host: info.host, fingerprint: info.fingerprint, auto: true, kind, mode,
+        previous: previous ?? null, source: source ?? null, saved };
+    }
+    if (!confirmHostKey) return { code: kind === 'changed' ? 'HOST_KEY_CHANGED' : 'HOST_KEY_UNKNOWN', detail };
     const approved = await Promise.resolve()
       .then(() => confirmHostKey({ profile: bookmark, host: info.host, fingerprint: info.fingerprint,
-        previous, source: previous ? source : undefined, endpoint, signal }))
+        previous, source: kind === 'changed' ? source : undefined, endpoint, signal }))
       .catch(() => false);
     if (approved !== true) return { code: 'HOST_KEY_UNCONFIRMED', detail };
     return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
-  }
-  // Before an agent connection, the agent's own file loses any key the user has not trusted, so OpenSSH asks again
-  // instead of stopping with "REMOTE HOST IDENTIFICATION HAS CHANGED". No file outside the agent's directory is changed.
-  async function pruneAgentKnownHosts(bookmark, endpoint) {
-    const hostname = /^hostname (.+)$/m.exec(endpoint)?.[1] || bookmark.host;
-    const port = Number(/^port (\d+)$/m.exec(endpoint)?.[1]) || bookmark.port || 22;
-    const name = (port !== 22 ? `[${hostname}]:${port}` : hostname).toLowerCase();
-    const trusted = trustOf(await trustedFor(name, ''));
-    const stored = await ssh.knownHostFingerprints(knownHosts, name);
-    if (stored.some(fingerprint => !trusted.includes(fingerprint))) await ssh.forgetKnownHost(knownHosts, name);
   }
   function validateGrant(value, p) {
     const choices = catalog(p);
@@ -153,14 +175,16 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
     const task = value.task ? { name: value.task.name, command: command(value.task.command) } : undefined;
     if (task && (typeof task.name !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(task.name))) throw problem('INVALID_TASK');
     if (value.sftp === false && !task && value.commandApproval !== true) throw problem('INVALID_REQUEST');
+    const hostKeyTrust = value.hostKeyTrust ?? 'off';
+    if (!['off', 'new', 'changed'].includes(hostKeyTrust)) throw problem('INVALID_REQUEST');
     return { sftp: value.sftp !== false, download: value.sftp !== false && value.download === true, savedAuth: value.savedAuth === true,
-      commandApproval: value.commandApproval === true, pam: selected('pam'), triggers: selected('triggers'), ...(task && { task }) };
+      commandApproval: value.commandApproval === true, pam: selected('pam'), triggers: selected('triggers'), hostKeyTrust, ...(task && { task }) };
   }
 
   async function resolve(input, legacy = false) {
     const p = normalized(input);
     if (!eligible(p)) throw problem('PROFILE_NOT_ELIGIBLE');
-    const config = { ...p, configPath: legacy ? '/dev/null' : p.configPath || '', knownHosts };
+    const config = { ...p, configPath: legacy ? '/dev/null' : p.configPath || '' };
     const output = await ssh.effectiveOutput(config);
     return { config, endpoint: ssh.authEndpoint(output), route: digest(output) };
   }
@@ -202,12 +226,17 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
       const handle = async () => {
         check();
         if (value.hostKey) {
-          const decision = await hostKeyDecision(value.prompt, { scope, profile: p, endpoint: target.endpoint, signal });
+          const decision = await hostKeyDecision(value.prompt, { scope, profile: p, endpoint: target.endpoint, signal,
+            mode: grant.hostKeyTrust });
           if (decision.code) {
             notify('error', withNext({ code: decision.code, stage: 'hostkey',
               hint: failureRules.find(rule => rule[0] === decision.code)?.[3] || 'The user did not confirm the host key.',
               exit: null, detail: decision.detail, log: scrubLines(output) }));
             connection?.answer(value.id, 'no');
+          } else if (decision.auto) {
+            notify('hostkey.autotrusted', { host: decision.host, fingerprint: decision.fingerprint, previous: decision.previous,
+              source: decision.source, kind: decision.kind, mode: decision.mode, saved: decision.saved });
+            connection?.answer(value.id, decision.answer);
           } else {
             notify('hostkey.pinned', { host: decision.host, fingerprint: decision.fingerprint });
             connection?.answer(value.id, decision.answer);
@@ -259,8 +288,6 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
       }
     }
     const auditPassword = () => notify('auth.rule', 'saved-password');
-    try { await pruneAgentKnownHosts(p, target.endpoint); }
-    catch { /* The agent's file is a cache of trust only. OpenSSH still asks for any key it does not know. */ }
     connection = await ssh.start(target.config, mode === 'ssh' ? 'exec' : mode, {}, onEvent, [],
       'ask', grant.savedAuth && state().useOpenSSHKeychain === true, password, auditPassword, true);
     if (signal.aborted) connection.close();
@@ -338,4 +365,4 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
   }
   return { eligible, eligibilityReason, resolve, command, catalog, validateGrant, connect, approve, run, download, nextFor };
 }
-module.exports = { createTransport, classifySshFailure, scrubLines, nextSteps };
+module.exports = { createTransport, classifySshFailure, scrubLines, nextSteps, classifyHostKey, autoTrustAllowed };

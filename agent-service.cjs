@@ -175,7 +175,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.status = 'connecting';
       }
       if (event === 'auth.rule') audit(base(s, event, 'submitted', null, clean(value)));
-      if (event === 'hostkey.pinned') audit(base(s, event, 'success', null, JSON.stringify(value)));
+      if (event === 'hostkey.pinned' || event === 'hostkey.autotrusted') audit(base(s, event, 'success', null, JSON.stringify(value)));
       if (event === 'error') {
         // The first failure is the final reason. Later noise from the same OpenSSH exit is not recorded.
         if (s.failure) return;
@@ -252,7 +252,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
   function sessionEvents(id, client, after = 0) {
     if (!Number.isSafeInteger(after) || after < 0) throw problem('INVALID_REQUEST');
     return db.prepare(`SELECT id,time,request,operation,result,reason,detail FROM events
-      WHERE session=? AND client=? AND id>? AND operation IN ('session.ready','session.ended','session.error','auth.prompt','auth.rule','trigger.match','ssh.approval')
+      WHERE session=? AND client=? AND id>? AND operation IN ('session.ready','session.ended','session.error','auth.prompt','auth.rule','trigger.match','ssh.approval','hostkey.pinned','hostkey.autotrusted')
       ORDER BY id LIMIT 100`).all(id, client, after);
   }
   const operations = new Set(['profiles.list', 'session.open', 'session.status', 'session.close', 'sftp.list', 'sftp.stat', 'sftp.download', 'events.list', 'ssh.run', 'ssh.command']);

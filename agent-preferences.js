@@ -74,12 +74,58 @@ function renderGrantBlocker(blocker) {
   action.textContent = blocker?.action ? t(blocker.action) : '';
   action.onclick = blocker?.run || null;
 }
+// Automatic host key trust. 'changed' needs a confirmation before it can be selected. The warning names the risk.
+const hostKeyTrustWarnings = {
+  new: 'PromeFTP will trust a server key it has not seen before without asking. If the first connection is intercepted (man-in-the-middle), saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.',
+  changed: 'PromeFTP will also trust a key that differs from the one you trusted, without asking. A changed key is the main sign of a man-in-the-middle attack. Saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.',
+};
+let agentHostKeyTrustConfirmed = 'off';
+function setHostKeyTrust(mode) {
+  agentElement('host-key-trust').value = mode;
+  agentHostKeyTrustConfirmed = mode;
+  updateHostKeyTrustWarning();
+}
+function updateHostKeyTrustWarning() {
+  const mode = agentValue('host-key-trust');
+  const warning = agentElement('host-key-trust-warning');
+  warning.hidden = mode === 'off';
+  warning.textContent = mode === 'off' ? '' : t(hostKeyTrustWarnings[mode]);
+}
+function confirmHostKeyTrustChanged() {
+  return new Promise(resolve => {
+    const dialog = byId('agent-host-key-dialog');
+    const cancel = byId('agent-host-key-cancel');
+    byId('agent-host-key-detail').textContent = t(hostKeyTrustWarnings.changed);
+    cancel.onclick = () => { dialog.close(); resolve(false); };
+    byId('agent-host-key-confirm').onclick = () => { dialog.close(); resolve(true); };
+    dialog.addEventListener('close', () => resolve(false), { once: true });
+    dialog.showModal();
+    cancel.focus();
+  });
+}
+agentElement('host-key-trust').addEventListener('change', async () => {
+  const mode = agentValue('host-key-trust');
+  if (mode === 'changed' && !(await confirmHostKeyTrustChanged())) {
+    setHostKeyTrust(agentHostKeyTrustConfirmed);
+    return;
+  }
+  agentHostKeyTrustConfirmed = mode;
+  updateHostKeyTrustWarning();
+});
+// Automatic trust is listed with its warning colour and the keys it involved.
+function autoTrustDetail(event) {
+  let value = {};
+  try { value = JSON.parse(event.detail || '{}'); } catch {}
+  return [t('Host key trusted automatically'), 'Host: ' + value.host, t('New fingerprint') + ': ' + value.fingerprint,
+    value.previous ? t('Previous fingerprint') + ': ' + value.previous + ' (' + (value.source || '') + ')' : '',
+    'Mode: ' + value.mode].filter(Boolean).join('\n');
+}
 // Presets only fill the form. Nothing is saved until the user saves it.
 const agentPresets = {
-  read: { sftp: true, root: '/', download: false, commandApproval: false, savedAuth: false, pam: false, triggers: false },
-  browse: { sftp: true, root: '/', download: true, commandApproval: false, savedAuth: false, pam: false, triggers: false },
-  commands: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: false, pam: false, triggers: false },
-  maximum: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: true, pam: true, triggers: true },
+  read: { sftp: true, root: '/', download: false, commandApproval: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
+  browse: { sftp: true, root: '/', download: true, commandApproval: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
+  commands: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
+  maximum: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: true, pam: true, triggers: true, hostKeyTrust: 'off' },
 };
 function applyAgentPreset(name) {
   const preset = agentPresets[name];
@@ -89,6 +135,7 @@ function applyAgentPreset(name) {
   agentElement('download').checked = preset.download;
   agentElement('approve-commands').checked = preset.commandApproval;
   agentElement('saved-auth').checked = preset.savedAuth;
+  setHostKeyTrust(preset.hostKeyTrust);
   for (const field of ['pam', 'triggers']) {
     for (const option of agentElement(field).options) option.selected = preset[field];
   }
@@ -162,6 +209,7 @@ function loadAgentGrantForm(p, grant) {
   for (const field of Object.keys(agentFieldErrors)) setAgentFieldError(field, '');
   agentElement('download').checked = grant?.download === true;
   agentElement('saved-auth').checked = grant?.savedAuth === true;
+  setHostKeyTrust(grant?.hostKeyTrust || 'off');
   agentElement('approve-commands').checked = grant?.commandApproval === true;
   agentElement('task').value = grant?.task?.name || '';
   agentElement('task-command').value = grant?.task?.command || '';
@@ -260,11 +308,14 @@ async function refreshAgentHistory() {
     const summary = document.createElement('summary');
     const client = agentInfo?.clients.find(c => c.id === event.client)?.name;
     const profile = agentInfo?.profiles.find(p => p.id === event.profile)?.name;
+    const autoTrusted = event.operation === 'hostkey.autotrusted';
     summary.textContent = [new Date(event.time).toLocaleString(), client || event.client, profile || event.profile,
-      event.operation, event.result, event.reason].filter(Boolean).join(' · ');
+      autoTrusted ? t('Host key trusted automatically') : event.operation, event.result, event.reason].filter(Boolean).join(' · ');
     const text = document.createElement('p');
-    text.textContent = [event.request && 'Request: ' + event.request, event.session && 'Session: ' + event.session, event.detail].filter(Boolean).join('\n');
+    text.textContent = autoTrusted ? autoTrustDetail(event)
+      : [event.request && 'Request: ' + event.request, event.session && 'Session: ' + event.session, event.detail].filter(Boolean).join('\n');
     details.append(summary, text);
+    if (autoTrusted) details.classList.add('error');
     if (event.operation === 'session.error' && event.session) {
       // The raw OpenSSH output is shown here only, and only on request.
       details.append(button(t('Show log'), async () => {
@@ -374,6 +425,7 @@ function agentGrantFields() {
   return {
     root: agentValue('root').trim(), sftp: agentChecked('sftp'), download: agentChecked('download'), savedAuth: agentChecked('saved-auth'),
     commandApproval: agentChecked('approve-commands'), pam: selectedIds('pam'), triggers: selectedIds('triggers'),
+    hostKeyTrust: agentValue('host-key-trust'),
     ...(name || command ? { task: { name, command } } : {}),
   };
 }

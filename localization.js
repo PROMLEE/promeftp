@@ -623,6 +623,14 @@ The server host key changed|서버 호스트 키가 바뀌었습니다|サーバ
 New fingerprint|새 지문|新しいフィンガープリント|新指纹
 Previous fingerprint|이전 지문|以前のフィンガープリント|之前的指纹
 Trust this key only after you verify its fingerprint with the server administrator.|서버 관리자에게 지문을 확인한 뒤에만 이 키를 신뢰하세요.|サーバー管理者にフィンガープリントを確認した後にのみ、この鍵を信頼してください。|只有在与服务器管理员核对指纹后才信任此密钥。
+Trust host keys automatically|호스트 키 자동 신뢰|ホストキーを自動的に信頼|自动信任主机密钥
+Off (ask me)|끔 (매번 확인)|オフ(毎回確認)|关闭(每次确认)
+New keys only|처음 보는 키만|初めてのキーのみ|仅首次出现的密钥
+New and changed keys|처음 보는 키와 바뀐 키|初めてのキーと変更されたキー|首次出现和已更改的密钥
+PromeFTP will trust a server key it has not seen before without asking. If the first connection is intercepted (man-in-the-middle), saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.|PromeFTP가 처음 보는 서버 키를 묻지 않고 신뢰합니다. 첫 연결이 중간자 공격을 받으면 저장된 비밀번호와 응답이 공격자에게 자동으로 전송될 수 있습니다. 이 선택의 책임은 사용자에게 있습니다.|PromeFTP は初めて見るサーバーキーを確認せずに信頼します。最初の接続が中間者攻撃を受けた場合、保存されたパスワードと応答が攻撃者に自動送信される可能性があります。この選択の責任はユーザーにあります。|PromeFTP 将不经询问信任首次出现的服务器密钥。如果首次连接遭到中间人攻击,已保存的密码和应答可能会被自动发送给攻击者。此选择的责任由您承担。
+PromeFTP will also trust a key that differs from the one you trusted, without asking. A changed key is the main sign of a man-in-the-middle attack. Saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.|PromeFTP가 신뢰했던 키와 다른 키도 묻지 않고 신뢰합니다. 키가 바뀐 것은 중간자 공격의 대표적인 징후입니다. 저장된 비밀번호와 응답이 공격자에게 자동으로 전송될 수 있습니다. 이 선택의 책임은 사용자에게 있습니다.|PromeFTP は信頼済みのキーと異なるキーも確認せずに信頼します。キーの変更は中間者攻撃の主な兆候です。保存されたパスワードと応答が攻撃者に自動送信される可能性があります。この選択の責任はユーザーにあります。|PromeFTP 也将不经询问信任与您已信任密钥不同的密钥。密钥变更是中间人攻击的主要迹象。已保存的密码和应答可能会被自动发送给攻击者。此选择的责任由您承担。
+Trust changed host keys automatically?|바뀐 호스트 키를 자동으로 신뢰할까요?|変更されたホストキーを自動的に信頼しますか?|要自动信任已更改的主机密钥吗?
+Host key trusted automatically|호스트 키 자동 신뢰됨|ホストキーを自動的に信頼しました|已自动信任主机密钥
 Don’t ask again for this verified key|이 키를 다시 묻지 않기|確認済みのこの鍵については再確認しない|不再询问此已验证的密钥
 All Groups|모든 그룹|すべてのグループ|所有分组
 Ungrouped|그룹 없음|グループなし|未分组

@@ -1,5 +1,5 @@
 // Agent connect flow with a fake ssh module injected into createTransport. No ssh or ssh-keygen runs, and no file under
-// ~/.ssh or the app's data folder is read or written. Files exist only in a temporary directory.
+// ~/.ssh, /etc/ssh or the app's data folder is read or written. Known-host entries come from the fake per file path.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -10,9 +10,11 @@ const openssh = require('../openssh.cjs');
 const stateRules = require('../state-rules.cjs');
 const saved = require('../saved-auth.cjs');
 const { matchesGlobalPattern } = require('../auth-rules.cjs');
-const { createTransport, nextSteps } = require('../agent-transport.cjs');
+const { createTransport, nextSteps, classifyHostKey, autoTrustAllowed } = require('../agent-transport.cjs');
 
 const HOME = '/var/empty-home';
+const USER = '/fake/home/.ssh/known_hosts';
+const SYSTEM = '/sys/fake';
 const endpointApp = 'hostname example.invalid\nuser alice\nport 22\nidentityagent ~/.1password/agent.sock';
 const endpointLegacy = 'hostname example.invalid\nuser alice\nport 22';
 const pOld = { id: 'b1', host: 'example.invalid', username: 'alice' };
@@ -22,8 +24,12 @@ const normalized = input => stateRules.profile(input, HOME);
 const scopeOf = endpoint => saved.authScope(normalized(pOld), endpoint);
 const keyOf = (endpoint = endpointApp, text = prompt) => saved.replyKey(normalized(pOld), endpoint, text);
 const fingerprint = name => 'SHA256:' + createHash('sha256').update(name).digest('base64').replace(/=+$/, '');
-const hostKeyPrompt = fp => `The authenticity of host 'example.invalid (203.0.113.5)' can't be established.\n` +
-  `ED25519 key fingerprint is ${fp}.\nAre you sure you want to continue connecting (yes/no/[fingerprint])?`;
+const hostKeyPrompt = (fp, type = 'ED25519') => `The authenticity of host 'example.invalid (203.0.113.5)' can't be established.\n` +
+  `${type} key fingerprint is ${fp}.\nAre you sure you want to continue connecting (yes/no/[fingerprint])?`;
+const ed = fp => ({ fingerprint: fp, type: 'ED25519' });
+const rsa = fp => ({ fingerprint: fp, type: 'RSA' });
+const K_OLD = fingerprint('old');
+const K_NEW = fingerprint('new');
 
 let tmp;
 test.before(async () => { tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'promeftp-agent-transport-')); });
@@ -40,22 +46,26 @@ async function settle() {
   for (let i = 0; i < 50; i++) await new Promise(resolve => setImmediate(resolve));
 }
 
-// Starts one agent connection through the transport. Endpoints and trust are supplied by the test.
-async function open({ state = {}, grant = {}, endpoints = {}, agentFps = [], userFps = [], confirmHostKey, bookmark = pOld } = {}) {
-  const agentFile = path.join(tmp, 'agent', 'known_hosts');
-  const userFile = path.join(tmp, 'home', '.ssh', 'known_hosts');
+// Starts one agent connection through the transport. Known-host entries and trust are supplied by the test.
+async function open({ state = {}, grant = {}, endpoints = {}, userKnown = [], systemKnown = [], confirmHostKey,
+  trustFails = false, unreadable = [], bookmark = pOld } = {}) {
   const endpoint = { app: endpointApp, legacy: endpointLegacy, ...endpoints };
   const st = { profiles: [pOld], globalAuthRules: [], authReplies: {}, sshPasswords: {}, trustedHostKeys: {},
     useStoredAuthOnConnect: true, useSavedRepliesAutomatically: true, useOpenSSHKeychain: false, ...state };
-  const calls = { starts: [], answers: [], forgets: [], confirms: [], lookups: [] };
+  const calls = { starts: [], answers: [], confirms: [], trusted: [], lookups: [], order: [] };
+  const entries = { [USER]: userKnown, [SYSTEM]: systemKnown };
   const sessions = [];
+  const controller = new AbortController();
   const ssh = {
     ...openssh,
     async effectiveOutput(config) { return config.configPath === '/dev/null' ? endpoint.legacy : endpoint.app; },
-    async knownHostFingerprints(file, host) { calls.lookups.push([file, host]); return file === userFile ? userFps : agentFps; },
-    async forgetKnownHost(file, host) { calls.forgets.push([file, host]); return true; },
+    async knownHostKeyEntries(file, host) {
+      calls.lookups.push([file, host]);
+      if (unreadable.includes(file)) throw Object.assign(new Error('Permission denied'), { code: 'EACCES' });
+      return entries[file] ?? [];
+    },
     async start(config, mode, size, onEvent, rules, strict, useKeychain, password, onPasswordUsed, agent) {
-      const connection = { close() {}, answer(id, value) { calls.answers.push({ id, value }); return true; } };
+      const connection = { close() {}, answer(id, value) { calls.answers.push({ id, value }); calls.order.push('answer'); return true; } };
       calls.starts.push({ config, mode, strict, useKeychain, password, agent });
       sessions.push(onEvent);
       return connection;
@@ -66,27 +76,33 @@ async function open({ state = {}, grant = {}, endpoints = {}, agentFps = [], use
     readAnswer: async entry => entry.answer ?? '',
     validAuthAnswer: value => typeof value === 'string' && value !== '' && !/[\r\n\0]/.test(value),
     matchesGlobalPattern, snippetScope: () => '', directory: tmp, approve: async () => true,
-    knownHosts: agentFile, profile: normalized, userKnownHosts: userFile,
-    ...(confirmHostKey && { confirmHostKey: async args => { calls.confirms.push(args); return confirmHostKey(args); } }),
+    profile: normalized, userKnownHosts: USER, systemKnownHosts: SYSTEM,
+    confirmHostKey: confirmHostKey && (async args => { calls.confirms.push(args); calls.order.push('confirm'); return confirmHostKey(args); }),
+    trustHostKey: async (host, fp) => {
+      calls.trusted.push([host, fp]); calls.order.push('trust');
+      if (trustFails) throw Error('storage failed');
+    },
     ssh,
   });
   const events = [];
-  const notify = (event, value) => events.push({ event, value });
-  const connecting = transport.connect(bookmark, { savedAuth: false, pam: [], ...grant }, 'ssh', notify, () => {},
-    new AbortController().signal);
+  const notify = (event, value) => { events.push({ event, value }); calls.order.push('notify:' + event); };
+  const connecting = transport.connect(bookmark, { savedAuth: false, pam: [], ...grant }, 'ssh', notify, () => {}, controller.signal);
   await until(() => sessions.length === 1);
   await connecting;
   return {
-    st, calls, events, transport, agentFile, userFile,
+    st, calls, events, transport, controller,
     // Delivers an OpenSSH prompt to the connection and waits until the transport has answered or notified.
     async prompt(value) {
       sessions[0]('prompt', { id: 'p1', prompt, hint: '', canRemember: true, targetProcess: true, hostKey: false, ...value });
       await settle();
     },
-    async hostKey(fp, extra = {}) {
-      sessions[0]('prompt', { id: 'h1', prompt: hostKeyPrompt(fp), hint: '', canRemember: false, targetProcess: true,
-        hostKey: true, ...extra });
+    async hostKey(fp, { type = 'ED25519' } = {}) {
+      sessions[0]('prompt', { id: 'h1', prompt: hostKeyPrompt(fp, type), hint: '', canRemember: false, targetProcess: true, hostKey: true });
       await settle();
+    },
+    // Delivers a host key question without waiting, so the test can change the signal in the middle.
+    hostKeyNow(fp) {
+      sessions[0]('prompt', { id: 'h1', prompt: hostKeyPrompt(fp), hint: '', canRemember: false, targetProcess: true, hostKey: true });
     },
   };
 }
@@ -177,45 +193,53 @@ test('the keychain option reaches OpenSSH only for a grant with saved auth', asy
   assert.equal((await open({ grant: { savedAuth: false }, state: { useOpenSSHKeychain: true } })).calls.starts[0].useKeychain, false);
 });
 
+test('the agent connection has no known_hosts path of its own in its config', async () => {
+  const s = await open({});
+  assert.equal('knownHosts' in s.calls.starts[0].config, false);
+});
+
 test('a host key the app trusted is accepted and the pin is audited', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('A') } } });
-  await s.hostKey(fingerprint('A'));
-  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: fingerprint('A') }]);
-  assert.equal(eventsNamed(s, 'hostkey.pinned')[0].value.fingerprint, fingerprint('A'));
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_NEW } } });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(eventsNamed(s, 'hostkey.pinned')[0].value.fingerprint, K_NEW);
 });
 
 test('a key in ~/.ssh that matches is accepted when the app has no value for the host', async () => {
-  const s = await open({ userFps: [fingerprint('A')] });
-  await s.hostKey(fingerprint('A'));
-  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: fingerprint('A') }]);
+  const s = await open({ userKnown: [ed(K_NEW)] });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(eventsNamed(s, 'hostkey.autotrusted').length, 0);
 });
 
 test('the app value wins over ~/.ssh, so a key only ~/.ssh trusts is a change', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('A') } }, userFps: [fingerprint('B')] });
-  await s.hostKey(fingerprint('B'));
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_OLD } }, userKnown: [ed(K_NEW)] });
+  await s.hostKey(K_NEW);
   assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
   assert.equal(errorOf(s).code, 'HOST_KEY_CHANGED');
+  assert.equal(errorOf(s).detail.trusted, K_OLD);
+  assert.equal(errorOf(s).detail.source, 'app');
 });
 
 test('a stale key in ~/.ssh does not block a key the app trusted', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('new') } }, userFps: [fingerprint('old')] });
-  await s.hostKey(fingerprint('new'));
-  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: fingerprint('new') }]);
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_NEW } }, userKnown: [ed(K_OLD)] });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
   assert.equal(errorOf(s), undefined);
 });
 
 test('a changed key asks once with the app value as the previous key, and approval accepts it', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('old') } }, confirmHostKey: () => true });
-  await s.hostKey(fingerprint('new'));
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_OLD } }, confirmHostKey: () => true });
+  await s.hostKey(K_NEW);
   assert.equal(s.calls.confirms.length, 1);
-  assert.equal(s.calls.confirms[0].previous, fingerprint('old'));
-  assert.equal(s.calls.confirms[0].fingerprint, fingerprint('new'));
-  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: fingerprint('new') }]);
+  assert.equal(s.calls.confirms[0].previous, K_OLD);
+  assert.equal(s.calls.confirms[0].fingerprint, K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
 });
 
 test('a declined confirmation answers no and reports HOST_KEY_UNCONFIRMED with a next step', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('old') } }, confirmHostKey: () => false });
-  await s.hostKey(fingerprint('new'));
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_OLD } }, confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
   assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
   assert.equal(errorOf(s).code, 'HOST_KEY_UNCONFIRMED');
   assert.equal(errorOf(s).next[0].action, 'ask_user');
@@ -234,13 +258,12 @@ test('an unknown key is accepted only after the user confirms it', async () => {
 });
 
 test('without a confirmation handler a changed key reports HOST_KEY_CHANGED with a next step', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('old') } } });
-  await s.hostKey(fingerprint('new'));
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_OLD } } });
+  await s.hostKey(K_NEW);
   const error = errorOf(s);
   assert.equal(error.code, 'HOST_KEY_CHANGED');
   assert.equal(error.next[0].action, 'ask_user');
-  assert.equal(error.detail.trusted, fingerprint('old'));
-  assert.equal(error.detail.source, 'app');
+  assert.equal(error.detail.trusted, K_OLD);
 });
 
 test('without a confirmation handler an unknown key reports HOST_KEY_UNKNOWN and is not accepted', async () => {
@@ -248,24 +271,6 @@ test('without a confirmation handler an unknown key reports HOST_KEY_UNKNOWN and
   await s.hostKey(fingerprint('unknown'));
   assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
   assert.equal(errorOf(s).code, 'HOST_KEY_UNKNOWN');
-});
-
-test('a stored agent key the user has not trusted is forgotten before connecting, in the agent file only', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('new') } }, agentFps: [fingerprint('old')] });
-  assert.deepEqual(s.calls.forgets, [[s.agentFile, 'example.invalid']]);
-  assert.ok(s.calls.forgets.every(([file]) => file === s.agentFile));
-  assert.ok(s.calls.forgets.every(([file]) => !file.includes('.ssh')));
-});
-
-test('a non-standard port is forgotten under its bracketed name', async () => {
-  const endpoints = { app: 'hostname example.invalid\nuser alice\nport 2222', legacy: 'hostname example.invalid\nuser alice\nport 2222' };
-  const s = await open({ endpoints, state: { trustedHostKeys: { 'host:[example.invalid]:2222': fingerprint('new') } }, agentFps: [fingerprint('old')] });
-  assert.deepEqual(s.calls.forgets, [[s.agentFile, '[example.invalid]:2222']]);
-});
-
-test('a trusted agent key is kept and nothing is forgotten', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('A') } }, agentFps: [fingerprint('A')] });
-  assert.deepEqual(s.calls.forgets, []);
 });
 
 test('every failure code has next steps, and an unmapped code gets the default step', () => {
@@ -279,17 +284,206 @@ test('every failure code has next steps, and an unmapped code gets the default s
   assert.equal(nextSteps.SSH_CONFIG_CHANGED[0].action, 'refresh_grant');
 });
 
-test('an app value decides cleanup: a stored key the app does not trust is forgotten even when ~/.ssh trusts it', async () => {
-  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': fingerprint('A') } },
-    agentFps: [fingerprint('B')], userFps: [fingerprint('B')] });
-  assert.deepEqual(s.calls.forgets, [[s.agentFile, 'example.invalid']]);
-  await s.hostKey(fingerprint('A'));
-  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: fingerprint('A') }]);
-  assert.equal(eventsNamed(s, 'hostkey.pinned').length, 1);
-  assert.equal(errorOf(s), undefined);
+// --- 1.1.9: classification, automatic trust, and the trust sources ---
+
+test('classifyHostKey: the app value decides first, then the agent value, then the user and system files', () => {
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_NEW] }), { kind: 'trusted', source: 'app' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_NEW], agent: [K_OLD] }), { kind: 'trusted', source: 'app' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', agent: [K_NEW] }), { kind: 'trusted', source: 'agent' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', agent: [K_OLD] }),
+    { kind: 'changed', previous: K_OLD, source: 'agent' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', agent: [K_OLD], user: [ed(K_NEW)] }),
+    { kind: 'changed', previous: K_OLD, source: 'agent' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_OLD] }),
+    { kind: 'changed', previous: K_OLD, source: 'app' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519' }), { kind: 'new' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', user: [ed(K_OLD)] }),
+    { kind: 'changed', previous: K_OLD, source: 'user_known_hosts' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', user: [rsa(K_OLD)] }),
+    { kind: 'changed', previous: K_OLD, source: 'user_known_hosts' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', user: [ed(K_NEW)] }),
+    { kind: 'trusted', source: 'user_known_hosts' });
 });
 
-test('without an app value, a key ~/.ssh trusts stays in the agent file', async () => {
-  const s = await open({ userFps: [fingerprint('A')], agentFps: [fingerprint('A')] });
-  assert.deepEqual(s.calls.forgets, []);
+test('autoTrustAllowed: off never trusts, new trusts only a new key, changed trusts every key that is not trusted', () => {
+  const kinds = ['trusted', 'new', 'changed'];
+  const table = {
+    off: [false, false, false],
+    new: [false, true, false],
+    changed: [false, true, true],
+  };
+  for (const [mode, expected] of Object.entries(table)) {
+    kinds.forEach((kind, index) => assert.equal(autoTrustAllowed(mode, kind), expected[index], `${mode} + ${kind}`));
+  }
+  assert.equal(autoTrustAllowed(undefined, 'new'), false);
+});
+
+test('off with a new key asks the user and does not trust automatically', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'off' }, confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 1);
+  assert.equal(s.calls.trusted.length, 0);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
+});
+
+test('new mode trusts a key the grant has never seen, without asking, and records it before answering', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'new' }, confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.deepEqual(s.calls.trusted, [['example.invalid', K_NEW]]);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.deepEqual(s.calls.order.filter(step => step !== 'answer'), ['trust', 'notify:hostkey.autotrusted']);
+  assert.deepEqual(s.calls.order.at(-1), 'answer');
+  const [event] = eventsNamed(s, 'hostkey.autotrusted');
+  assert.deepEqual({ kind: event.value.kind, previous: event.value.previous, source: event.value.source, mode: event.value.mode, saved: event.value.saved },
+    { kind: 'new', previous: null, source: null, mode: 'new', saved: true });
+  assert.equal(s.st.trustedHostKeys['host:example.invalid'], undefined);
+});
+
+test('new mode asks the user when the key differs from the trusted one', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'new' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD } },
+    confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 1);
+  assert.equal(s.calls.trusted.length, 0);
+  assert.equal(errorOf(s).code, 'HOST_KEY_UNCONFIRMED');
+});
+
+test('changed mode trusts a changed key without asking and reports the previous key and its source', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'changed' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD } },
+    confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.deepEqual(s.calls.trusted, [['example.invalid', K_NEW]]);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  const [event] = eventsNamed(s, 'hostkey.autotrusted');
+  assert.deepEqual({ kind: event.value.kind, previous: event.value.previous, source: event.value.source, mode: event.value.mode },
+    { kind: 'changed', previous: K_OLD, source: 'app', mode: 'changed' });
+});
+
+test('the 1.1.8 pre-stop case: a key ~/.ssh trusted before is a change, asked in off mode and accepted in changed mode', async () => {
+  const asked = await open({ grant: { hostKeyTrust: 'off' }, userKnown: [ed(K_OLD)], confirmHostKey: () => true });
+  await asked.hostKey(K_NEW);
+  assert.equal(asked.calls.confirms.length, 1);
+  assert.equal(asked.calls.confirms[0].previous, K_OLD);
+  assert.equal(asked.calls.confirms[0].source, 'user_known_hosts');
+  assert.deepEqual(asked.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(errorOf(asked), undefined);
+
+  const automatic = await open({ grant: { hostKeyTrust: 'changed' }, userKnown: [ed(K_OLD)], confirmHostKey: () => false });
+  await automatic.hostKey(K_NEW);
+  assert.equal(automatic.calls.confirms.length, 0);
+  assert.deepEqual(automatic.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(errorOf(automatic), undefined);
+});
+
+test('the server key changed after the app trusted an older one: off asks, changed trusts with source app', async () => {
+  const asked = await open({ grant: { hostKeyTrust: 'off' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD } },
+    confirmHostKey: () => true });
+  await asked.hostKey(K_NEW);
+  assert.equal(asked.calls.confirms.length, 1);
+  assert.deepEqual(asked.calls.answers, [{ id: 'h1', value: K_NEW }]);
+
+  const automatic = await open({ grant: { hostKeyTrust: 'changed' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD } } });
+  await automatic.hostKey(K_NEW);
+  assert.deepEqual(automatic.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(eventsNamed(automatic, 'hostkey.autotrusted')[0].value.source, 'app');
+});
+
+test('the system-wide known_hosts is a trust source too: a key there is trusted, an old key there is a change', async () => {
+  const trusted = await open({ systemKnown: [ed(K_NEW)] });
+  await trusted.hostKey(K_NEW);
+  assert.deepEqual(trusted.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.ok(trusted.calls.lookups.some(([file]) => file === SYSTEM));
+
+  const changed = await open({ grant: { hostKeyTrust: 'changed' }, systemKnown: [ed(K_OLD)] });
+  await changed.hostKey(K_NEW);
+  const [event] = eventsNamed(changed, 'hostkey.autotrusted');
+  assert.equal(event.value.source, 'user_known_hosts');
+  assert.equal(event.value.previous, K_OLD);
+});
+
+test('a failure to record an automatically trusted key still accepts for this connection and says it was not saved', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'new' }, trustFails: true });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(eventsNamed(s, 'hostkey.autotrusted')[0].value.saved, false);
+});
+
+test('when the session is aborted before the key is decided, nothing is recorded', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'changed' } });
+  s.hostKeyNow(K_NEW);
+  s.controller.abort();
+  await settle();
+  assert.equal(s.calls.trusted.length, 0);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
+  assert.equal(eventsNamed(s, 'hostkey.autotrusted').length, 0);
+});
+
+test('the grant mode is validated: a missing mode is off, and an unknown mode is rejected', async () => {
+  const s = await open({});
+  assert.equal(s.transport.validateGrant({}, pOld).hostKeyTrust, 'off');
+  assert.equal(s.transport.validateGrant({ hostKeyTrust: 'changed' }, pOld).hostKeyTrust, 'changed');
+  assert.throws(() => s.transport.validateGrant({ hostKeyTrust: 'yes' }, pOld), { message: 'INVALID_REQUEST' });
+});
+
+test('classifyHostKey: a file that cannot be read is a change with no previous key, never a new key', () => {
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', unreadable: true }),
+    { kind: 'changed', source: 'user_known_hosts' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', user: [ed(K_NEW)], unreadable: true }),
+    { kind: 'trusted', source: 'user_known_hosts' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519' }), { kind: 'new' });
+});
+
+test('an unreadable known_hosts is never taken as no entry: new mode asks instead of trusting a changed key', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'new' }, userKnown: [ed(K_OLD)], unreadable: [USER], confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.trusted.length, 0);
+  assert.equal(s.calls.confirms.length, 1);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
+  assert.equal(errorOf(s).code, 'HOST_KEY_UNCONFIRMED');
+});
+
+test('an unreadable known_hosts also asks in off mode, and without a handler reports HOST_KEY_CHANGED', async () => {
+  const asked = await open({ grant: { hostKeyTrust: 'off' }, unreadable: [USER], confirmHostKey: () => true });
+  await asked.hostKey(K_NEW);
+  assert.equal(asked.calls.confirms.length, 1);
+  assert.equal(asked.calls.confirms[0].previous, undefined);
+  assert.equal(asked.calls.confirms[0].source, 'user_known_hosts');
+  assert.deepEqual(asked.calls.answers, [{ id: 'h1', value: K_NEW }]);
+
+  const noHandler = await open({ unreadable: [USER] });
+  await noHandler.hostKey(K_NEW);
+  assert.equal(errorOf(noHandler).code, 'HOST_KEY_CHANGED');
+  assert.equal(errorOf(noHandler).detail.source, 'user_known_hosts');
+});
+
+test('changed mode may accept a key when the known_hosts cannot be read, showing the source and no previous key', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'changed' }, unreadable: [USER] });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  const [event] = eventsNamed(s, 'hostkey.autotrusted');
+  assert.deepEqual({ kind: event.value.kind, previous: event.value.previous, source: event.value.source },
+    { kind: 'changed', previous: null, source: 'user_known_hosts' });
+});
+
+test('the system-wide known_hosts that cannot be read is judged the same way: new mode asks', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'new' }, unreadable: [SYSTEM], confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.trusted.length, 0);
+  assert.equal(s.calls.confirms.length, 1);
+});
+
+test('a readable entry that matches still trusts the key when the other file cannot be read', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'off' }, userKnown: [ed(K_NEW)], unreadable: [SYSTEM], confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+});
+
+test('a missing known_hosts file is no entry: new mode trusts a key never seen before', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'new' }, confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.deepEqual(eventsNamed(s, 'hostkey.autotrusted')[0].value.kind, 'new');
 });
