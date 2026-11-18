@@ -286,7 +286,7 @@ hostKeyTrust: 'off' | 'new' | 'changed'   // 기본 'off'. 다른 값 → proble
 ```js
 function classifyHostKey({ fingerprint, keyType, app /*string[]*/, agent /*string[]*/, user /*[{fingerprint,type}]*/ })
 // -> { kind: 'trusted'|'new'|'changed', previous?, source?: 'app'|'agent'|'user_known_hosts' }
-// 우선순위: app → agent → user(~/.ssh + /etc). 비어 있지 않은 첫 근거만 본다(뒤 근거는 무시).
+// 우선순위: 앱 값 일치 → trusted(app), 에이전트 값 일치 → trusted(agent). 둘 다 불일치면 앱 값(없으면 에이전트 값)을 previous로 changed. 둘 다 없으면 user(~/.ssh + /etc) 규칙.
 // app 있음: 포함 → trusted, 아니면 changed(previous=app[0], source 'app').
 // app 없고 agent 있음: 포함 → trusted, 아니면 changed(previous=agent[0], source 'agent').
 // 둘 다 없음: user 중 같은 종류 항목에 일치 → trusted. user 비어 있음 → new. 그 외 → changed(previous=같은 종류 항목 또는 user[0], source 'user_known_hosts').

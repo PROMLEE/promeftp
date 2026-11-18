@@ -79,10 +79,12 @@ const sameTarget = (a, b) => targetLines(a) === targetLines(b);
 // A user or system file that could not be read is not "no entry": the key is judged as changed, with no previous key,
 // so it is never trusted automatically in 'new' mode.
 function classifyHostKey({ fingerprint, keyType = '', app = [], agent = [], user = [], unreadable = false }) {
-  if (app.length) return app.includes(fingerprint) ? { kind: 'trusted', source: 'app' }
-    : { kind: 'changed', previous: app[0], source: 'app' };
-  if (agent.length) return agent.includes(fingerprint) ? { kind: 'trusted', source: 'agent' }
-    : { kind: 'changed', previous: agent[0], source: 'agent' };
+  // A key that matches any trusted value of the first source that holds one is trusted. The agent's own value counts
+  // even when the app has a different value, so a key already trusted for the agent is not asked about again.
+  if (app.includes(fingerprint)) return { kind: 'trusted', source: 'app' };
+  if (agent.includes(fingerprint)) return { kind: 'trusted', source: 'agent' };
+  if (app.length) return { kind: 'changed', previous: app[0], source: 'app' };
+  if (agent.length) return { kind: 'changed', previous: agent[0], source: 'agent' };
   const sameType = keyType ? user.filter(entry => entry.type === keyType) : user;
   if (sameType.some(entry => entry.fingerprint === fingerprint)) return { kind: 'trusted', source: 'user_known_hosts' };
   if (!user.length && !unreadable) return { kind: 'new' };

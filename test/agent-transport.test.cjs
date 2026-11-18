@@ -487,3 +487,43 @@ test('a missing known_hosts file is no entry: new mode trusts a key never seen b
   assert.equal(s.calls.confirms.length, 0);
   assert.deepEqual(eventsNamed(s, 'hostkey.autotrusted')[0].value.kind, 'new');
 });
+
+test('classifyHostKey: an agent value that matches is trusted even when the app value differs', () => {
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_OLD], agent: [K_NEW] }),
+    { kind: 'trusted', source: 'agent' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_OLD], agent: [K_OLD] }),
+    { kind: 'changed', previous: K_OLD, source: 'app' });
+});
+
+// The app trusts an old key, and the agent already trusts the server's current key.
+const appOldAgentNew = () => ({ trustedHostKeys: { 'host:example.invalid': K_OLD }, agent: { trustedHostKeys: { 'host:example.invalid': K_NEW } } });
+
+test('changed mode: a key the agent already trusts is not recorded again on each connection', async () => {
+  for (let connection = 1; connection <= 2; connection++) {
+    const s = await open({ grant: { hostKeyTrust: 'changed' }, state: appOldAgentNew(), confirmHostKey: () => false });
+    await s.hostKey(K_NEW);
+    assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }], `connection ${connection}`);
+    assert.equal(s.calls.trusted.length, 0);
+    assert.equal(eventsNamed(s, 'hostkey.autotrusted').length, 0);
+    assert.equal(eventsNamed(s, 'hostkey.pinned').length, 1);
+    assert.equal(s.calls.confirms.length, 0);
+  }
+});
+
+test('off mode accepts a key the agent already trusts, without a dialog', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'off' }, state: appOldAgentNew(), confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+});
+
+test('an agent value that differs from the server key is still a change, reported against the app value', async () => {
+  const state = { trustedHostKeys: { 'host:example.invalid': K_OLD }, agent: { trustedHostKeys: { 'host:example.invalid': fingerprint('C') } } };
+  const s = await open({ grant: { hostKeyTrust: 'changed' }, state });
+  await s.hostKey(K_NEW);
+  const [event] = eventsNamed(s, 'hostkey.autotrusted');
+  assert.equal(event.value.kind, 'changed');
+  assert.equal(event.value.previous, K_OLD);
+  assert.equal(event.value.source, 'app');
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+});
