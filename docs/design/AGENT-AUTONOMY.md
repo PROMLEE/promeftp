@@ -18,7 +18,7 @@
 
 제외(하지 말 것)
 - 사용자 `~/.ssh/known_hosts`, `~/.ssh/config` 를 수정하지 않는다(읽기만). `ssh-keygen -R` 은 에이전트 파일에만 쓴다.
-- 사람 확인 없이 바뀐 호스트 키를 자동 수락하는 옵션(선택지 b)을 만들지 않는다.
+- (1.1.8 범위) 자동 수락 옵션은 1.1.9 섹션에서 다룬다.
 - 비밀값(응답, 비밀번호)을 에이전트 클라이언트로 보내거나 로그에 남기지 않는다.
 - 새 npm 의존성 금지. 테스트에서 실제 `~/.ssh`, `~/Library/Application Support/PromeFTP` 접근 금지(임시 디렉터리만 사용).
 - 앱(사람) 접속 경로의 동작은 바꾸지 않는다. 공용 함수로 옮겨도 결과가 같아야 한다.
@@ -160,7 +160,7 @@ type Next = { action: 'retry' | 'ask_user' | 'check_input' | 'refresh_grant', me
 - D1=A: `allowedRuleIds = grant.savedAuth ? (state.globalAuthRules||[]).map(r=>r.id) : grant.pam`. 사유 `global_rule_not_granted` 는 savedAuth=false이고 grant.pam 밖의 전역 규칙이 매칭될 때만 쓴다. grant UI "저장된 인증 사용" 설명에 "전역 인증 규칙 포함" 문구 추가.
 - D2=A: `grant.savedAuth && state.useOpenSSHKeychain === true` 이면 에이전트 `ssh.start` 7번째 인자 `useKeychain=true`. `IdentityAgent=none`, `IdentitiesOnly=yes` 유지. 사유가 `no_saved_reply` 이고 질문 마지막 줄이 `/password|passphrase/i` 면 prompt 값에 `next: [{action:'ask_user', message: NO_PROMPT_IN_APP}]` 추가. `NO_PROMPT_IN_APP = 'PromeFTP signed in without a prompt (likely ssh-agent). Save the password/answer once in PromeFTP or set an identity file on this bookmark.'`
 - D3=A: 미신뢰/변경 키에 네이티브 확인 다이얼로그(기본=취소, 60초).
-- D4: "호스트 키 변경 자동 수락" 옵션은 만들지 않는다.
+- D4: 1.1.8에서는 자동 수락 옵션이 없었다. 1.1.9에서 사용자 결정으로 grant 옵션 `hostKeyTrust` 를 추가한다(아래 "1.1.9" 섹션).
 
 ## 구현 체크리스트
 각 항목 끝의 "확인"을 만족해야 완료. 순서대로 진행.
@@ -228,4 +228,222 @@ const prompt = '(alice@example.invalid) Verification code: ';
 9. 앱(사람) 접속의 자동 응답·호스트 키 다이얼로그 동작이 변하지 않는다(I2 리팩터 후 같은 입력에 같은 결과 — saved-auth 테스트로 확인).
 
 ## 결정 필요
+(없음)
+
+
+---
+
+# 1.1.9: 호스트 키 자동 신뢰 옵션과 사전 중단 제거
+기준: 1.1.8 출시본(HEAD `7a4d711`). 위 1.1.8 설계는 구현 완료 상태다.
+
+## 9.목표
+- 사용자가 북마크별로 허용하면, 에이전트 접속이 호스트 키 확인 다이얼로그 없이 끝나게 한다. 기본은 꺼짐이고, 켤 때 위험을 경고해 사용자 책임을 분명히 한다.
+- 앱 신뢰값이 없는데 에이전트 파일이나 시스템 known_hosts의 낡은 키 때문에 OpenSSH가 질문 전에 중단하는 문제를 없앤다. 모든 키 판정이 PromeFTP의 판정 함수를 거치게 한다.
+
+## 9.범위
+포함: grant 필드 `hostKeyTrust`, 자동 수락 로직, 감사·이벤트 `hostkey.autotrusted`, 설정 UI(경고 문구, 강한 확인 다이얼로그, 4개 언어), 접속별 임시 known_hosts, 문서(AGENTS.md, TROUBLESHOOTING.md, skills/promeftp/SKILL.md, llms.txt, llms-full.txt).
+제외: `~/.ssh`, `/etc/ssh` 아래 어떤 파일에도 쓰지 않는다. 앱(사람) 접속의 호스트 키 다이얼로그 동작은 바꾸지 않는다. 자동 신뢰값은 에이전트 전용 `state.agent.trustedHostKeys` 에만 저장하므로 앱 접속에 영향이 없다. 에이전트 확인 다이얼로그에서 승인하면 1.1.8처럼 앱 `trustedHostKeys` 에 저장한다(변경 없음). 새 의존성 없음. `ssh-keyscan` 은 쓰지 않는다(9.원인 비교 참고).
+
+## 9.원인: 1.1.8에 남은 사전 중단
+- 1.1.8 에이전트 ssh 인자는 `UserKnownHostsFile=<agent file>` 이고 `GlobalKnownHostsFile` 은 기본값이다 (`openssh.cjs:72-77`).
+- `pruneAgentKnownHosts` 는 신뢰 집합 `trustOf` 에 **있는** 키를 에이전트 파일에 남긴다 (`agent-transport.cjs:117, 138-145`). 이 키가 서버의 새 키와 다르면 OpenSSH는 질문 없이 "REMOTE HOST IDENTIFICATION HAS CHANGED" 로 중단한다. 그래서 `hostKeyDecision`(`agent-transport.cjs:119-136`)이 실행되지 않는다. 경우는 셋이다.
+  1. 앱 신뢰값 없음. `~/.ssh` 에 예전 키 K_old가 있고, 과거에 `~/.ssh` 신뢰로 수락한 K_old가 에이전트 파일에도 남아 있음. 서버는 지금 K_new를 쓴다.
+  2. 앱 신뢰값 K_app이 에이전트 파일에 있고 서버 키가 바뀌었다. 1.1.8은 이 경우도 다이얼로그 없이 `HOST_KEY_CHANGED` 로 끝난다.
+  3. `/etc/ssh/ssh_known_hosts`(시스템 전역 파일)에 낡은 키가 있다.
+
+### 새 지문을 얻는 방법 비교
+| 방법 | 장점 | 단점 |
+|---|---|---|
+| A. **접속마다 빈 임시 known_hosts + `GlobalKnownHostsFile=/dev/null`** (추천) | OpenSSH가 항상 "authenticity can't be established" 질문을 보내므로 실제 접속 경로(ProxyJump/ProxyCommand 포함)로 협상한 키의 지문을 얻는다. 재시도가 필요 없다. 판정은 모두 `hostKeyDecision` 이 한다. | 매 접속마다 askpass 왕복이 1회 생긴다(수 ms). OpenSSH가 "아는 키 종류"를 우선하는 알고리즘 순서 조정을 잃는다. 그래서 `~/.ssh` 에 RSA 키만 있고 서버가 ED25519를 협상하면 "바뀐 키"로 보일 수 있다(아래 종류 규칙으로 처리). |
+| B. `ssh-keyscan` 으로 지문 수집 | 구현이 단순해 보인다. | ProxyJump/ProxyCommand를 따르지 않는다(다른 경로의 키를 볼 수 있음). 여러 키 종류 중 실제 협상될 키를 고를 수 없다. 별도 연결이 하나 더 생긴다. |
+| C. 중단을 감지한 뒤 대체 known_hosts로 1회 재접속 | 평소 경로는 변경 없음. | `connect` 가 이미 반환한 connection을 바꿔야 해서 agent-service 세션 구조를 고쳐야 한다. 실패 로그와 이벤트가 두 번 생긴다. |
+
+결정: A. 에이전트 파일 `userData/agent/known_hosts` 는 더 이상 읽거나 쓰지 않는다. 남아 있는 파일은 지운다(I9-9).
+
+### 키 종류 규칙
+`~/.ssh` 근거는 질문에 나온 키 종류(`ED25519 key fingerprint is` 의 첫 단어)와 같은 종류의 항목만 비교한다. `ssh-keygen -l` 출력의 `(ED25519)` 를 쓴다.
+- 같은 종류 항목이 있고 지문이 다르면 "바뀐 키"다.
+- 다른 종류만 있으면 "새 종류 키"다. "처음 보는 키"로 취급하지 않고 "바뀐 키" 쪽으로 엄격하게 분류한다(`new` 모드에서 자동 수락하지 않음).
+
+앱 신뢰값(`trustedHostKeys`)과 에이전트 전용 신뢰값(`state.agent.trustedHostKeys`)은 종류를 저장하지 않으므로 지문만 비교한다. 시스템 근거는 `~/.ssh/known_hosts` 와 `/etc/ssh/ssh_known_hosts` 를 합친 목록이다(둘 다 읽기 전용).
+
+## 9.데이터·인터페이스
+grant 필드 (`agent-transport.cjs` `validateGrant`):
+```js
+hostKeyTrust: 'off' | 'new' | 'changed'   // 기본 'off'. 다른 값 → problem('INVALID_REQUEST'). 없는(예전) grant → 'off'.
+```
+- `off`: 1.1.8과 같다. 신뢰된 키가 아니면 확인 다이얼로그를 띄운다.
+- `new`: 처음 보는 키(앱 신뢰값 없음, `~/.ssh` 에 그 호스트 항목이 전혀 없음)는 자동 수락한다. 바뀐 키와 새 종류 키는 다이얼로그.
+- `changed`: 처음 보는 키, 바뀐 키, 새 종류 키를 모두 자동 수락한다.
+
+판정 결과 (`hostKeyDecision` 반환 확장):
+```js
+{ answer, host, fingerprint }                                    // 신뢰된 키 → 기존 hostkey.pinned
+{ answer, host, fingerprint, auto: true, previous?, source?, kind: 'new'|'changed' } // 자동 수락
+{ code, detail }                                                 // 오류 (기존)
+```
+분류 함수(순수, export):
+```js
+function classifyHostKey({ fingerprint, keyType, app /*string[]*/, agent /*string[]*/, user /*[{fingerprint,type}]*/ })
+// -> { kind: 'trusted'|'new'|'changed', previous?, source?: 'app'|'agent'|'user_known_hosts' }
+// 우선순위: app → agent → user(~/.ssh + /etc). 비어 있지 않은 첫 근거만 본다(뒤 근거는 무시).
+// app 있음: 포함 → trusted, 아니면 changed(previous=app[0], source 'app').
+// app 없고 agent 있음: 포함 → trusted, 아니면 changed(previous=agent[0], source 'agent').
+// 둘 다 없음: user 중 같은 종류 항목에 일치 → trusted. user 비어 있음 → new. 그 외 → changed(previous=같은 종류 항목 또는 user[0], source 'user_known_hosts').
+function autoTrustAllowed(mode, kind) // mode==='changed' ? kind!=='trusted' : mode==='new' ? kind==='new' : false
+```
+`openssh.cjs`:
+- `parseKeygenFingerprints(stdout)` 는 그대로 둔다(문자열 배열).
+- `parseKeygenEntries(stdout) -> [{ fingerprint, type }]` 를 추가한다. 줄 형식은 `256 SHA256:x host (ED25519)` 이고, type은 대문자 괄호 안 값이다.
+- `knownHostEntries(file, host)` 를 추가한다. `knownHostFingerprints` 와 같은 실행이고 entries를 반환한다. 기존 함수 `knownHostEntries(line)`(`openssh.cjs:25`)와 이름이 겹치므로 새 함수 이름은 **`knownHostKeyEntries`** 로 한다.
+- `parseHostKeyPrompt` 반환에 `keyType` 을 추가한다(`/^([\w-]+) key fingerprint is/m` 의 1번 그룹을 대문자로, 없으면 `''`). 기존 테스트의 `deepEqual` 3건(`test/openssh.test.cjs:9-21`)은 `keyType` 필드를 넣어 기대값을 고친다.
+- `agentRestrictedOptions(config)`: `UserKnownHostsFile=` + `sshQuote(config.knownHosts)` 다음에 `'-o', 'GlobalKnownHostsFile=/dev/null'` 을 추가한다.
+- `start` 에서 에이전트이면 `config.knownHosts` 를 접속 임시 디렉터리(`directory`, 이미 `fs.mkdtemp('/tmp/promeftp-')`) 안의 `known_hosts` 로 덮어쓴다. 즉 `agent` 일 때 `agentRestrictedOptions({ ...config, knownHosts: path.join(directory, 'known_hosts') })`. 파일은 만들지 않는다(OpenSSH가 없는 파일을 빈 파일로 취급). `close()` 의 `fs.rm(directory)` 가 정리한다.
+
+주입 의존성 (`createTransport`):
+- `trustHostKey: async (host, fingerprint) => void` 를 추가한다. main.cjs 구현은 `updateState(next => (((next.agent ??= {}).trustedHostKeys ??= {})['host:' + host] = fingerprint))` 다. 앱 `trustedHostKeys` 에는 쓰지 않는다.
+- `systemKnownHosts` 를 추가한다(기본 `'/etc/ssh/ssh_known_hosts'`, 테스트에서 교체).
+- `knownHosts` 인자는 제거한다.
+
+상태: `state.agent.trustedHostKeys: { ['host:'+host]: fingerprint }`. 이 객체는 앱 설정 UI에서 편집하지 않는다. 에이전트 확인 다이얼로그 승인(`confirmAgentHostKey`)이 앱 `trustedHostKeys` 에 저장되면 판정 우선순위상 그 값이 이 객체보다 우선한다.
+
+이벤트·감사:
+- transport notify: `notify('hostkey.autotrusted', { host, fingerprint, previous: previous || null, source: source || null, kind, mode })`.
+- agent-service: `if (event === 'hostkey.autotrusted') audit(base(s, event, 'success', null, JSON.stringify(value)))`. `sessionEvents` 의 `operation IN (...)`(`agent-service.cjs:255`)에 `'hostkey.pinned'`, `'hostkey.autotrusted'` 를 추가한다. 에이전트가 `events list` 로 볼 수 있다.
+- 설정의 활동 기록(Preferences → Agents)에서 `hostkey.autotrusted` 행을 경고 색으로 표시하고, detail에서 host, 이전/새 지문을 보여 준다(`preferences.js` 의 활동 렌더링에 operation 라벨 추가).
+
+## 9.동작 흐름
+1. `connect`: `pruneAgentKnownHosts` 호출과 함수 자체를 삭제한다. ssh는 접속별 빈 임시 파일과 `GlobalKnownHostsFile=/dev/null` 로 실행되므로 항상 질문한다.
+2. 질문 수신 → `hostKeyDecision(prompt, { scope, profile, endpoint, signal, mode: grant.hostKeyTrust || 'off' })`:
+   1. `info = ssh.parseHostKeyPrompt(prompt)`. 지문 없음 → `HOST_KEY_UNKNOWN`(기존).
+   2. `trustedFor(host, scope)` 를 `{ app, agent, user }` 를 반환하도록 수정한다.
+      - `app` 은 기존과 같다.
+      - `agent = [state().agent?.trustedHostKeys?.['host:'+host]].filter(Boolean)`.
+      - `user` 는 `knownHostKeyEntries(userKnownHosts, host)` 와 `knownHostKeyEntries(systemKnownHosts, host)` 결과를 합친 것이다. 각각 실패하면 `[]`.
+   3. `c = classifyHostKey(...)`. `trusted` → 기존 수락(`hostkey.pinned`).
+   4. `autoTrustAllowed(mode, c.kind)` → `await trustHostKey(info.host, info.fingerprint)`. 실패해도 이번 접속은 수락한다(감사 detail에 `saved:false`). 그다음 `notify('hostkey.autotrusted', ...)` 후 `answer(info.accept)`. 다이얼로그는 띄우지 않는다.
+   5. 그 외 → 1.1.8의 `confirmHostKey` 경로(다이얼로그). `previous` 는 `c.previous`, `source` 는 `c.source`.
+3. 오류 흐름: `trustHostKey` 예외 → 수락은 하고 감사에 기록. 세션 중단(signal) → 아무것도 저장하지 않고 `answer('no')`.
+4. 기존 `HOST_KEY_CHANGED` 분류 regex는 남긴다(이론상 더는 나오지 않지만, 시스템 설정이 바뀌는 경우에 대비).
+5. 시작 시 정리: `main.cjs` `initializeAgent` 에서 `fs.rm(path.join(directory, 'known_hosts'), { force: true })` 와 `.old` 를 지운다. `showHostKeyPrompt` 의 `forgetKnownHost(agentKnownHostsPath(), host)` 호출(`main.cjs` remember 내부)도 삭제하고, `agentKnownHostsPath` 사용처를 정리한다. `profileTrusted` 는 앱 신뢰값, `state.agent.trustedHostKeys`, `~/.ssh`, `/etc/ssh/ssh_known_hosts` 항목 중 하나라도 있으면 true를 반환한다.
+
+## 9.디자인 방향 (설정 UI)
+- 위치: `preferences.html` "Authentication and triggers" fieldset(`agent-saved-auth` 아래).
+- 컨트롤: `<label>Trust host keys automatically<select id="agent-host-key-trust">` 옵션 3개.
+  - `off` "Off (ask me)"
+  - `new` "New keys only"
+  - `changed` "New and changed keys"
+- 경고 영역: `<p id="agent-host-key-trust-warning" class="settings-note warning" role="note" hidden>`. off가 아니면 보인다. 기존 경고 스타일을 재사용하고, 새 색이나 아이콘 세트를 만들지 않는다.
+- `changed` 선택 시: `agent-maximum-dialog` 와 같은 구조의 `<dialog id="agent-host-key-dialog">` 를 연다. 버튼은 [Cancel(기본), Turn On]이다. Cancel이나 Esc를 누르면 select를 이전 값으로 되돌린다.
+- 프리셋(`agent-preferences.js:79-82`)은 4개 모두 `hostKeyTrust: 'off'` 로 둔다(9.D3). "maximum" 확인 다이얼로그 문구는 변경하지 않는다.
+- 금지: 토글 하나로 `changed` 까지 켜는 UI, 경고 없이 켜지는 경로, 경고를 툴팁에만 두는 것.
+
+문구 (localization.js 형식: `영어|한국어|日本語|中文`, 한 줄에 하나):
+```
+Trust host keys automatically|호스트 키 자동 신뢰|ホストキーを自動的に信頼|自动信任主机密钥
+Off (ask me)|끔 (매번 확인)|オフ(毎回確認)|关闭(每次确认)
+New keys only|처음 보는 키만|初めてのキーのみ|仅首次出现的密钥
+New and changed keys|처음 보는 키와 바뀐 키|初めてのキーと変更されたキー|首次出现和已更改的密钥
+PromeFTP will trust a server key it has not seen before without asking. If the first connection is intercepted (man-in-the-middle), saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.|PromeFTP가 처음 보는 서버 키를 묻지 않고 신뢰합니다. 첫 연결이 중간자 공격을 받으면 저장된 비밀번호와 응답이 공격자에게 자동으로 전송될 수 있습니다. 이 선택의 책임은 사용자에게 있습니다.|PromeFTP は初めて見るサーバーキーを確認せずに信頼します。最初の接続が中間者攻撃を受けた場合、保存されたパスワードと応答が攻撃者に自動送信される可能性があります。この選択の責任はユーザーにあります。|PromeFTP 将不经询问信任首次出现的服务器密钥。如果首次连接遭到中间人攻击,已保存的密码和应答可能会被自动发送给攻击者。此选择的责任由您承担。
+PromeFTP will also trust a key that differs from the one you trusted, without asking. A changed key is the main sign of a man-in-the-middle attack. Saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.|PromeFTP가 신뢰했던 키와 다른 키도 묻지 않고 신뢰합니다. 키가 바뀐 것은 중간자 공격의 대표적인 징후입니다. 저장된 비밀번호와 응답이 공격자에게 자동으로 전송될 수 있습니다. 이 선택의 책임은 사용자에게 있습니다.|PromeFTP は信頼済みのキーと異なるキーも確認せずに信頼します。キーの変更は中間者攻撃の主な兆候です。保存されたパスワードと応答が攻撃者に自動送信される可能性があります。この選択の責任はユーザーにあります。|PromeFTP 也将不经询问信任与您已信任密钥不同的密钥。密钥变更是中间人攻击的主要迹象。已保存的密码和应答可能会被自动发送给攻击者。此选择的责任由您承担。
+Trust changed host keys automatically?|바뀐 호스트 키를 자동으로 신뢰할까요?|変更されたホストキーを自動的に信頼しますか?|要自动信任已更改的主机密钥吗?
+Turn On|켜기|オンにする|开启
+Host key trusted automatically|호스트 키 자동 신뢰됨|ホストキーを自動的に信頼しました|已自动信任主机密钥
+```
+`Turn On` 등 이미 있는 키는 중복 추가하지 않는다(`grep -n "^Turn On|" localization.js` 로 먼저 확인). `test/i18n-keys.test.cjs` 를 통과해야 한다.
+
+## 9.구현 체크리스트
+- [ ] I9-1: `openssh.cjs` 를 수정한다.
+  - `parseHostKeyPrompt` 에 `keyType` 을 추가한다.
+  - `parseKeygenEntries`, `knownHostKeyEntries` 를 추가하고 export한다.
+  - `agentRestrictedOptions` 에 `GlobalKnownHostsFile=/dev/null` 을 넣는다.
+  - `start` 의 에이전트 known_hosts를 접속 임시 디렉터리 파일로 바꾼다.
+  - 확인: `test/openssh.test.cjs` 의 신규·수정 케이스.
+- [ ] I9-2: `agent-transport.cjs` 에 순수 함수 `classifyHostKey`, `autoTrustAllowed` 를 추가하고 `module.exports` 에 넣는다. 확인: `test/agent-transport.test.cjs` "classifyHostKey" 묶음.
+- [ ] I9-3: `validateGrant` 반환에 `hostKeyTrust: ['off','new','changed'].includes(value.hostKeyTrust ?? 'off') ? (value.hostKeyTrust ?? 'off') : throw INVALID_REQUEST` 를 넣는다. 확인: 잘못된 값 → `INVALID_REQUEST`, 누락 → 'off'.
+- [ ] I9-4: `createTransport` 인자에서 `knownHosts` 를 빼고 `trustHostKey`, `systemKnownHosts = '/etc/ssh/ssh_known_hosts'` 를 추가한다. `trustedFor` 는 9.동작 흐름 2-2대로 `{app, agent, user}` 를 반환하게 고치고, `trustOf` 는 삭제한다(`classifyHostKey` 가 대신한다). `pruneAgentKnownHosts` 와 그 호출을 삭제한다. `resolve` 에서 config에 `knownHosts` 를 넣던 코드도 삭제한다(`start` 가 정함). 확인: `grep -n "pruneAgentKnownHosts\|knownHosts" agent-transport.cjs` 결과가 `userKnownHosts`, `systemKnownHosts` 만.
+- [ ] I9-5: `hostKeyDecision` 을 9.동작 흐름 2에 맞게 수정하고, 호출부(`agent-transport.cjs:205` 근처)에서 `decision.auto` 이면 `notify('hostkey.autotrusted', ...)` 를 보낸 뒤 answer한다. 확인: 테스트의 notify 순서 `hostkey.autotrusted` → answer.
+- [ ] I9-6: `main.cjs` 를 수정한다.
+  - `initializeAgent` 의 `createTransport` 호출에서 `knownHosts` 를 제거하고, `trustHostKey` 를 주입한다. 구현은 `state.agent.trustedHostKeys` 에만 쓴다(9.데이터 참고).
+  - `confirmAgentHostKey` 는 변경하지 않는다(승인 시 계속 앱 `trustedHostKeys` 에 저장).
+  - 예전 에이전트 known_hosts와 `.old` 를 삭제한다.
+  - `showHostKeyPrompt` remember의 `forgetKnownHost(agentKnownHostsPath()...)` 를 삭제한다.
+  - `profileTrusted` 에서 에이전트 파일을 제외하고, `state.agent.trustedHostKeys` 와 `/etc/ssh/ssh_known_hosts` 를 근거에 추가한다.
+  - `agentKnownHostsPath` 는 삭제용으로만 남긴다.
+  - 확인: `grep -n "agentKnownHostsPath" main.cjs` 가 정의와 삭제 코드 2건.
+- [ ] I9-7: `agent-service.cjs` 에서 `hostkey.autotrusted` 를 감사에 기록하고, `sessionEvents` 의 operation 목록에 `hostkey.pinned`, `hostkey.autotrusted` 를 추가한다. 확인: 서비스 테스트 또는 수동 `promeftp events list`.
+- [ ] I9-8: 설정 UI를 만든다.
+  - `preferences.html` 에 select, 경고 p, `agent-host-key-dialog` 를 추가한다.
+  - `agent-preferences.js` 를 고친다. 164행 근처 로드 시 `grant?.hostKeyTrust || 'off'` 를 쓰고, 375행 근처 저장 객체에 `hostKeyTrust` 를 넣는다. 프리셋 4개에 `hostKeyTrust:'off'` 를 넣고, 91행 근처 프리셋 적용에도 반영한다.
+  - change 핸들러: off가 아니면 경고를 보이고, 문구는 new/changed에 따라 바꾼다. `changed` 를 고르면 다이얼로그를 열고, 취소하면 이전 값으로 되돌린다.
+  - `preferences.js` 활동 라벨에 `hostkey.autotrusted` 를 추가한다.
+  - `localization.js` 에 9.디자인 방향의 문구를 추가한다.
+  - 확인: `npm test`(i18n, ipc-surface, syntax), 수동 UI 확인.
+- [ ] I9-9: 문서를 갱신한다.
+  - `docs/AGENTS.md` 21행 문단: 자동 신뢰 옵션 3단계와 위험, 접속별 임시 known_hosts, `hostkey.autotrusted` 이벤트.
+  - `docs/TROUBLESHOOTING.md` 60-62행: `HOST_KEY_CHANGED` 가 더는 사전 중단으로 나오지 않음, 자동 신뢰 시 활동 기록에서 확인하는 법.
+  - `skills/promeftp/SKILL.md`: 이벤트 목록에 `hostkey.pinned`, `hostkey.autotrusted` 를 추가하고, "에이전트는 hostKeyTrust를 바꿀 수 없고 사용자에게 요청만 한다"는 문장을 넣는다. 스킬 매니페스트 서명이 있으면(커밋 `0ea15b9`) 서명 갱신 절차를 RELEASE 문서대로 따른다.
+  - `llms.txt`, `llms-full.txt`: 같은 내용을 반영한다.
+  - 확인: `test/doc-links.test.cjs`, `test/agent-skills.test.cjs` 통과.
+- [ ] I9-10: 테스트를 작성하고 `npm test` 전체를 통과시킨다.
+
+## 9.테스트 계획
+`test/agent-transport.test.cjs` 의 가짜 `ssh` 확장:
+- `knownHostKeyEntries(file, host)` 는 테스트 맵을 반환한다.
+- `parseHostKeyPrompt` 는 실제 함수를 쓴다.
+- `trustHostKey` 는 호출을 기록하는 스파이다.
+- `systemKnownHosts` 는 `'/sys/fake'` 로 주입하고, 가짜 `knownHostKeyEntries` 가 파일 경로별로 다른 목록을 반환한다.
+
+목데이터:
+```js
+const ask = (type, fp) => `The authenticity of host 'example.invalid (203.0.113.5)' can't be established.\n${type} key fingerprint is ${fp}.\nAre you sure you want to continue connecting (yes/no/[fingerprint])?`;
+const K_OLD = 'SHA256:old', K_NEW = 'SHA256:new';
+```
+classifyHostKey (순수):
+- app=[K_NEW] → trusted
+- app=[], agent=[K_NEW] → trusted. app=[], agent=[K_OLD] → changed, source 'agent'
+- app=[K_NEW], agent=[K_OLD] → trusted (app 우선)
+- app=[], agent=[K_OLD], user=[{K_NEW, ED25519}] → changed (agent가 user보다 우선)
+- app=[K_OLD] → changed, source 'app'
+- app=[], user=[] → new
+- user=[{K_OLD, ED25519}], 질문 ED25519 K_NEW → changed, source 'user_known_hosts'
+- user=[{K_OLD, RSA}], 질문 ED25519 → changed
+- user=[{K_NEW, ED25519}] → trusted
+autoTrustAllowed: 3×3 표 전부를 assert한다.
+
+흐름:
+- off + new → `confirmHostKey` 1회, `trustHostKey` 0회.
+- new + new → `confirmHostKey` 0회, `trustHostKey('example.invalid', K_NEW)` 1회(main 구현 단위 확인: `state.agent.trustedHostKeys` 만 바뀌고 `state.trustedHostKeys` 는 그대로), `hostkey.autotrusted` detail `{kind:'new', previous:null, mode:'new'}`, answer = K_NEW.
+- new + changed → `confirmHostKey` 1회(자동 수락 안 함).
+- changed + changed(app K_OLD) → 자동 수락, detail `previous: K_OLD, source: 'app'`.
+- 1.1.8 사전 중단 재현(원인의 경우 1): app 없음, user K_OLD, 질문 K_NEW → 오류가 아니라 다이얼로그(off) 또는 자동 수락(changed).
+- `trustHostKey` 가 reject해도 answer가 호출된다.
+- signal abort 후 → `trustHostKey` 0회.
+- `/etc` 근거: user 맵의 `'/sys/fake'` 에만 {K_NEW, ED25519}가 있음 → trusted. `'/sys/fake'` 에만 K_OLD가 있음 → changed, source 'user_known_hosts'.
+- validateGrant: `{hostKeyTrust:'yes'}` → INVALID_REQUEST, 누락 → 'off'.
+`test/openssh.test.cjs`:
+- `agentRestrictedOptions({knownHosts:'/x/k'})` 가 `GlobalKnownHostsFile=/dev/null` 을 포함하고 `.ssh` 문자열을 포함하지 않는다.
+- `parseKeygenEntries('256 SHA256:abc example.invalid (ED25519)\n# Host x found: line 3')` → `[{fingerprint:'SHA256:abc', type:'ED25519'}]`. 빈 문자열 → `[]`.
+- `parseHostKeyPrompt` 의 `keyType`: ED25519, ECDSA, RSA, 종류 줄이 없으면 ''.
+- 서명 경로를 실제로 실행하지 않는다. 실제 `~/.ssh` 나 userData에 접근하지 않는다.
+
+## 9.수용 기준
+1. `npm test` 가 전부 통과한다.
+2. 기본값(필드 없음)인 grant에서는 신뢰되지 않은 키를 다이얼로그 없이 수락하는 경로가 없다(테스트 off×{new,changed}).
+3. `new` 모드는 바뀐 키와 새 종류 키를 자동 수락하지 않는다(테스트).
+4. 자동 수락할 때마다 `hostkey.autotrusted` 가 host, fingerprint, previous, source, kind, mode와 함께 notify된다. agent-service 감사에 기록되고 `events list` 에도 포함된다.
+5. 에이전트 ssh 인자에 `GlobalKnownHostsFile=/dev/null` 이 있고, `UserKnownHostsFile` 은 접속 임시 디렉터리 안의 파일 하나다. `~/.ssh` 경로는 인자에 없다.
+6. 코드 어디에서도 `~/.ssh` 또는 `/etc/ssh` 아래에 쓰지 않는다. `forgetKnownHost` 호출이 남아 있지 않거나, 있다면 userData 경로만 대상으로 한다(grep).
+7. 원인의 경우 1~3(앱 신뢰값 없음 또는 있음, 낡은 키)에서 에이전트 세션이 `HOST_KEY_CHANGED` 사전 중단으로 끝나지 않는다. 다이얼로그나 자동 수락으로 진행한다(테스트로 질문 흐름 확인. 실제 OpenSSH 동작은 수동 확인 1회).
+8. 설정 UI: off 이외를 고르면 경고가 보인다. `changed` 는 확인 다이얼로그를 거쳐야 저장되고, 취소하면 원래 값으로 돌아간다. 4개 언어 문구가 있다.
+9. 에이전트 API로는 `hostKeyTrust` 를 바꿀 수 없다. grant 저장은 앱 설정 IPC로만 한다(기존 구조 유지 확인).
+10. 자동 신뢰는 `state.agent.trustedHostKeys` 에만 저장되고 앱 `trustedHostKeys` 는 바뀌지 않는다. 판정 우선순위는 app → agent → `~/.ssh`·`/etc` 이다(테스트).
+
+## 9.확정된 결정
+- 9.D1: 3단계 off/new/changed.
+- 9.D2: 자동 신뢰값은 에이전트 전용 `state.agent.trustedHostKeys` 에 저장한다. 판정 우선순위는 앱 `trustedHostKeys` → 에이전트 전용 → `~/.ssh`·`/etc/ssh/ssh_known_hosts` 이다. 에이전트 다이얼로그 승인은 기존처럼 앱 `trustedHostKeys` 에 저장한다.
+- 9.D3: 프리셋 4개 모두 off(maximum 포함).
+- 9.D4: 접속별 임시 known_hosts + `GlobalKnownHostsFile=/dev/null`. `/etc/ssh/ssh_known_hosts` 는 읽기 전용 근거로 합친다.
+
+## 9.결정 필요
 (없음)

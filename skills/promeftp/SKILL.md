@@ -31,6 +31,10 @@ in PromeFTP → Settings → Agents.
    The user must approve that exact command in PromeFTP. Respect denial and
    report the exit code and any truncated output.
 6. Inspect rule activity with `promeftp events list --session ID --after 0 --json`.
+   Host key events are `hostkey.pinned` (a key the user already trusted) and
+   `hostkey.autotrusted` (a key PromeFTP trusted without asking, under the
+   bookmark's host key trust setting). You cannot change that setting. If a
+   task needs it, ask the user to change it in PromeFTP → Settings → Agents.
    Close the connection with `promeftp session close --session ID --json`.
 
 Do not use another tool or SSH connection to bypass a denied operation. Do not

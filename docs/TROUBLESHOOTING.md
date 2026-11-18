@@ -59,7 +59,9 @@ Change the shortcut in **Preferences → Shortcuts** if the key is taken, or tur
 
 Run `session status` for the session. Its `error.code` names the cause, such as `HOST_KEY_UNKNOWN`, `HOST_KEY_CHANGED`, `HOST_KEY_UNCONFIRMED`, `DNS_FAILED`, `CONNECTION_REFUSED`, or `AUTH_FAILED`. Open the activity history in **Preferences → Agents** and choose **Show log** for the raw OpenSSH output.
 
-`error.next` lists the steps the agent may take. A step with `ask_user` means you must act in PromeFTP, and the agent should not retry it. `HOST_KEY_CHANGED` appears when a server's key differs from the one you trusted. PromeFTP then shows a dialog with both fingerprints, and the agent connects only after you choose **Trust and Connect**. `HOST_KEY_UNCONFIRMED` means the dialog was declined or not answered within 60 seconds. PromeFTP never changes your `~/.ssh/known_hosts`.
+`error.next` lists the steps the agent may take. A step with `ask_user` means you must act in PromeFTP, and the agent should not retry it. The agent no longer stops before PromeFTP decides about a host key. A key that differs from the one you trusted opens a dialog with both fingerprints, and the agent connects only after you choose **Trust and Connect**, unless the bookmark's host key trust is set to **New and changed keys**. In that case the key is trusted automatically and recorded as `hostkey.autotrusted`. `HOST_KEY_CHANGED` appears only when no dialog can be shown. `HOST_KEY_UNCONFIRMED` means the dialog was declined or not answered within 60 seconds. PromeFTP never changes your `~/.ssh/known_hosts`.
+
+To check automatic trust, open **Preferences → Agents** and look for **Host key trusted automatically** in the activity history. Those rows are shown in red and list the host and the previous and new fingerprints.
 
 When an agent reaches an authentication prompt that PromeFTP did not answer, the `auth.prompt` event records a `savedAuth` reason. The reason never includes the question's answer or any password.
 
