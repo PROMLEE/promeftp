@@ -1,0 +1,23 @@
+{
+  "heading": "Agents use your saved sign-in and confirm host keys",
+  "summary": "Agents fill in saved passwords and answers the way the app does, and a changed host key can be confirmed in a dialog without opening the app.",
+  "changes": [
+    [
+      "Saved sign-in for agents",
+      "With saved authentication allowed, agents use your saved passwords, saved answers, and authentication rules as the app does."
+    ],
+    [
+      "Host key confirmation",
+      "A new or changed host key opens a dialog with the previous and new fingerprints. Agents continue only after you confirm."
+    ],
+    [
+      "Stale known_hosts entries",
+      "An old key in ~/.ssh/known_hosts no longer blocks a server whose current key you trusted in PromeFTP."
+    ],
+    [
+      "Next steps in errors",
+      "Failed agent requests list what to do next, and prompts say why they were not answered automatically."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
