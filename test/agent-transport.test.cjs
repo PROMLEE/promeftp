@@ -427,6 +427,15 @@ test('the grant mode is validated: a missing mode is off, and an unknown mode is
   assert.throws(() => s.transport.validateGrant({ hostKeyTrust: 'yes' }, pOld), { message: 'INVALID_REQUEST' });
 });
 
+test('T6: commandAutoApprove is kept only with commandApproval on; otherwise it is stored as false', async () => {
+  const s = await open({});
+  const grantOf = value => s.transport.validateGrant({ sftp: true, root: '/', ...value }, pOld);
+  assert.equal(grantOf({ commandApproval: false, commandAutoApprove: true }).commandAutoApprove, false);
+  assert.equal(grantOf({ commandApproval: true, commandAutoApprove: true }).commandAutoApprove, true);
+  assert.equal(grantOf({ commandApproval: true }).commandAutoApprove, false);
+  assert.equal(grantOf({ commandApproval: true, commandAutoApprove: 'yes' }).commandAutoApprove, false);
+});
+
 test('classifyHostKey: a file that cannot be read is a change with no previous key, never a new key', () => {
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', unreadable: true }),
     { kind: 'changed', source: 'user_known_hosts' });

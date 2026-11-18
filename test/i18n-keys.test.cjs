@@ -44,3 +44,22 @@ test('every key used in code has ko, ja and zh translations', () => {
   }
   assert.deepEqual(missing, [], `missing translations:\n${missing.join('\n')}`);
 });
+
+// Messages picked from a table in the code, such as agentCodeMessages, are looked up by t(table[code]) rather than t('…'),
+// so the scan above does not see them. Each value must still have a translation row.
+test('T11: every message in the agent code-message table has ko, ja and zh translations', () => {
+  const agent = fs.readFileSync(path.join(root, 'agent-preferences.js'), 'utf8');
+  const block = agent.slice(agent.indexOf('const agentCodeMessages = {'), agent.indexOf('};', agent.indexOf('const agentCodeMessages = {')));
+  const messages = [...block.matchAll(/^\s+[A-Z_]+: '((?:[^'\\\n]|\\.)+)',$/gm)].map(match => match[1]);
+  assert.ok(messages.length >= 8, `only ${messages.length} agent messages found`);
+  const missing = [];
+  for (const key of messages) {
+    const fields = rowByKey.get(key);
+    if (!fields) { missing.push(`${key} (no row)`); continue; }
+    for (const [language, column] of languages) {
+      const index = { ko: 1, ja: 2, zh: 3 }[column];
+      if (!fields[index]?.trim()) missing.push(`${language}: ${key}`);
+    }
+  }
+  assert.deepEqual(missing, [], `missing translations:\n${missing.join('\n')}`);
+});

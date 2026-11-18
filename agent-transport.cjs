@@ -179,8 +179,11 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
     if (value.sftp === false && !task && value.commandApproval !== true) throw problem('INVALID_REQUEST');
     const hostKeyTrust = value.hostKeyTrust ?? 'off';
     if (!['off', 'new', 'changed'].includes(hostKeyTrust)) throw problem('INVALID_REQUEST');
+    // Running without asking needs command approval on. Without it the flag is stored as false.
+    const commandAutoApprove = value.commandApproval === true && value.commandAutoApprove === true;
     return { sftp: value.sftp !== false, download: value.sftp !== false && value.download === true, savedAuth: value.savedAuth === true,
-      commandApproval: value.commandApproval === true, pam: selected('pam'), triggers: selected('triggers'), hostKeyTrust, ...(task && { task }) };
+      commandApproval: value.commandApproval === true, commandAutoApprove, pam: selected('pam'), triggers: selected('triggers'),
+      hostKeyTrust, ...(task && { task }) };
   }
 
   async function resolve(input, legacy = false) {

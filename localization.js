@@ -65,22 +65,18 @@ Read-only: browse the root|읽기 전용: 루트 둘러보기|読み取り専用
 Browse and download|둘러보기와 다운로드|閲覧とダウンロード|浏览和下载
 Browse, download, and approved commands|둘러보기, 다운로드, 승인된 명령|閲覧、ダウンロード、承認済みコマンド|浏览、下载和已批准的命令
 Maximum allowed (review first)|최대 허용 (먼저 검토)|最大許可（先に確認）|最大允许（请先检查）
-Apply to all eligible bookmarks|적격한 모든 북마크에 적용|対象となるすべてのブックマークに適用|应用到所有符合条件的书签
+Apply to All Eligible Bookmarks|사용 가능한 모든 북마크에 적용|対象となるすべてのブックマークに適用|应用到所有符合条件的书签
 Give this client every permission?|이 클라이언트에 모든 권한을 줄까요?|このクライアントにすべての権限を与えますか？|要授予此客户端所有权限吗？
-This client gets browsing, downloads, approved commands, saved authentication and every rule and trigger, for|이 클라이언트는 둘러보기, 다운로드, 승인된 명령, 저장된 인증, 모든 규칙과 트리거를 다음 북마크에 대해 받습니다:|このクライアントは、閲覧、ダウンロード、承認済みコマンド、保存済み認証、すべてのルールとトリガーを次のブックマークに対して得ます：|此客户端将获得以下书签的浏览、下载、已批准命令、已保存认证以及所有规则和触发器：
 bookmark(s).|개의 북마크.|件のブックマーク。|个书签。
 bookmark(s)|북마크|ブックマーク|书签
 Skipped|건너뜀|スキップ|已跳过
 I understand the risks|위험을 이해했습니다|リスクを理解しました|我已了解风险
 Commands still need approval each time. SFTP writes and commands without approval are not available through this API.|명령은 매번 승인이 필요합니다. SFTP 쓰기와 승인 없는 명령은 이 API로 열 수 없습니다.|コマンドは毎回承認が必要です。SFTP の書き込みと承認なしのコマンドはこの API では利用できません。|命令每次仍需审批。此 API 不提供 SFTP 写入和无需审批的命令。
-Local agent access is off.|로컬 에이전트 접근이 꺼져 있습니다.|ローカルのエージェントアクセスはオフです。|本地代理访问已关闭。
 Turn On|켜기|オンにする|开启
 Register an agent client first.|먼저 에이전트 클라이언트를 등록하세요.|まずエージェントクライアントを登録してください。|请先注册代理客户端。
 Register Client|클라이언트 등록|クライアントを登録|注册客户端
 Choose the client that will receive this access.|이 권한을 받을 클라이언트를 선택하세요.|このアクセス権を受け取るクライアントを選んでください。|请选择要接收此访问权限的客户端。
 Choose Client|클라이언트 선택|クライアントを選択|选择客户端
-Choose a bookmark.|북마크를 선택하세요.|ブックマークを選んでください。|请选择书签。
-Choose Bookmark|북마크 선택|ブックマークを選択|选择书签
 This server's host key is not trusted yet. Connect to it once in PromeFTP to trust it.|이 서버의 호스트 키를 아직 신뢰하지 않았습니다. PromeFTP에서 한 번 연결해 신뢰하세요.|このサーバーのホストキーはまだ信頼されていません。PromeFTPで一度接続して信頼してください。|此服务器的主机密钥尚未受信任。请先在 PromeFTP 中连接一次以信任它。
 Show log|로그 보기|ログを表示|显示日志
 No log is kept for this session.|이 세션의 로그는 보관되지 않았습니다.|このセッションのログは保存されていません。|此会话未保留日志。
@@ -201,7 +197,6 @@ Agent token|에이전트 토큰|エージェントトークン|智能体令牌
 Copy Token|토큰 복사|トークンをコピー|复制令牌
 Token copied to clipboard.|토큰을 클립보드에 복사했습니다.|トークンをクリップボードにコピーしました。|令牌已复制到剪贴板。
 Token hidden. Revoke and register a new client if you need another token.|토큰 창을 닫았습니다. 새 토큰이 필요하면 클라이언트를 해지한 뒤 다시 등록하세요.|トークンウィンドウを閉じました。新しいトークンが必要な場合はクライアントを無効化して再登録してください。|令牌窗口已关闭。如需新令牌，请撤销客户端并重新注册。
-Agent service is offline.|에이전트 서비스가 오프라인입니다.|エージェントサービスはオフラインです。|智能体服务已离线。
 Skill installed. Reload skills or start a new agent session.|스킬을 설치했습니다. 에이전트에서 스킬을 새로 고치거나 새 세션을 시작하세요.|スキルをインストールしました。エージェントのスキルを再読み込みするか、新しいセッションを開始してください。|技能已安装。请重新加载智能体技能或开始新的智能体会话。
 The installed app provides the CLI.|설치된 앱에 CLI가 포함되어 있습니다.|インストール済みアプリに CLI が含まれています。|已安装的应用包含 CLI。
 Save access again after a bookmark change.|북마크를 변경한 뒤 접근 권한을 다시 저장하세요.|ブックマークを変更した後、アクセス権を再度保存してください。|书签更改后请重新保存访问权限。
@@ -256,7 +251,6 @@ Retention (days)|보관 기간(일)|保持期間（日）|保留天数
 Save Retention|보관 기간 저장|保持期間を保存|保存保留期限
 Register a client to create an agent token.|에이전트 토큰을 만들려면 클라이언트를 등록하세요.|エージェントトークンを作成するにはクライアントを登録してください。|注册客户端以创建智能体令牌。
 Choose client|클라이언트 선택|クライアントを選択|选择客户端
-Choose bookmark|북마크 선택|ブックマークを選択|选择书签
 All|전체|すべて|全部
 Detected|감지됨|検出済み|已检测
 Automatic updates|자동 업데이트|自動更新|自动更新
@@ -656,6 +650,20 @@ New bookmark created|새 북마크를 만들었습니다|新しいブックマ�
 Paste into terminal|터미널에 붙여넣기|ターミナルに貼り付け|粘贴到终端
 Reconnect the SFTP session before comparing.|비교하기 전에 SFTP를 다시 연결하세요.|比較する前に SFTP に再接続してください。|比较前请重新连接 SFTP。
 Remote to Local|원격 → 로컬|リモートからローカルへ|远程到本地
+Agent service could not start.|에이전트 서비스를 시작하지 못했습니다.|エージェントサービスを開始できませんでした。|无法启动智能体服务。
+Another PromeFTP is still using the agent socket.|다른 PromeFTP가 아직 에이전트 소켓을 사용 중입니다.|別の PromeFTP がまだエージェントのソケットを使用しています。|另一个 PromeFTP 仍在使用智能体套接字。
+Try Again|다시 시도|再試行|重试
+Run commands without asking|명령을 묻지 않고 실행|確認なしでコマンドを実行|无需询问即可运行命令
+Commands the agent sends run immediately without a confirmation window. Every command is still recorded in Activity.|에이전트가 보낸 명령이 확인 창 없이 바로 실행됩니다. 모든 명령은 활동 기록에 남습니다.|エージェントが送信したコマンドは、確認ウィンドウなしですぐに実行されます。すべてのコマンドはアクティビティに記録されます。|智能体发送的命令将立即运行，不再显示确认窗口。所有命令仍会记录在活动中。
+Saved authentication is turned off in Authentication settings, so the agent will ask you for answers.|인증 설정에서 저장된 인증 사용이 꺼져 있어 에이전트가 응답을 물어봅니다.|認証設定で保存済みの認証がオフになっているため、エージェントが応答を尋ねます。|“身份验证”设置中已关闭已保存的身份验证，因此智能体会向您询问应答。
+Open Authentication Settings|인증 설정 열기|認証設定を開く|打开身份验证设置
+Access allowed|허용됨|許可済み|已允许
+Save again|다시 저장 필요|再保存が必要|需要重新保存
+Renew Access for Changed Bookmarks|변경된 북마크 권한 다시 저장|変更されたブックマークのアクセス権を再保存|为已更改的书签重新保存访问权限
+Turn on local agent access to change these settings.|이 설정을 바꾸려면 로컬 에이전트 접속을 켜세요.|これらの設定を変更するには、ローカルのエージェントアクセスをオンにしてください。|如需更改这些设置，请先开启本地智能体访问。
+This client gets browsing, downloads, commands that run without asking, automatic trust of new host keys, saved authentication and every rule and trigger, for|이 클라이언트는 탐색, 다운로드, 묻지 않는 명령 실행, 새 호스트 키 자동 신뢰, 저장된 인증, 모든 규칙과 트리거를 다음 북마크에 대해 받습니다:|このクライアントは、閲覧、ダウンロード、確認なしで実行されるコマンド、新しいホストキーの自動信頼、保存済み認証、すべてのルールとトリガーを次のブックマークに対して得ます：|此客户端将获得以下书签的浏览、下载、无需询问即可运行的命令、新主机密钥的自动信任、已保存认证以及所有规则和触发器：
+Choose a bookmark.|북마크를 선택하세요.|ブックマークを選んでください。|请选择书签。
+Add an SSH bookmark first.|먼저 SSH 북마크를 추가하세요.|先に SSH ブックマークを追加してください。|请先添加 SSH 书签。
 `.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];

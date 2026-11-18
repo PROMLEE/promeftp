@@ -8,13 +8,17 @@ const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
 const { createHash, randomBytes } = require('node:crypto');
-const { createAgentService, protocol } = require('../agent-service.cjs');
+const { createAgentService, protocol, historyOf } = require('../agent-service.cjs');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const p1 = { id: 'p1', label: 'Test', host: 'example.invalid', username: 'alice', port: null, keyPath: '', configPath: '' };
 const token = randomBytes(32).toString('base64url');
-const grant = () => ({ sftp: true, root: '/', download: true, commandApproval: false, savedAuth: false, pam: [], triggers: [],
-  route: 'route', fingerprint: hash(JSON.stringify(p1)) });
+// A grant as an older app version saved it: the fingerprint is the whole bookmark, so the service migrates it at start.
+const grant = (p = p1) => ({ sftp: true, root: '/', download: true, commandApproval: false, savedAuth: false, pam: [], triggers: [],
+  route: 'route', fingerprint: hash(JSON.stringify(p)) });
+// The fingerprint the service writes now: connection fields only, in this order.
+const stampOf = p => hash(JSON.stringify({ host: p.host, hostname: p.hostname || '', port: p.port ?? null, username: p.username || '',
+  keyPath: p.keyPath || '', configPath: p.configPath || '', usesAlias: p.usesAlias === true, pam: p.pam === true }));
 const file = { isSymbolicLink: () => false, isDirectory: () => false, isFile: () => true, size: 10, mtime: new Date(0) };
 
 let root;
@@ -45,12 +49,14 @@ function request(dir, body) {
 
 let counter = 0;
 // Starts a service with mock timers enabled first, so its interval and the socket timers are controlled by the test.
-async function start(t) {
+// profiles and permission(profile) default to the test bookmark with its older-style grant.
+async function start(t, { profiles = [p1], permission = p => grant(p) } = {}) {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'] });
   const dir = path.join(root, `case-${++counter}`);
   await fs.mkdir(dir, { mode: 0o700 });
-  const st = { agent: { enabled: true, clients: [{ id: 'c1', name: 'test', digest: hash(token), grants: { p1: grant() } }] } };
-  const fake = { notify: null, connection: null, answers: [], downloads: 0 };
+  const st = { agent: { enabled: true, clients: [{ id: 'c1', name: 'test', digest: hash(token),
+    grants: Object.fromEntries(profiles.map(p => [p.id, permission(p)])) }] } };
+  const fake = { notify: null, connection: null, answers: [], downloads: 0, approvals: [], approved: true, runs: 0 };
   const transport = {
     eligible: () => true,
     nextFor: () => [{ action: 'ask_user', message: 'Check PromeFTP.' }],
@@ -61,14 +67,19 @@ async function start(t) {
     },
     // Never resolves, so a request holds the active slot until the 30 second limit.
     download() { fake.downloads++; return new Promise(() => {}); },
+    command: value => value,
+    approve: async (...args) => { fake.approvals.push(args); return fake.approved; },
+    run: async () => { fake.runs++; return { exitCode: 0, truncated: false }; },
   };
   const sftpCall = async (channel, op, arg) => {
     if (op === 'realpath') return arg;
     if (op === 'lstat') return file;
     throw Object.assign(new Error('no such file'), { code: 2 });
   };
-  const service = await createAgentService({ directory: dir, state: () => st, save: async () => {}, profiles: () => [p1],
-    transport, sftpCall, busy: () => {}, socketDir: dir });
+  // Applies each change to the in-memory settings, as the app's save does before the service reads them again.
+  const saves = { count: 0 };
+  const service = await createAgentService({ directory: dir, state: () => st, save: async change => { saves.count++; change(st.agent); },
+    profiles: () => profiles, transport, sftpCall, busy: () => {}, socketDir: dir });
   await service.listen();
   t.after(() => service.stop());
   const call = body => request(dir, body);
@@ -80,7 +91,24 @@ async function start(t) {
   }
   const status = session => call({ method: 'session.status', params: { session } });
   const wait = (session, timeout) => call({ method: 'session.wait', params: timeout === undefined ? { session } : { session, timeout } });
-  return { service, fake, st, dir, call, open, status, wait };
+  return { service, fake, st, dir, call, open, status, wait, saves };
+}
+// A service whose socket path is already taken: by another live listener, or by a file that is not a socket.
+// Nothing listens on it through the service, so the test decides when it is released.
+async function occupiedService(t, { plainFile = false } = {}) {
+  const dir = path.join(root, `occupied-${++counter}`);
+  await fs.mkdir(dir, { mode: 0o700 });
+  let blocker;
+  if (plainFile) await fs.writeFile(path.join(dir, 'api.sock'), '');
+  else {
+    blocker = net.createServer();
+    await new Promise(resolve => blocker.listen(path.join(dir, 'api.sock'), resolve));
+  }
+  const st = { agent: { enabled: true, clients: [] } };
+  const service = await createAgentService({ directory: dir, state: () => st, save: async change => change(st.agent), profiles: () => [p1],
+    transport: { eligible: () => true, nextFor: () => [] }, sftpCall: async () => file, busy: () => {}, socketDir: dir });
+  t.after(() => { service.stop(); if (blocker?.listening) blocker.close(); });
+  return { service, st, blocker };
 }
 
 test('a new session is connecting, its status carries a wait step, and it expires 120 seconds after open', async t => {
@@ -330,4 +358,129 @@ test('the wait call does not hold the active request slot: a request during a wa
   await pending;
   const res = await ctx.call({ method: 'session.status', params: { session } });
   assert.equal(res.data.status, 'ready');
+});
+
+// Opens an SSH session (mode ssh), which needs command approval or a task in the grant, and makes it ready.
+async function openSsh(ctx) {
+  const res = await ctx.call({ method: 'session.open', params: { profile: 'p1', mode: 'ssh' } });
+  await until(() => ctx.fake.notify);
+  ctx.fake.notify('ready', { endpoint: '' });
+  return res.data.session;
+}
+
+test('T1: a label or folder change keeps the grant: not stale, still in profiles.list, and a session still opens', async t => {
+  const bookmark = { ...p1, group: '' };
+  const ctx = await start(t, { profiles: [bookmark] });
+  bookmark.label = 'Renamed';
+  bookmark.group = 'Production';
+  assert.equal(ctx.service.info().clients[0].grants.p1.stale, false);
+  assert.deepEqual((await ctx.call({ method: 'profiles.list' })).data.map(p => p.id), ['p1']);
+  const opened = await ctx.call({ method: 'session.open', params: { profile: 'p1', mode: 'sftp' } });
+  assert.equal(opened.error, undefined);
+  assert.equal(opened.data.status, 'connecting');
+});
+
+test('T2: a grant saved with the old whole-bookmark fingerprint is moved to the new one once, at startup', async t => {
+  const ctx = await start(t);
+  assert.equal(ctx.st.agent.clients[0].grants.p1.fingerprint, stampOf(p1));
+  assert.equal(ctx.service.info().clients[0].grants.p1.stale, false);
+  assert.equal(ctx.saves.count, 1);
+});
+
+test('T2b: a grant that matches neither fingerprint stays stale, and startup saves nothing', async t => {
+  const older = hash('an older bookmark');
+  const ctx = await start(t, { permission: p => ({ ...grant(p), fingerprint: older }) });
+  assert.equal(ctx.st.agent.clients[0].grants.p1.fingerprint, older);
+  assert.equal(ctx.service.info().clients[0].grants.p1.stale, true);
+  assert.equal(ctx.saves.count, 0);
+});
+
+test('T3: with commandAutoApprove, ssh.command runs without asking and the activity records AUTO_APPROVED', async t => {
+  const ctx = await start(t, { permission: p => ({ ...grant(p), commandApproval: true, commandAutoApprove: true }) });
+  const session = await openSsh(ctx);
+  const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.deepEqual(res.data, { exitCode: 0, truncated: false });
+  assert.equal(ctx.fake.approvals.length, 0);
+  assert.equal(ctx.fake.runs, 1);
+  const rows = ctx.service.history({ session, operation: 'ssh.approval' });
+  assert.equal(rows.length, 1);
+  assert.deepEqual([rows[0].result, rows[0].reason], ['allowed', 'AUTO_APPROVED']);
+  // The command row records the command as auto-approved, not as user-approved.
+  // Two rows per command: the start (allowed) and the finish (success). The finish row carries the final detail.
+  const commandRows = ctx.service.history({ session, operation: 'ssh.command' });
+  const finished = commandRows.at(-1);
+  assert.equal(finished.result, 'success');
+  assert.equal(JSON.parse(finished.detail).target, 'auto-approved command');
+});
+
+test('historyOf: with no service (startup failed) the history is empty; with a service it is that service history', async t => {
+  assert.deepEqual(historyOf(undefined, { session: 'x' }), []);
+  const ctx = await start(t);
+  const seen = [];
+  const rows = historyOf({ history: filter => { seen.push(filter); return ['row']; } }, { client: 'c1' });
+  assert.deepEqual(rows, ['row']);
+  assert.deepEqual(seen, [{ client: 'c1' }]);
+  assert.ok(Array.isArray(ctx.service.history({})));
+});
+
+test('T4: enabled stays the saved setting, and a socket held by another listener is the offline reason SOCKET_IN_USE', async t => {
+  const { service } = await occupiedService(t);
+  await assert.rejects(service.listen(), { agentCode: 'SOCKET_IN_USE' });
+  const info = service.info();
+  assert.equal(info.enabled, true);
+  assert.equal(info.online, false);
+  assert.equal(info.offlineReason, 'SOCKET_IN_USE');
+});
+
+test('T4b: a socket path that is not a socket gives the offline reason UNSAFE_SOCKET', async t => {
+  const { service } = await occupiedService(t, { plainFile: true });
+  await assert.rejects(service.listen(), { agentCode: 'UNSAFE_SOCKET' });
+  assert.equal(service.info().offlineReason, 'UNSAFE_SOCKET');
+});
+
+test('T5: a change of host or port makes the grant stale, and the bookmark leaves profiles.list', async t => {
+  const bookmark = { ...p1 };
+  const ctx = await start(t, { profiles: [bookmark] });
+  bookmark.host = 'other.invalid';
+  assert.equal(ctx.service.info().clients[0].grants.p1.stale, true);
+  assert.deepEqual((await ctx.call({ method: 'profiles.list' })).data, []);
+  bookmark.host = p1.host;
+  bookmark.port = 2222;
+  assert.equal(ctx.service.info().clients[0].grants.p1.stale, true);
+});
+
+test('T7: when no grant needs migrating, startup does not save', async t => {
+  const ctx = await start(t, { permission: p => ({ ...grant(p), fingerprint: stampOf(p) }) });
+  assert.equal(ctx.saves.count, 0);
+  assert.equal(ctx.service.info().clients[0].grants.p1.stale, false);
+});
+
+test('T8: without commandAutoApprove the approval window decides, and a refusal is USER_DENIED', async t => {
+  const ctx = await start(t, { permission: p => ({ ...grant(p), commandApproval: true, commandAutoApprove: false }) });
+  const session = await openSsh(ctx);
+  ctx.fake.approved = false;
+  const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.equal(res.error, 'USER_DENIED');
+  assert.equal(ctx.fake.approvals.length, 1);
+  assert.equal(ctx.fake.runs, 0);
+});
+
+test('T9: once the socket is released, enable(true) (Try Again) brings the service online with no offline reason', async t => {
+  const { service, blocker } = await occupiedService(t);
+  await assert.rejects(service.listen(), { agentCode: 'SOCKET_IN_USE' });
+  await new Promise(resolve => blocker.close(resolve));
+  await service.enable(true);
+  const info = service.info();
+  assert.equal(info.online, true);
+  assert.equal(info.offlineReason, '');
+});
+
+test('T10: a grant saved before commandAutoApprove existed still asks for approval', async t => {
+  const ctx = await start(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.equal(res.error, undefined);
+  assert.equal(ctx.fake.approvals.length, 1);
+  assert.deepEqual(ctx.service.history({ session, operation: 'ssh.approval' }).map(row => [row.result, row.reason]),
+    [['waiting_for_user', null], ['allowed', null]]);
 });

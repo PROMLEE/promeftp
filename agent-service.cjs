@@ -29,6 +29,12 @@ const endNext = {
 };
 const fallbackNext = [{ action: 'ask_user', message: 'Ask the user to check PromeFTP, then open a new session.' }];
 const hash = value => createHash('sha256').update(value).digest('hex');
+// The grant fingerprint covers only what decides where a connection goes and how it logs in. A label or folder change
+// keeps the grant. legacyStamp is the old whole-bookmark fingerprint, kept only to migrate grants made before this.
+const stampFields = p => ({ host: p.host, hostname: p.hostname || '', port: p.port ?? null, username: p.username || '',
+  keyPath: p.keyPath || '', configPath: p.configPath || '', usesAlias: p.usesAlias === true, pam: p.pam === true });
+const stamp = p => hash(JSON.stringify(stampFields(p)));
+const legacyStamp = p => hash(JSON.stringify(p));
 const clean = value => String(value ?? '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 512);
 const problem = (code, reason) => Object.assign(Error(code), { agentCode: code, ...(reason && { agentReason: reason }) });
 function socketDirectory(uid = process.getuid()) { return '/tmp/promeftp-agent-' + uid; }
@@ -43,11 +49,12 @@ async function createAgentService({ directory, state, save, profiles, transport,
   const diagnostics = new Map();
   let server, starting, stopping, db;
   let storageFailed = false;
+  // The code of the last failed listen(), shown as the reason the service is offline. Empty after a successful listen.
+  let lastListenError = '';
   const day = 86400000;
   const settings = () => state().agent || {};
   const scopeFor = (client, id) => settings().clients?.find(item => item.id === client)?.grants?.[id];
   const profileFor = id => profiles().find(p => p.id === id);
-  const stamp = p => hash(JSON.stringify(p));
   const base = (session, operation, result, reason, detail, request = session.request) => ({
     request, client: session.client, profile: session.profile, session: session.id,
     operation, result, reason, detail,
@@ -387,22 +394,29 @@ async function createAgentService({ directory, state, save, profiles, transport,
               if (s.mode !== 'ssh') throw problem('ACCESS_DENIED');
               if (arbitrary ? !grant.commandApproval : !grant.task || params.task !== grant.task.name) throw problem('ACCESS_DENIED');
               const command = arbitrary ? transport.command(params.command) : grant.task.command;
-              event.detail = arbitrary ? 'user-approved command' : grant.task.name;
+              // An auto-approved command is recorded as such. Its approval id stays in the ssh.approval row.
+              const autoApproved = arbitrary && grant.commandAutoApprove === true;
+              event.detail = arbitrary ? (autoApproved ? 'auto-approved command' : 'user-approved command') : grant.task.name;
               work = async () => {
                 let approval;
                 if (arbitrary) {
                   approval = randomUUID();
-                  audit(base(s, 'ssh.approval', 'waiting_for_user', null, approval, request));
-                  const approved = await transport.approve(s, command, profileFor(s.profile), client.name);
-                  current(s);
-                  audit(base(s, 'ssh.approval', approved ? 'allowed' : 'denied', null, approval, request));
-                  if (!approved) throw problem('USER_DENIED');
+                  if (autoApproved) {
+                    // The user chose to run commands without asking. The command is still recorded.
+                    audit(base(s, 'ssh.approval', 'allowed', 'AUTO_APPROVED', approval, request));
+                  } else {
+                    audit(base(s, 'ssh.approval', 'waiting_for_user', null, approval, request));
+                    const approved = await transport.approve(s, command, profileFor(s.profile), client.name);
+                    current(s);
+                    audit(base(s, 'ssh.approval', approved ? 'allowed' : 'denied', null, approval, request));
+                    if (!approved) throw problem('USER_DENIED');
+                  }
                 }
                 const result = await transport.run(s, command, (kind, detail) => {
                   try { audit(base(s, kind, 'success', null, clean(detail), request)); }
                   catch { close(s); }
                 });
-                if (approval) event.detail = JSON.stringify({ approval });
+                if (approval && !autoApproved) event.detail = JSON.stringify({ approval });
                 return result;
               };
             } else {
@@ -521,7 +535,13 @@ async function createAgentService({ directory, state, save, profiles, transport,
       listener.on('error', () => { storageFailed = true; for (const s of sessions.values()) close(s); });
       server = listener;
     })();
-    try { await starting; } finally { starting = undefined; }
+    try {
+      await starting;
+      lastListenError = '';
+    } catch (error) {
+      lastListenError = error.agentCode || 'STARTUP_FAILED';
+      throw error;
+    } finally { starting = undefined; }
   }
   function stop() {
     if (server) {
@@ -542,11 +562,32 @@ async function createAgentService({ directory, state, save, profiles, transport,
     const order = typeof filter.session === 'string' && filter.session ? 'ASC' : 'DESC';
     return db.prepare(`SELECT ${fields} FROM events WHERE ${conditions.join(' AND ')} ORDER BY id ${order} LIMIT ?`).all(...args, maximum);
   }
+  // Runs once at startup. A grant that matches the old whole-bookmark fingerprint is moved to the new one. A grant that
+  // is already stale under both fingerprints stays stale, so the user saves it again. Saved only when something changed.
+  const migrations = [];
+  for (const client of settings().clients || []) {
+    for (const [id, grant] of Object.entries(client.grants || {})) {
+      const p = profileFor(id);
+      if (p && grant.fingerprint === legacyStamp(p) && grant.fingerprint !== stamp(p)) migrations.push([client.id, id, stamp(p)]);
+    }
+  }
+  if (migrations.length) {
+    await save(g => {
+      for (const [client, id, fingerprint] of migrations) {
+        const grant = g.clients?.find(c => c.id === client)?.grants?.[id];
+        if (grant) grant.fingerprint = fingerprint;
+      }
+    });
+  }
   return {
     listen, stop, reconcile, history, audit,
     verify() { if (storageFailed) throw problem('AUDIT_UNAVAILABLE'); },
     info() {
-      return { enabled: settings().enabled === true, online: Boolean(server) && !storageFailed, days: settings().days || 30,
+      const enabled = settings().enabled === true;
+      const online = Boolean(server) && !storageFailed;
+      // enabled is the saved setting. A failed start shows here as the reason the service is offline.
+      const offlineReason = online || !enabled ? '' : storageFailed ? 'AUDIT_UNAVAILABLE' : lastListenError || 'STARTUP_FAILED';
+      return { enabled, online, offlineReason, days: settings().days || 30,
         clients: (settings().clients || []).map(({ id, name, grants }) => ({
           id, name, grants: Object.fromEntries(Object.entries(grants || {}).map(([id, { fingerprint, task, ...g }]) =>
             [id, { ...g, task, stale: !profileFor(id) || fingerprint !== stamp(profileFor(id)) }])),
@@ -648,4 +689,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
   };
 }
 
-module.exports = { createAgentService, socketDirectory, protocol, problem };
+// History for the preferences window. Without a service (startup failed) there is nothing to read, so it is empty.
+function historyOf(service, filter) { return service ? service.history(filter) : []; }
+
+module.exports = { createAgentService, socketDirectory, protocol, problem, historyOf };

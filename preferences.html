@@ -86,9 +86,11 @@
     <section id="settings-agent" role="tabpanel" aria-labelledby="settings-tab-agent" data-settings-panel="agent" hidden>
       <div class="agent-section">
         <label class="settings-check" data-tip="Lets AI agents on this Mac connect through the PromeFTP CLI."><input id="agent-enabled" type="checkbox">Enable local agent access</label>
+        <p id="agent-offline" class="agent-blocker" role="status" hidden><span id="agent-offline-text"></span><button id="agent-offline-retry" type="button">Try Again</button></p>
         <p class="settings-note" id="agent-cli-path"></p>
         <p id="agent-message" class="settings-note" role="status"></p>
       </div>
+      <div id="agent-dependent">
       <section id="agent-prompts-section" class="agent-section agent-requests" hidden>
         <h3 data-tip="Shows a question from a server that an agent session is waiting for you to answer. This section appears only when a request is waiting.">Authentication requests</h3>
         <div id="agent-prompts"></div>
@@ -101,13 +103,14 @@
       </section>
       <section class="agent-section">
         <h3>Bookmark access</h3>
-        <select id="agent-profile" aria-label="Bookmark" data-tip="Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump. ProxyCommand may start a local process."></select>
+        <select id="agent-profile" size="6" aria-label="Bookmark" data-tip="Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump. ProxyCommand may start a local process."></select>
+        <div class="agent-controls"><button id="agent-renew-stale" type="button" hidden>Renew Access for Changed Bookmarks</button></div>
         <p class="settings-note" id="agent-profile-summary">Uses this bookmark's SSH settings.</p>
         <p class="settings-note" id="agent-endpoint"></p>
         <p id="agent-grant-blocker" class="agent-blocker" role="status" hidden><span id="agent-grant-blocker-text"></span> <button id="agent-grant-blocker-action" type="button" hidden></button></p>
         <div class="agent-controls agent-preset-row">
           <label>Permission preset<select id="agent-preset"><option value="">Choose a preset</option><option value="read">Read-only: browse the root</option><option value="browse">Browse and download</option><option value="commands">Browse, download, and approved commands</option><option value="maximum">Maximum allowed (review first)</option></select></label>
-          <button id="agent-preset-all" type="button" hidden>Apply to all eligible bookmarks</button>
+          <button id="agent-preset-all" type="button" hidden>Apply to All Eligible Bookmarks</button>
         </div>
         <fieldset id="agent-grant-fields" class="agent-groups">
           <fieldset class="agent-group">
@@ -122,6 +125,8 @@
           <fieldset class="agent-group">
             <legend>SSH commands</legend>
             <label class="settings-check"><input id="agent-approve-commands" type="checkbox" data-tip="Each command the agent requests runs only after you approve it in a confirmation window.">Allow SSH commands with approval</label>
+            <label class="settings-check"><input id="agent-auto-approve" type="checkbox">Run commands without asking</label>
+            <p id="agent-auto-approve-warning" class="settings-note error" role="note" hidden>Commands the agent sends run immediately without a confirmation window. Every command is still recorded in Activity.</p>
             <label>Optional task name<input id="agent-task" placeholder="service-status" maxlength="64" data-tip="One command that can run without approval, identified by a name the agent uses." aria-describedby="agent-task-error"></label>
             <p class="field-error" id="agent-task-error" role="alert" hidden></p>
             <label>Fixed SSH command<input id="agent-task-command" maxlength="1024" aria-describedby="agent-task-command-error"></label>
@@ -130,6 +135,7 @@
           <fieldset class="agent-group">
             <legend>Authentication and triggers</legend>
             <label class="settings-check"><input id="agent-saved-auth" type="checkbox" data-tip="Uses the saved PAM responses for this host and all-host PAM rules when the agent connects. The PAM rules list is ignored while this is on.">Use saved authentication</label>
+            <p id="agent-saved-auth-note" class="agent-blocker" hidden><span>Saved authentication is turned off in Authentication settings, so the agent will ask you for answers.</span><button id="agent-open-auth" type="button">Open Authentication Settings</button></p>
             <label>Trust host keys automatically<select id="agent-host-key-trust"><option value="off">Off (ask me)</option><option value="new">New keys only</option><option value="changed">New and changed keys</option></select></label>
             <p id="agent-host-key-trust-warning" class="settings-note error" role="note" hidden></p>
             <label data-tip="Choose the host-wide PAM rules the agent connection may use. Ignored while saved authentication is on.">PAM rules<select id="agent-pam" multiple size="2"></select></label>
@@ -162,6 +168,7 @@
         <div class="agent-controls"><button id="agent-install" type="button">Install or Update</button><button id="agent-remove-skill" type="button">Remove Skill</button></div>
         <ul id="agent-installed-skills"></ul>
       </section>
+      </div>
       <section class="agent-section">
         <h3>Activity history</h3>
         <p class="settings-note" id="agent-history-count" aria-live="polite"></p>

@@ -58,10 +58,12 @@ function selectedProfile() {
 }
 // The first thing that blocks the grant form, in order. Only blockers that stop editing disable the fields.
 function grantBlocker(client, p) {
-  if (!agentChecked('enabled')) return { text: 'Local agent access is off.', action: 'Turn On', run: () => { agentElement('enabled').checked = true; agentElement('enabled').dispatchEvent(new Event('change')); }, stops: true };
+  // With local agent access off, the sections below the master switch are dimmed and inert. No message is needed here.
+  if (!agentChecked('enabled')) return null;
   if (!agentInfo?.clients.length) return { text: 'Register an agent client first.', action: 'Register Client', run: () => agentElement('client-name').focus(), stops: true };
   if (!client) return { text: 'Choose the client that will receive this access.', action: 'Choose Client', run: () => agentElement('client').focus(), stops: true };
-  if (!p) return { text: 'Choose a bookmark.', action: 'Choose Bookmark', run: () => agentElement('profile').focus(), stops: true };
+  if (!agentInfo.profiles.length) return { text: 'Add an SSH bookmark first.', stops: true };
+  if (!p) return { text: 'Choose a bookmark.', stops: true };
   if (!p.eligible) return { text: p.reason || 'Use a valid SSH host name or alias.', stops: true };
   if (p.trusted === false) return { text: "This server's host key is not trusted yet. Connect to it once in PromeFTP to trust it.", stops: false };
   return null;
@@ -122,10 +124,10 @@ function autoTrustDetail(event) {
 }
 // Presets only fill the form. Nothing is saved until the user saves it.
 const agentPresets = {
-  read: { sftp: true, root: '/', download: false, commandApproval: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
-  browse: { sftp: true, root: '/', download: true, commandApproval: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
-  commands: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
-  maximum: { sftp: true, root: '/', download: true, commandApproval: true, savedAuth: true, pam: true, triggers: true, hostKeyTrust: 'off' },
+  read: { sftp: true, root: '/', download: false, commandApproval: false, commandAutoApprove: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
+  browse: { sftp: true, root: '/', download: true, commandApproval: false, commandAutoApprove: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
+  commands: { sftp: true, root: '/', download: true, commandApproval: true, commandAutoApprove: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
+  maximum: { sftp: true, root: '/', download: true, commandApproval: true, commandAutoApprove: true, savedAuth: true, pam: true, triggers: true, hostKeyTrust: 'new' },
 };
 function applyAgentPreset(name) {
   const preset = agentPresets[name];
@@ -134,12 +136,27 @@ function applyAgentPreset(name) {
   agentElement('root').value = preset.root;
   agentElement('download').checked = preset.download;
   agentElement('approve-commands').checked = preset.commandApproval;
+  agentElement('auto-approve').checked = preset.commandAutoApprove;
   agentElement('saved-auth').checked = preset.savedAuth;
   setHostKeyTrust(preset.hostKeyTrust);
   for (const field of ['pam', 'triggers']) {
     for (const option of agentElement(field).options) option.selected = preset[field];
   }
   updateAgentSftpFields();
+  updateAgentAutoApprove();
+  renderSavedAuthNote();
+}
+// Running commands without asking needs SSH command approval on. Turning that off clears and disables this option.
+function updateAgentAutoApprove() {
+  const commands = agentChecked('approve-commands');
+  const auto = agentElement('auto-approve');
+  if (!commands) auto.checked = false;
+  auto.disabled = !commands;
+  agentElement('auto-approve-warning').hidden = !(commands && auto.checked);
+}
+// Saved authentication also needs two global switches. When they are off the agent is asked for each answer, so say why.
+function renderSavedAuthNote() {
+  agentElement('saved-auth-note').hidden = !(agentChecked('saved-auth') && agentInfo?.savedAuthReady === false);
 }
 // The broadest preset needs a deliberate acknowledgement. Resolves true only when the user confirms.
 function confirmMaximumGrant(bookmarkCount) {
@@ -149,7 +166,7 @@ function confirmMaximumGrant(bookmarkCount) {
     const save = byId('agent-maximum-save');
     ack.checked = false;
     save.disabled = true;
-    byId('agent-maximum-detail').textContent = t('This client gets browsing, downloads, approved commands, saved authentication and every rule and trigger, for') + ' ' + (bookmarkCount || 1) + ' ' + t('bookmark(s).');
+    byId('agent-maximum-detail').textContent = t('This client gets browsing, downloads, commands that run without asking, automatic trust of new host keys, saved authentication and every rule and trigger, for') + ' ' + (bookmarkCount || 1) + ' ' + t('bookmark(s).');
     ack.onchange = () => { save.disabled = !ack.checked; };
     byId('agent-maximum-cancel').onclick = () => { dialog.close(); resolve(false); };
     save.onclick = () => { dialog.close(); resolve(true); };
@@ -211,6 +228,7 @@ function loadAgentGrantForm(p, grant) {
   agentElement('saved-auth').checked = grant?.savedAuth === true;
   setHostKeyTrust(grant?.hostKeyTrust || 'off');
   agentElement('approve-commands').checked = grant?.commandApproval === true;
+  agentElement('auto-approve').checked = grant?.commandAutoApprove === true;
   agentElement('task').value = grant?.task?.name || '';
   agentElement('task-command').value = grant?.task?.command || '';
   for (const field of ['pam', 'triggers']) {
@@ -218,6 +236,8 @@ function loadAgentGrantForm(p, grant) {
     for (const option of agentElement(field).options) option.selected = grant?.[field]?.includes(option.value) === true;
   }
   updateAgentSftpFields();
+  updateAgentAutoApprove();
+  renderSavedAuthNote();
 }
 function updateAgentSftpFields() {
   agentElement('sftp-fields').hidden = !agentChecked('sftp');
@@ -257,20 +277,78 @@ function renderAgentPrompts(prompts) {
     return form;
   }));
 }
+// The master switch dims the sections below it and makes them inert. A service that is on but not listening shows the
+// reason and a retry button, and the checkbox keeps the saved setting.
+function renderAgentStatus(info) {
+  const dependent = byId('agent-dependent');
+  dependent.inert = !info.enabled;
+  dependent.classList.toggle('dimmed', !info.enabled);
+  dependent.title = info.enabled ? '' : t('Turn on local agent access to change these settings.');
+  const offline = info.enabled && !info.online;
+  agentElement('offline').hidden = !offline;
+  agentElement('offline-text').textContent = offline ? t(agentCodeMessages[info.offlineReason] || 'Agent service could not start.') : '';
+  renderSavedAuthNote();
+}
+// Bookmarks as a list. For the selected client, "Access allowed" or "Save again" shows which bookmarks have access.
+function renderAgentProfiles() {
+  const client = agentInfo?.clients.find(c => c.id === agentValue('client'));
+  agentOptions('profile', (agentInfo?.profiles || []).map(p => {
+    const grant = client?.grants?.[p.id];
+    const status = !p.eligible ? t(p.reason || 'Use a valid SSH host name or alias.') : grant ? t(grant.stale ? 'Save again' : 'Access allowed') : '';
+    return { ...p, disabled: !p.eligible, name: [p.name, status].filter(Boolean).join(' · ') };
+  }));
+  agentElement('renew-stale').hidden = staleBookmarkIds(client).length === 0;
+}
+// Bookmarks whose grant went stale and that can still be used. Only these can be renewed.
+function staleBookmarkIds(client) {
+  return Object.entries(client?.grants || {})
+    .filter(([id, grant]) => grant.stale && (agentInfo?.profiles || []).some(p => p.id === id && p.eligible))
+    .map(([id]) => id);
+}
+// The saved permissions of a grant, sent again unchanged. No confirmation: the user already approved them when saved.
+function grantFieldsFrom(grant) {
+  return { root: grant.root || '', sftp: grant.sftp !== false, download: grant.download === true, savedAuth: grant.savedAuth === true,
+    commandApproval: grant.commandApproval === true, commandAutoApprove: grant.commandAutoApprove === true,
+    pam: grant.pam || [], triggers: grant.triggers || [], hostKeyTrust: grant.hostKeyTrust || 'off',
+    ...(grant.task ? { task: grant.task } : {}) };
+}
+async function renewStaleGrants() {
+  if (agentBusy) return;
+  const client = agentValue('client');
+  const current = agentInfo?.clients.find(c => c.id === client);
+  const ids = staleBookmarkIds(current);
+  if (!ids.length) return;
+  agentBusy = true;
+  setGrantStatus('');
+  const failed = [];
+  let saved = 0;
+  try {
+    for (const id of ids) {
+      try {
+        await api['agent-grant'](client, id, grantFieldsFrom(current.grants[id]));
+        saved++;
+      } catch (error) {
+        failed.push(`${agentInfo.profiles.find(p => p.id === id)?.name || id}: ${agentErrorText(error)}`);
+      }
+    }
+    await refreshAgents();
+    setGrantStatus(`${t('Access saved')}: ${saved} / ${ids.length}` + failed.map(line => ' · ' + line).join(''), saved === ids.length);
+  } catch (error) { setGrantStatus(t('Save failed') + ': ' + agentErrorText(error), false); }
+  finally { agentBusy = false; }
+}
 async function refreshAgents(full = true) {
   const turn = ++agentRefresh;
   const info = await api['agent-info']();
   if (turn !== agentRefresh || agentElement('enabled').closest('[hidden]')) return;
   agentInfo = info;
+  renderAgentStatus(info);
   renderAgentPrompts(info.prompts);
   if (!full) return;
   agentElement('enabled').checked = info.enabled;
   agentElement('cli-path').textContent = info.cli || t('The installed app provides the CLI.');
-  if (info.enabled && !info.online) agentStatus('Agent service is offline.');
   agentOptions('client', info.clients.map(client => ({ ...client, name: `${client.name} · ${Object.keys(client.grants || {}).length} ${t('bookmark(s)')}` })), 'Choose client');
   restoreAgentChoice();
-  agentOptions('profile', info.profiles.map(p => ({ ...p, disabled: !p.eligible,
-    name: p.eligible ? p.name : p.name + ' · ' + t(p.reason || 'Use a valid SSH host name or alias.') })), 'Choose bookmark');
+  renderAgentProfiles();
   agentOptions('skill-engine', [...info.targets].sort((a, b) => Number(b.detected) - Number(a.detected))
     .map(target => ({ ...target, name: target.name + (target.detected ? ' · ' + t('Detected') : '') })));
   agentOptions('filter-client', info.clients, 'All');
@@ -299,7 +377,8 @@ function agentFilter() {
   return result;
 }
 async function refreshAgentHistory() {
-  const rows = await api['agent-history'](agentFilter());
+  // No agent service to read from (startup failed): show an empty history instead of asking the main process.
+  const rows = agentInfo?.unavailable ? [] : await api['agent-history'](agentFilter());
   const list = agentElement('history');
   const visibleRows = agentValue('filter-session') ? rows.slice(-5) : rows.slice(0, 5);
   agentElement('history-count').textContent = rows.length > 5 ? t('Showing the 5 most recent activities.') : '';
@@ -344,6 +423,10 @@ const agentCodeMessages = {
   PROFILE_NOT_ELIGIBLE: "This bookmark can't be used by agents. Check its SSH settings.",
   ACCESS_DENIED: 'The bookmark changed after this page loaded. Choose it again and save.',
   INVALID_REQUEST: 'Choose at least one permission: SFTP browsing, approved SSH commands, or a task.',
+  SOCKET_IN_USE: 'Another PromeFTP is still using the agent socket.',
+  UNSAFE_SOCKET: 'Agent service could not start.',
+  AUDIT_UNAVAILABLE: 'Agent service could not start.',
+  STARTUP_FAILED: 'Agent service could not start.',
 };
 function agentErrorText(error) {
   const text = String(error?.message || error);
@@ -366,9 +449,15 @@ agentElement('enabled').addEventListener('change', () => agentAction(async () =>
   try { await api['agent-enable'](agentChecked('enabled')); }
   catch (error) { agentElement('enabled').checked = !agentChecked('enabled'); throw error; }
 }));
-agentElement('client').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); showAgentGrant(); });
+agentElement('client').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); renderAgentProfiles(); showAgentGrant(); });
 agentElement('profile').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); showAgentGrant(); });
 agentElement('sftp').addEventListener('change', updateAgentSftpFields);
+agentElement('approve-commands').addEventListener('change', updateAgentAutoApprove);
+agentElement('auto-approve').addEventListener('change', updateAgentAutoApprove);
+agentElement('saved-auth').addEventListener('change', renderSavedAuthNote);
+byId('agent-open-auth').addEventListener('click', () => showSettingsPage('authentication'));
+agentButton('offline-retry', () => api['agent-enable'](true));
+agentElement('renew-stale').addEventListener('click', renewStaleGrants);
 for (const field of Object.keys(agentFieldErrors)) agentElement(field).addEventListener('input', () => setAgentFieldError(field, ''));
 agentButton('register', async () => {
   if (!agentValue('client-name').trim()) throw Error(t('Enter a client name.'));
@@ -424,7 +513,8 @@ function agentGrantFields() {
   const command = agentValue('task-command');
   return {
     root: agentValue('root').trim(), sftp: agentChecked('sftp'), download: agentChecked('download'), savedAuth: agentChecked('saved-auth'),
-    commandApproval: agentChecked('approve-commands'), pam: selectedIds('pam'), triggers: selectedIds('triggers'),
+    commandApproval: agentChecked('approve-commands'), commandAutoApprove: agentChecked('approve-commands') && agentChecked('auto-approve'),
+    pam: selectedIds('pam'), triggers: selectedIds('triggers'),
     hostKeyTrust: agentValue('host-key-trust'),
     ...(name || command ? { task: { name, command } } : {}),
   };

@@ -11,7 +11,7 @@ const path = require('node:path');
 const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { translate, supportedLocale } = require('./localization.js');
-const { createAgentService } = require('./agent-service.cjs');
+const { createAgentService, historyOf } = require('./agent-service.cjs');
 const { createTransport } = require('./agent-transport.cjs');
 const { manageSkill, agentTargets, detectAgents } = require('./agent-skills.cjs');
 const pathFavorites = require('./path-favorites.cjs');
@@ -1755,7 +1755,21 @@ async function initializeAgent() {
     busy: count => { agentConnections = count; syncUpdateBusy(); },
     onPrompt: () => openPreferences('agent'),
   });
-  if (state.agent?.enabled) await agent.listen();
+  // Not awaited: the app keeps starting while the socket is busy, for example just after an update when the old
+  // process still holds it. The preferences window shows the offline state and offers a retry.
+  if (state.agent?.enabled) startAgentListening();
+}
+// Tries to listen again while the socket is busy (10 tries, one second apart). A socket that is not safe to use is
+// not retried, since the same answer comes back.
+async function startAgentListening(attempts = 10, delayMs = 1000) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try { await agent.listen(); return true; }
+    catch (error) {
+      if (!state.agent?.enabled || error.agentCode === 'UNSAFE_SOCKET') return false;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  return false;
 }
 let detectedAgents;
 handle('agent-diagnostic', id => getAgent().diagnostic(typeof id === 'string' ? id : ''));
@@ -1768,9 +1782,13 @@ async function profileTrusted(p) {
     .some(fingerprints => fingerprints.length > 0);
 }
 handle('agent-info', async () => {
-  const service = getAgent();
-  const info = service.info();
-  return { ...info, profiles: await Promise.all(info.profiles.map(async p => ({ ...p,
+  // Saved authentication also needs these two global switches. The preferences window explains it when they are off.
+  const savedAuthReady = state.useStoredAuthOnConnect !== false && state.useSavedRepliesAutomatically !== false;
+  // Startup can fail before the service exists. The window still opens and shows the offline state.
+  if (!agent) return { enabled: state.agent?.enabled === true, online: false, offlineReason: 'STARTUP_FAILED', days: 30,
+    clients: [], profiles: [], prompts: [], targets: [], skills: [], hasSavedToken: false, cli: null, savedAuthReady, unavailable: true };
+  const info = agent.info();
+  return { ...info, savedAuthReady, profiles: await Promise.all(info.profiles.map(async p => ({ ...p,
     trusted: await profileTrusted(p),
     ...(!p.eligible && { reason: agentTransport.eligibilityReason(state.profiles.find(entry => entry.id === p.id)) }),
     ...(p.eligible && agentTransport.catalog(state.profiles.find(entry => entry.id === p.id))),
@@ -1822,7 +1840,7 @@ handle('agent-grant-bulk', (client, ids, grant) => {
   return getAgent().grantMany(client, ids, grant);
 });
 handle('agent-answer', (session, id, value) => getAgent().answer(session, id, value));
-handle('agent-history', filter => getAgent().history(filter));
+handle('agent-history', filter => historyOf(agent, filter));
 handle('agent-retention', days => getAgent().retention(days));
 handle('agent-export', async (filter, includePaths) => {
   const service = getAgent();
