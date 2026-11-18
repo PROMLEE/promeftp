@@ -13,6 +13,7 @@ const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { translate, supportedLocale } = require('./localization.js');
 const { createAgentService, historyOf } = require('./agent-service.cjs');
 const { backupStamp, backupName, backupCommand, classifyBackupFailure, collectCommand, copyAttributes } = require('./remote-backup.cjs');
+const conflicts = require('./transfer-conflicts.cjs');
 const { createTransport } = require('./agent-transport.cjs');
 const { manageSkill, agentTargets, detectAgents } = require('./agent-skills.cjs');
 const pathFavorites = require('./path-favorites.cjs');
@@ -37,6 +38,10 @@ let transferQueue;
 const comparisonPlans = new Map();
 const comparisonControllers = new Map();
 const transferConflictRequests = new Map();
+// Answers given for one transfer request ("apply to the remaining"), kept in memory until its jobs are gone.
+const decisionStore = conflicts.createDecisionStore();
+const transferConflictGroups = new Map();
+const decisionGroups = conflicts.createDecisionGroups();
 let agentConnections = 0;
 let agent;
 let agentTransport;
@@ -83,7 +88,7 @@ const preferencesMethods = new Set([
   'appearance', 'application-info', 'preferences-data', 'save-preferences', 'open-config-from-preferences', 'close-preferences',
   'keyboard-shortcuts', 'update-status', 'open-link', 'open-sponsors', 'open-project-license', 'open-license-notices', 'check-for-updates', 'set-automatic-updates',
   'saved-auth-replies', 'reveal-auth-answer', 'move-auth-reply-to-global', 'saved-auto-setting',
-  'set-saved-auto-setting', 'global-auth-rules', 'save-global-auth-rule', 'remove-global-auth-rule',
+  'set-saved-auto-setting', 'transfer-conflict-policy', 'set-transfer-conflict-policy', 'global-auth-rules', 'save-global-auth-rule', 'remove-global-auth-rule',
   'update-auth-reply', 'remove-auth-reply', 'keychain-preferences', 'set-keychain-preferences',
   'shortcut-set', 'shortcut-reset', 'shortcut-capture', 'shortcut-diagnostics',
   'agent-info', 'agent-diagnostic', 'agent-enable', 'agent-register', 'agent-revoke', 'agent-save-token', 'agent-clear-token', 'agent-grant', 'agent-grant-bulk', 'agent-answer',
@@ -974,7 +979,7 @@ function validName(name) {
 function verifySource(attrs, expected, remote, name) {
   if (expected && (!attrs.isFile() || attrs.size !== expected.size || (remote ? attrs.mtime * 1000 : attrs.mtimeMs) !== expected.modifiedAt)) throw Error(`Source changed since comparison: ${name}. Compare again.`);
 }
-async function upload(channel, local, remote, depth = 0, signal, progress = () => {}, expectedDestination, conflictPolicy, expectedSource) {
+async function upload(channel, local, remote, depth = 0, signal, progress = () => {}, expectedDestination, conflictPolicy, expectedSource, decision) {
   await signal?.pausePoint?.();
   if (depth > 50) throw Error('Folder nesting is too deep.');
   if (signal?.aborted) throw Error('Transfer cancelled.');
@@ -986,7 +991,7 @@ async function upload(channel, local, remote, depth = 0, signal, progress = () =
     if (!existing) await sftpCall(channel, 'mkdir', remote);
     let skippedCount = 0;
     for (const name of (await fs.readdir(local)).sort((a, b) => a.localeCompare(b))) {
-      const result = await upload(channel, path.join(local, name), path.posix.join(remote, name), depth + 1, signal, progress, undefined, conflictPolicy);
+      const result = await upload(channel, path.join(local, name), path.posix.join(remote, name), depth + 1, signal, progress, undefined, conflictPolicy, undefined, decision);
       skippedCount += result?.skippedCount || (result?.status === 'skipped' ? 1 : 0);
     }
     return { status: 'completed', skippedCount };
@@ -1003,7 +1008,8 @@ async function upload(channel, local, remote, depth = 0, signal, progress = () =
   if (existing && !existing.isFile()) throw Error('Destination is not a regular file. ' + remote);
   if (existing) {
     expectedDestination ??= { size: existing.size, modifiedAt: existing.mtime * 1000 };
-    const choice = await conflictChoice('Replace the remote file?', remote, conflictPolicy, signal);
+    const choice = await conflictChoice('Replace the remote file?', remote, conflictPolicy, signal, { ...decision, name: path.posix.basename(remote), direction: 'upload',
+      source: { size: attributes.size, modifiedAt: attributes.mtimeMs }, destination: { size: existing.size, modifiedAt: existing.mtime * 1000 } });
     if (choice === 'skip') return { status: 'skipped' };
     if (choice === 'keep-both') {
       keepBoth = true;
@@ -1048,19 +1054,24 @@ async function upload(channel, local, remote, depth = 0, signal, progress = () =
   }
   return { status: 'completed' };
 }
-async function conflictChoice(message, detail, policy, signal) {
+// Finds the answer for one file in the order of the design: the job's own policy, the batch answer, the saved setting.
+// Only a request from a queued job (saved: true) reads the saved setting; a direct edit upload always asks.
+async function conflictChoice(message, detail, policy, signal, { group, saved = false, total, index, source, destination, direction, name } = {}) {
   if (signal?.aborted) throw Error('Transfer cancelled.');
-  if (['skip', 'replace', 'keep-both'].includes(policy)) return policy;
+  const choice = conflicts.pickChoice({ jobPolicy: policy, groupChoice: decisionStore.get(group),
+    savedPolicy: saved ? state.transferConflictPolicy : undefined });
+  if (choice) return conflicts.resolveChoice(choice, source, destination);
   if (!window || window.isDestroyed()) return 'skip';
   const id = randomUUID();
   const owner = window;
   const request = () => new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(Error('Transfer cancelled.')); return; }
-    const finish = choice => {
+    const finish = answer => {
       transferConflictRequests.delete(id);
+      transferConflictGroups.delete(id);
       signal?.removeEventListener('abort', abort);
       owner.removeListener('closed', abort);
-      if (choice) resolve(choice);
+      if (answer) resolve(answer);
       else {
         if (!owner.isDestroyed()) owner.webContents.send('session', { id: '*', event: 'transfer-conflict-dismissed', value: id });
         reject(Error('Transfer cancelled.'));
@@ -1068,20 +1079,43 @@ async function conflictChoice(message, detail, policy, signal) {
     };
     const abort = () => finish();
     transferConflictRequests.set(id, finish);
+    transferConflictGroups.set(id, group);
     signal?.addEventListener('abort', abort, { once: true });
     owner.once('closed', abort);
-    owner.webContents.send('session', { id: '*', event: 'transfer-conflict', value: { id, message, detail } });
+    owner.webContents.send('session', { id: '*', event: 'transfer-conflict', value: {
+      id, message, detail, name, direction, source, destination, remaining: conflicts.remainingAfter(total, index),
+    } });
   });
-  return signal?.waitForDecision ? signal.waitForDecision(request) : request();
+  const answer = await (signal?.waitForDecision ? signal.waitForDecision(request) : request());
+  return conflicts.resolveChoice(answer, source, destination);
 }
-handle('transfer-resolve-conflict', (id, choice) => {
-  if (!['skip', 'replace', 'keep-both'].includes(choice)) throw Error('Invalid conflict choice.');
+// The window answers with { choice, applyToGroup, remember }. A bare choice string is still accepted.
+// "Apply to the remaining" answers the other conflicts of the same request; "remember" saves the choice and answers
+// every waiting conflict with it.
+handle('transfer-resolve-conflict', async (id, answer) => {
+  const value = typeof answer === 'string' ? { choice: answer } : (answer || {});
+  if (!conflicts.validChoice(value.choice)) throw Error('Invalid conflict choice.');
   const finish = transferConflictRequests.get(id);
   if (!finish) return false;
-  finish(choice);
+  const group = transferConflictGroups.get(id);
+  if (value.remember === true) await updateState(next => { next.transferConflictPolicy = value.choice; });
+  if (value.applyToGroup === true && group) decisionStore.set(group, value.choice);
+  finish(value.choice);
+  for (const [otherId, otherGroup] of [...transferConflictGroups]) {
+    const covered = value.remember === true || (value.applyToGroup === true && group && otherGroup === group);
+    if (otherId === id || !covered) continue;
+    transferConflictRequests.get(otherId)?.(value.choice);
+    if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-conflict-dismissed', value: otherId });
+  }
   return true;
 });
-async function download(channel, remote, local, replace = false, depth = 0, signal, progress = () => {}, expectedDestination, conflictPolicy, expectedSource) {
+handle('transfer-conflict-policy', () => (conflicts.validPolicy(state.transferConflictPolicy) ? state.transferConflictPolicy : 'ask'));
+handle('set-transfer-conflict-policy', async policy => {
+  if (!conflicts.validPolicy(policy)) throw Error('Invalid conflict policy.');
+  await updateState(next => { if (policy === 'ask') delete next.transferConflictPolicy; else next.transferConflictPolicy = policy; });
+  return policy;
+});
+async function download(channel, remote, local, replace = false, depth = 0, signal, progress = () => {}, expectedDestination, conflictPolicy, expectedSource, decision) {
   await signal?.pausePoint?.();
   if (depth > 50) throw Error('Folder nesting is too deep.');
   if (signal?.aborted) throw Error('Transfer cancelled.');
@@ -1096,7 +1130,7 @@ async function download(channel, remote, local, replace = false, depth = 0, sign
         if (['.', '..'].includes(name)) continue;
         throw Error('Invalid remote name.');
       }
-      const result = await download(channel, path.posix.join(remote, name), path.join(local, name), false, depth + 1, signal, progress, undefined, conflictPolicy);
+      const result = await download(channel, path.posix.join(remote, name), path.join(local, name), false, depth + 1, signal, progress, undefined, conflictPolicy, undefined, decision);
       skippedCount += result?.skippedCount || (result?.status === 'skipped' ? 1 : 0);
     }
     return { status: 'completed', skippedCount };
@@ -1109,7 +1143,8 @@ async function download(channel, remote, local, replace = false, depth = 0, sign
   if (expectedDestination && !expectedDestination.absent && (!present || present.size !== expectedDestination.size || present.mtimeMs !== expectedDestination.modifiedAt)) throw Error(`Destination changed since comparison: ${local}`);
   if (present && (!replace || (conflictPolicy && conflictPolicy !== 'replace'))) {
     expectedDestination ??= { size: present.size, modifiedAt: present.mtimeMs };
-    const choice = await conflictChoice('Replace the local file?', local, conflictPolicy, signal);
+    const choice = await conflictChoice('Replace the local file?', local, conflictPolicy, signal, { ...decision, name: path.basename(local), direction: 'download',
+      source: { size: attributes.size, modifiedAt: attributes.mtime * 1000 }, destination: { size: present.size, modifiedAt: present.mtimeMs } });
     if (choice === 'skip') return { status: 'skipped' };
     if (choice === 'keep-both') {
       keepBoth = true;
@@ -1141,10 +1176,25 @@ async function download(channel, remote, local, replace = false, depth = 0, sign
     await fs.rm(temp, { force: true });
   }
 }
+// Answers given for a request ("apply to the remaining") last only while the request still has jobs in the queue.
+function queuedDecision(job) {
+  return { group: job.decisionGroup, saved: true, total: job.decisionTotal, index: job.decisionIndex };
+}
+// A decision group is handed over to the tracker with each job; answers are dropped only when the tracker finishes it.
+function trackDecisionJob(group, total, id) {
+  if (!group) return;
+  for (const dropped of decisionGroups.add(group, total, id)) decisionStore.clear(dropped);
+}
+function releaseFinishedDecisions(jobs) {
+  for (const group of decisionGroups.settle(jobs)) decisionStore.clear(group);
+}
 transferQueue = createTransferService({
   file: path.join(app.getPath('userData'), 'sftp-transfer-queue.json'),
   historyFile: path.join(app.getPath('userData'), 'sftp-transfer-history.jsonl'),
-  emit: jobs => { if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-jobs', value: jobs }); },
+  emit: jobs => {
+    releaseFinishedDecisions(jobs);
+    if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-jobs', value: jobs });
+  },
   onBusy: busy => { queuedTransferBusy = busy; syncUpdateBusy(); },
   execute: async (job, signal, progress) => {
     if (job.operation === 'mkdir-local') { await fs.mkdir(job.localPath, { recursive: true, mode: 0o700 }); return { status: 'completed' }; }
@@ -1160,9 +1210,9 @@ transferQueue = createTransferService({
       return { status: 'completed' };
     }
     if (job.operation === 'upload') {
-      return await upload(channel, job.localPath, job.remotePath, 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource);
+      return await upload(channel, job.localPath, job.remotePath, 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource, queuedDecision(job));
     } else if (job.operation === 'download') {
-      return await download(channel, job.remotePath, job.localPath, Boolean(job.replace), 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource);
+      return await download(channel, job.remotePath, job.localPath, Boolean(job.replace), 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource, queuedDecision(job));
     } else if (job.operation === 'remote-duplicate') {
       // Fallback for a server without shell commands: download the item, then upload it under its backup name.
       const stage = await fs.mkdtemp(path.join(app.getPath('temp'), 'promeftp-duplicate-'));
@@ -1189,24 +1239,30 @@ transferQueue = createTransferService({
         const local = path.join(stage, path.posix.basename(job.sourcePath));
         await download(channel, job.sourcePath, local, false, 0, signal, progress, undefined, undefined, job.expectedSource);
         if (signal.aborted) throw Error('Transfer cancelled.');
-        return await upload(target, local, path.posix.join(job.targetDirectory, path.posix.basename(job.sourcePath)), 0, signal, progress, job.expectedDestination, job.conflictPolicy);
+        return await upload(target, local, path.posix.join(job.targetDirectory, path.posix.basename(job.sourcePath)), 0, signal, progress, job.expectedDestination, job.conflictPolicy, undefined, queuedDecision(job));
       } finally { await fs.rm(stage, { recursive: true, force: true }); }
     }
   },
 });
 handle('transfer-list', () => transferQueue.list());
 handle('transfer-history', (query, limit) => transferQueue.history(typeof query === 'string' ? query.slice(0, 200) : '', Math.min(Number(limit) || 300, 500)));
-function enqueueTransfer(input) {
+async function enqueueTransfer(input) {
   const source = sessions.get(input?.sessionId);
   if (!source || source.mode !== 'sftp') throw Error('Open the source SFTP connection first.');
   const sourceName = input.operation === 'upload' ? 'Local' : source.input.label || source.input.host;
-  const enriched = { ...input, sourceName, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, connectionScope: pathFavorites.scopeFor(source.input) };
+  const decisionGroup = conflicts.validGroup(input.decisionGroup) ? input.decisionGroup : undefined;
+  const decisionTotal = decisionGroup && conflicts.validCount(input.decisionTotal) ? input.decisionTotal : undefined;
+  const decisionIndex = decisionTotal !== undefined && conflicts.validIndex(input.decisionIndex, decisionTotal) ? input.decisionIndex : undefined;
+  const enriched = { ...input, sourceName, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, connectionScope: pathFavorites.scopeFor(source.input),
+    decisionGroup, decisionTotal, decisionIndex };
   if (input.operation === 'remote-copy') {
     const target = sessions.get(input.targetSessionId);
     if (!target || target.mode !== 'sftp') throw Error('Open the destination SFTP connection first.');
     enriched.targetScope = pathFavorites.scopeFor(target.input); enriched.targetName = target.input.label || target.input.host; enriched.targetGeneration = target.generation; enriched.targetIdentity = target.transferIdentity;
   }
-  return transferQueue.enqueue(enriched);
+  const id = await transferQueue.enqueue(enriched);
+  trackDecisionJob(decisionGroup, decisionTotal, id);
+  return id;
 }
 handle('transfer-enqueue', enqueueTransfer);
 function retryBinding(job) {
@@ -1316,7 +1372,7 @@ handle('compare-cancel', requestId => { const controller = comparisonControllers
 handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', requestId) => {
   const plan = comparisonPlans.get(id);
   if (!plan || !Array.isArray(selectedPaths) || selectedPaths.length > 20_000) throw Error('Comparison plan expired. Compare again.');
-  if (!['ask', 'skip', 'replace', 'keep-both'].includes(conflictPolicy)) throw Error('Invalid conflict policy.');
+  if (!conflicts.validPolicy(conflictPolicy)) throw Error('Invalid conflict policy.');
   for (const endpoint of [plan.source, plan.destination]) if (endpoint.kind === 'remote' && sessions.get(endpoint.sessionId)?.generation !== endpoint.generation) throw Error('Connection changed since comparison. Compare again.');
   const selection = directoryCompare.selectedFilePlan(plan.entries, selectedPaths);
   const entries = selection.files;
@@ -1363,19 +1419,22 @@ handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', reques
     if (plan.destination.kind === 'local') ids.push(await transferQueue.enqueue({ operation: 'mkdir-local', batchId, batchLabel, localPath, label: row.relativePath }));
     else ids.push(await transferQueue.enqueue({ operation: 'mkdir-remote', batchId, batchLabel, sessionId: plan.destination.sessionId, connectionScope: destinationScope, connectionGeneration: destinationRecord.generation, connectionIdentity: destinationRecord.transferIdentity, remotePath, label: row.relativePath }));
   }
-  for (const row of entries) {
+  const batchTotal = conflicts.validCount(entries.length) ? entries.length : undefined;
+  // Each file job is tracked as it is queued, with its place in the batch.
+  const enqueueFile = async job => { const id = await transferQueue.enqueue(job); trackDecisionJob(job.decisionGroup, job.decisionTotal, id); return id; };
+  for (const [index, row] of entries.entries()) {
     const sourcePath = plan.source.kind === 'local' ? path.join(plan.sourceRoot, ...row.relativePath.split('/')) : path.posix.join(plan.sourceRoot, row.relativePath);
     const destinationPath = plan.destination.kind === 'local' ? path.join(plan.destinationRoot, ...row.relativePath.split('/')) : path.posix.join(plan.destinationRoot, row.relativePath);
     const label = row.relativePath;
     if (plan.source.kind === 'local' && plan.destination.kind === 'remote') {
       const destination = sessions.get(plan.destination.sessionId);
-      ids.push(await transferQueue.enqueue({ operation: 'upload', batchId, batchLabel, conflictPolicy, sessionId: plan.destination.sessionId, connectionScope: destinationScope, connectionGeneration: destination.generation, connectionIdentity: destination.transferIdentity, sourceName: 'Local', targetName: destination?.input.label || destination?.input.host, localPath: sourcePath, remotePath: destinationPath, expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
+      ids.push(await enqueueFile({ operation: 'upload', batchId, batchLabel, conflictPolicy, decisionGroup: batchId, decisionTotal: batchTotal, decisionIndex: index, sessionId: plan.destination.sessionId, connectionScope: destinationScope, connectionGeneration: destination.generation, connectionIdentity: destination.transferIdentity, sourceName: 'Local', targetName: destination?.input.label || destination?.input.host, localPath: sourcePath, remotePath: destinationPath, expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
     } else if (plan.source.kind === 'remote' && plan.destination.kind === 'local') {
       const source = sessions.get(plan.source.sessionId);
-      ids.push(await transferQueue.enqueue({ operation: 'download', batchId, batchLabel, conflictPolicy, sessionId: plan.source.sessionId, connectionScope: sourceScope, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, sourceName: source?.input.label || source?.input.host, targetName: 'Local', remotePath: sourcePath, localPath: destinationPath, replace: row.operation === 'update', expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
+      ids.push(await enqueueFile({ operation: 'download', batchId, batchLabel, conflictPolicy, decisionGroup: batchId, decisionTotal: batchTotal, decisionIndex: index, sessionId: plan.source.sessionId, connectionScope: sourceScope, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, sourceName: source?.input.label || source?.input.host, targetName: 'Local', remotePath: sourcePath, localPath: destinationPath, replace: row.operation === 'update', expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
     } else if (plan.source.kind === 'remote' && plan.destination.kind === 'remote') {
       const source = sessions.get(plan.source.sessionId), destination = sessions.get(plan.destination.sessionId);
-      ids.push(await transferQueue.enqueue({ operation: 'remote-copy', batchId, batchLabel, conflictPolicy, sessionId: plan.source.sessionId, connectionScope: sourceScope, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, sourceName: source?.input.label || source?.input.host, targetName: destination?.input.label || destination?.input.host, sourcePath, targetSessionId: plan.destination.sessionId, targetScope: destinationScope, targetGeneration: destination.generation, targetIdentity: destination.transferIdentity, targetDirectory: path.posix.dirname(destinationPath), expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
+      ids.push(await enqueueFile({ operation: 'remote-copy', batchId, batchLabel, conflictPolicy, decisionGroup: batchId, decisionTotal: batchTotal, decisionIndex: index, sessionId: plan.source.sessionId, connectionScope: sourceScope, connectionGeneration: source.generation, connectionIdentity: source.transferIdentity, sourceName: source?.input.label || source?.input.host, targetName: destination?.input.label || destination?.input.host, sourcePath, targetSessionId: plan.destination.sessionId, targetScope: destinationScope, targetGeneration: destination.generation, targetIdentity: destination.transferIdentity, targetDirectory: path.posix.dirname(destinationPath), expectedSource: { size: row.source.size, modifiedAt: row.source.modifiedAt }, expectedDestination: row.destination ? { size: row.destination.size, modifiedAt: row.destination.modifiedAt } : { absent: true }, label }));
     }
     else throw Error('Local-to-local folder comparison is unnecessary.');
   }
@@ -1543,7 +1602,7 @@ handle('sftp', async (id, action, target, name) => {
     await download(channel, target, path.join(name, basename));
   } else if (action === 'download') {
     const result = await dialog.showSaveDialog(window, { defaultPath: path.posix.basename(target) });
-    if (!result.canceled) await enqueueTransfer({ operation: 'download', sessionId: id, sourceName: sessions.get(id)?.input.label || sessions.get(id)?.input.host, targetName: 'Local', remotePath: target, localPath: result.filePath, label: path.posix.basename(target) });
+    if (!result.canceled) await enqueueTransfer({ operation: 'download', sessionId: id, sourceName: sessions.get(id)?.input.label || sessions.get(id)?.input.host, targetName: 'Local', remotePath: target, localPath: result.filePath, label: path.posix.basename(target), replace: true, conflictPolicy: 'replace' });
   } else if (action === 'edit') {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'promeftp-edit-'));
     const local = path.join(directory, path.posix.basename(target));

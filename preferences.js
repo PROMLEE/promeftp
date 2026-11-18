@@ -212,6 +212,7 @@ function showSettingsPage(page) {
   byId('settings-actions').hidden = !['general', 'terminal'].includes(page);
   if (page === 'authentication') refreshPamPreferences();
   else clearPamPreferences();
+  if (page === 'general') refreshConflictPolicy().catch(showError);
   if (page === 'about') refreshUpdateStatus().catch(showError);
   if (page === 'shortcuts') renderShortcutPreferences().catch(showError);
   if (page === 'agent') byId('settings-agent').dispatchEvent(new Event('agent-visible'));
@@ -353,6 +354,24 @@ for (const [kind, control] of Object.entries(keychainControls)) {
     finally { control.disabled = false; }
   });
 }
+// Same-name conflicts: the choice is saved as soon as it changes, because transfers read it when they start.
+const conflictPolicy = byId('preferences-conflict-policy');
+const conflictNote = byId('preferences-conflict-note');
+function showConflictPolicy(value) {
+  conflictPolicy.value = value;
+  conflictPolicy.dataset.saved = value;
+  conflictNote.hidden = value === 'ask';
+}
+async function refreshConflictPolicy() {
+  showConflictPolicy(await api['transfer-conflict-policy']());
+}
+conflictPolicy.addEventListener('change', async () => {
+  conflictPolicy.disabled = true;
+  try { showConflictPolicy(await api['set-transfer-conflict-policy'](conflictPolicy.value)); }
+  catch (error) { showConflictPolicy(conflictPolicy.dataset.saved || 'ask'); showError(error); }
+  finally { conflictPolicy.disabled = false; }
+});
+refreshConflictPolicy().catch(showError);
 const savedAuto = byId('saved-auto');
 let pamLoad = 0;
 function clearPamPreferences() {

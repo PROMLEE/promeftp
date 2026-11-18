@@ -206,3 +206,12 @@ test('T11: a remote-duplicate transfer (backup fallback) is accepted, runs, and 
   assert.equal(history[0].id, id);
   assert.equal(history[0].state, 'completed');
 });
+
+test('T10 a job keeps its decision group after enqueue, so answers can be shared within one request', async t => {
+  // The transfer takes a moment, so the job is still listed right after enqueue. stop() waits for it at cleanup.
+  const env = await setup(() => new Promise(resolve => setTimeout(() => resolve({ status: 'completed' }), 200)));
+  t.after(env.cleanup);
+  await env.service.enqueue({ operation: 'upload', label: 'one.txt', sessionId: 's1', localPath: '/x', remotePath: '/y', decisionGroup: '0f8b8f0e-1c2d-4e5f-8a9b-0c1d2e3f4a5b' });
+  const [job] = env.service.list();
+  assert.equal(job.decisionGroup, '0f8b8f0e-1c2d-4e5f-8a9b-0c1d2e3f4a5b');
+});

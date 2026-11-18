@@ -677,6 +677,18 @@ The server is out of disk space.|서버 디스크 공간이 부족합니다.|サ
 Links can't be backed up. Back up the original instead.|링크는 백업할 수 없습니다. 원본을 백업하세요.|リンクはバックアップできません。元のファイルをバックアップしてください。|无法备份链接。请改为备份原始项目。
 Backup took too long and was stopped. Check the folder before retrying.|백업이 너무 오래 걸려 중단했습니다. 다시 시도하기 전에 폴더를 확인하세요.|バックアップに時間がかかりすぎたため中止しました。再試行する前にフォルダーを確認してください。|备份耗时过长已停止。重试前请先检查文件夹。
 Too many backups with this name were made in the same second.|같은 초에 만든 같은 이름의 백업이 너무 많습니다.|同じ秒に同じ名前のバックアップが多すぎます。|同一秒内创建的同名备份过多。
+Existing|기존 파일|既存のファイル|已有文件
+Incoming|새 파일|新しいファイル|新文件
+Newer|더 최신|より新しい|更新
+Remember this choice|이 선택 기억|この選択を記憶|记住此选择
+You can change this in Settings > General.|설정 > 일반에서 바꿀 수 있습니다.|設定 > 一般で変更できます。|可以在“设置 > 通用”中更改。
+Replace if newer|더 최신이면 덮어쓰기|新しい場合は置き換え|较新时替换
+File Transfers|파일 전송|ファイル転送|文件传输
+When a file already exists|같은 이름의 파일이 있을 때|同じ名前のファイルがある場合|存在同名文件时
+PromeFTP uses this choice without asking. Choose Ask each time to see the question again.|PromeFTP가 묻지 않고 이 선택을 사용합니다. 다시 확인하려면 "매번 확인"을 고르세요.|PromeFTP はこの選択を確認せずに使用します。再度確認するには「毎回確認」を選んでください。|PromeFTP 将不再询问并使用此选择。若要再次询问，请选择“每次询问”。
+Skip|건너뛰기|スキップ|跳过
+Replace|덮어쓰기|置き換え|替换
+Apply to the rest of this transfer|이번 전송의 나머지 항목에도 적용|この転送の残りの項目にも適用|应用于本次传输的其余项目
 `.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];

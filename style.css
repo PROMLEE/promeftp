@@ -309,6 +309,12 @@ body.terminal-transparent .auth-requests { background: var(--paper); }
 .local-file-panes .split-divider { background: var(--paper); }
 .local-file-panes .split-divider::before { background: var(--line); }
 .local-file-panes:has(.split-node) .file-panel.active-local .file-heading h3 { color: var(--accent); }
+/* Conflict dialog: the existing and incoming files side by side. The options start hidden when they do not apply. */
+.transfer-conflict-files { display: grid; grid-template-columns: auto 1fr; gap: var(--space-2) var(--space-4); margin: var(--space-3) 0; color: var(--ink); font-size: var(--fs-sm); }
+.transfer-conflict-files dt { color: var(--muted); }
+.transfer-conflict-files dd { margin: 0; overflow-wrap: anywhere; }
+#transfer-conflict-all-row[hidden], #transfer-conflict-remember-note[hidden] { display: none; }
+#transfer-conflict-remember-note { margin-top: var(--space-2); }
 /* A narrow local pane keeps its toolbar on one line (same height as the other pane) and its name column at least
    120px wide. Below the widths in the container queries, the modified and type columns hide first. */
 .local-file-panes .file-tools { flex-wrap: nowrap; max-width: none; min-width: 0; }

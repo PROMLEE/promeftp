@@ -34,6 +34,12 @@
         <label class="settings-row">Theme<select name="appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <h3>Connections</h3>
         <div class="settings-row"><span>SSH configuration files</span><button id="preferences-config" type="button">OpenSSH Config…</button></div>
+        <h3>File Transfers</h3>
+        <label class="settings-row">When a file already exists<select id="preferences-conflict-policy">
+          <option value="ask">Ask each time</option><option value="skip">Skip existing</option>
+          <option value="replace">Replace existing</option><option value="replace-if-newer">Replace if newer</option>
+          <option value="keep-both">Keep both</option></select></label>
+        <p class="settings-note" id="preferences-conflict-note" hidden>PromeFTP uses this choice without asking. Choose Ask each time to see the question again.</p>
       </section>
       <section id="settings-terminal" role="tabpanel" aria-labelledby="settings-tab-terminal" data-settings-panel="terminal" hidden>
         <h3>Text</h3>

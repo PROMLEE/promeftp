@@ -2605,7 +2605,9 @@ function setupFiles(session) {
     if (!entries.length || !session.remoteDirectory || !session.ready) return;
     const localTarget = localSide.directory;
     const remoteTarget = session.remoteDirectory;
-    for (const entry of entries) {
+    // One request, one decision group: "apply to the remaining" answers only the conflicts of this request.
+    const decisionGroup = crypto.randomUUID();
+    for (const [index, entry] of entries.entries()) {
       const localPath = localTarget.replace(/\/$/, '') + '/' + entry.name;
       const remotePath = remoteTarget.replace(/\/$/, '') + '/' + entry.name;
       const job = remoteSource
@@ -2613,7 +2615,8 @@ function setupFiles(session) {
         : receiving
           ? { operation: 'download', sessionId: session.id, remotePath, localPath, label: entry.name }
           : { operation: 'upload', sessionId: session.id, localPath, remotePath, label: entry.name };
-      await api['transfer-enqueue'](job);
+      // The total and this job's place let the first conflict know how many jobs follow, before they are queued.
+      await api['transfer-enqueue']({ ...job, decisionGroup, decisionTotal: entries.length, decisionIndex: index });
     }
     status(session, `${entries.length} transfer job${entries.length === 1 ? '' : 's'} queued.`);
     showTransferDrawer();
@@ -3072,19 +3075,43 @@ function dismissTransferConflict(id) {
   const next = transferConflictQueue.shift();
   if (next) presentTransferConflict(next);
 }
+// One line per file: size, modification time, and "Newer" on the more recent side (compared in whole seconds).
+function conflictFileLine(file, newer) {
+  if (!file) return '';
+  const date = Number.isFinite(file.modifiedAt) && file.modifiedAt > 0
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(file.modifiedAt) : '—';
+  return [formatFileSize(file.size), date, newer ? t('Newer') : ''].filter(Boolean).join(' · ');
+}
 function presentTransferConflict(value) {
   const dialog = byId('transfer-conflict-dialog');
   if (dialog.open) { transferConflictQueue.push(value); return; }
   dialog.dataset.requestId = value.id;
   byId('transfer-conflict-title').textContent = t(value.message);
   byId('transfer-conflict-detail').textContent = value.detail;
-  const answer = async choice => {
+  const incomingSeconds = Math.floor((value.source?.modifiedAt ?? NaN) / 1000);
+  const existingSeconds = Math.floor((value.destination?.modifiedAt ?? NaN) / 1000);
+  byId('transfer-conflict-incoming').textContent = conflictFileLine(value.source, incomingSeconds > existingSeconds);
+  byId('transfer-conflict-existing').textContent = conflictFileLine(value.destination, existingSeconds > incomingSeconds);
+  // Every conflict starts with both options off.
+  const remaining = value.remaining || 0;
+  const all = byId('transfer-conflict-all'), remember = byId('transfer-conflict-remember');
+  const note = byId('transfer-conflict-remember-note');
+  byId('transfer-conflict-all-row').hidden = remaining < 1;
+  byId('transfer-conflict-all-label').textContent = t('Apply to the rest of this transfer');
+  all.checked = false;
+  remember.checked = false;
+  note.hidden = true;
+  remember.onchange = () => { note.hidden = !remember.checked; };
+  const answer = async (choice, { ignoreOptions = false } = {}) => {
+    const applyToGroup = !ignoreOptions && all.checked && remaining > 0;
+    const rememberChoice = !ignoreOptions && remember.checked;
     try {
-      await api['transfer-resolve-conflict'](value.id, choice);
+      await api['transfer-resolve-conflict'](value.id, { choice, applyToGroup, remember: rememberChoice });
       dismissTransferConflict(value.id);
     } catch (error) { showTransferError(error); }
   };
-  dialog.oncancel = event => { event.preventDefault(); void answer('skip'); };
+  // Escape skips this file only, whatever the options say.
+  dialog.oncancel = event => { event.preventDefault(); void answer('skip', { ignoreOptions: true }); };
   for (const control of dialog.querySelectorAll('[data-conflict-choice]')) {
     control.onclick = () => answer(control.dataset.conflictChoice);
   }
@@ -3129,6 +3156,7 @@ async function showFolderCompare(session, layout, remote) {
     const abort = () => api['compare-cancel'](requestId).catch(error => status(session, error.message, true));
     byId('compare-cancel').onclick = () => { dialog.close(); void abort(); };
     dialog.onclose = () => { if (activeCompareRequest === requestId) void abort(); };
+    api['transfer-conflict-policy']().then(policy => { byId('compare-conflict-policy').value = policy; }).catch(() => {});
     dialog.show();
     let plan;
     try {
