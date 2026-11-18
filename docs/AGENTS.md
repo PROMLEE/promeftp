@@ -51,11 +51,21 @@ Use the CLI path shown in Settings. In the standard installation it is
 promeftp profiles list --json
 promeftp session open --profile PROFILE_ID --mode ssh --json
 promeftp session status --session SESSION_ID --json
+promeftp session wait --session SESSION_ID --json
 promeftp ssh run --session SESSION_ID --task service-status --json
 promeftp ssh command --session SESSION_ID --command 'uptime' --json
 promeftp events list --session SESSION_ID --after 0 --json
 promeftp session close --session SESSION_ID --json
 ```
+
+A session can stay in `connecting` or `waiting_for_user` for a while when the
+user must enter an OTP in PromeFTP. Keep it open and keep polling. `session wait`
+returns within 25 seconds, or as soon as the status changes. A question from
+PromeFTP extends the authentication deadline by three minutes, and never past
+ten minutes after the session opened. `expires` in the status is a Unix time in
+milliseconds: keep waiting until the status changes, or until the current time is
+past `expires`. Do not close or reopen the session while it waits, because
+reopening asks the user for a new OTP.
 
 Open a session with `--mode sftp` for `sftp list`, `sftp stat`, and
 `sftp download`. Each takes `--session` and `--path`. The SFTP API does

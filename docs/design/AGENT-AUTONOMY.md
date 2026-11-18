@@ -447,3 +447,156 @@ autoTrustAllowed: 3×3 표 전부를 assert한다.
 
 ## 9.결정 필요
 (없음)
+
+---
+
+# 1.1.9 — 세션 유지·OTP 대기
+기준: HEAD `b5f2134`(1.1.9 미출시). 위 1.1.9 호스트 키 섹션과 같은 릴리스에 포함한다.
+
+## S.목표
+OTP(keyboard-interactive) 접속에서는 사용자가 PromeFTP에서 OTP를 입력할 때까지 시간이 걸린다. 그동안 에이전트가 세션을 닫거나 실패로 보고하지 않게 한다. 스킬과 응답만 보고도 에이전트가 무엇을 해야 할지 알 수 있게 한다.
+
+## S.현황 (근거)
+- 유휴 한도 10분: `agent-service.cjs:10`. 요청마다 `touched` 갱신: `:308`. 유휴 종료 `IDLE_TIMEOUT`: `:143`.
+- 인증 한도는 open 시각 + 120초(`authDeadline`, `:151`)이고, 지나면 `AUTH_TIMEOUT`(`:142`).
+  - 이 120초에는 접속, 호스트 키 다이얼로그(최대 60초), OTP 입력이 모두 들어간다. 다이얼로그를 띄운 뒤 OTP를 받으면 실제 OTP 입력 시간은 60초 이하가 될 수 있다.
+- 인증 질문은 앱에서 답한다. `answer()` 는 `authDeadline` 이 지나면 거부한다(`:570`).
+- `session.status` 는 ready 전이면 `expires`(=authDeadline)를 준다(`:309`). 끝난 세션이면 `{status:'closed', reason, error}` 를 준다(`:295-300`).
+- 요청 하나의 작업 한도는 30초이고, 초과하면 세션을 `TIMEOUT` 으로 **종료**한다(`:369-372`). 소켓 한도는 35초(`:397`), CLI 소켓 한도는 38초(`native/agent-cli.swift:73-75`).
+- 종료 사유 코드: `CONNECT_FAILED`(`:199`), `CLIENT_CLOSED`(`:310`), `AUTH_TIMEOUT`, `IDLE_TIMEOUT`, `TIMEOUT`, `PERMISSION_CHANGED`(`:135`), `SERVICE_DISABLED`(`:465`), `USER_CANCELLED`(`:573`), `REMOTE_CLOSED`(`:199` 근처 closed 처리).
+- CLI 소스: `native/agent-cli.swift`. 메서드와 허용 인자 표는 `:29-34`, 인자 파싱은 `:37-51`이다. 빌드는 `build-macos.sh:26` 의 `swiftc` 다. Node 테스트로는 실행할 수 없다.
+- 스킬 `skills/promeftp/SKILL.md:13-24` 에는 상태별 행동, 폴링 간격, "닫지 말 것" 지시가 없다.
+
+## S.비교와 결정
+| 안 | 내용 | 장점 | 단점 |
+|---|---|---|---|
+| (a) `session.wait` | 상태가 바뀌거나 최대 25초가 지나면 반환하는 블로킹 메서드와 CLI `session wait` | 폴링 횟수와 토큰이 줄고, 상태 변화에 즉시 반응한다. | 서비스와 CLI(Swift)를 모두 수정해야 한다. 30초 작업 한도보다 짧게 두어야 하고, `activeSession` 으로 잡으면 안 된다(잡으면 TIMEOUT 종료). |
+| (b) 질문 대기 중 인증 한도 연장 | 질문이 뜨면 `authDeadline = max(authDeadline, now + 180초)`, 상한은 open + 600초 | 호스트 키 다이얼로그와 OTP가 겹쳐도 OTP 입력 시간이 3분 보장된다. | 무한히 연장되지 않도록 상한이 필요하다. |
+| (c) status에 `next` 안내 | `connecting`/`waiting_for_user` 응답에 `next:[{action:'wait', message}]` 와 `retryAfter` | 스킬을 읽지 않은 에이전트도 올바르게 행동한다. 변경이 작다. | 응답 크기가 조금 늘어난다. |
+
+확정: (a)(b)(c) 모두 넣는다(S.확정된 결정).
+
+## S.데이터·인터페이스
+- 상수(`agent-service.cjs` 상단): `const authWindow = 120_000, promptWindow = 180_000, authCeiling = 600_000, waitLimit = 25_000;`
+- 세션 필드: `opened: Date.now()` (startSession), `waiters: new Set()`.
+- `session.status` 응답 (ready 전):
+  ```js
+  { session, status: 'connecting'|'waiting_for_user', expires, retryAfter: 2,
+    next: [{ action: 'wait', message: WAIT_MESSAGES[status] }] }
+  ```
+  - `WAIT_MESSAGES.connecting = 'Connecting. Keep polling session status every 2-5 seconds until expires. Do not close or reopen the session.'`
+  - `WAIT_MESSAGES.waiting_for_user = 'Waiting for the user to answer an authentication prompt (such as an OTP) in PromeFTP. Tell the user once, then keep polling until expires. Do not close or reopen the session.'`
+  - ready: `{ session, status: 'ready' }` (기존과 같음). closed: 기존과 같고 `error.next` 를 포함한다.
+- 끝난 세션의 `reason` 이 `error` 를 만들지 않는 경우(`AUTH_TIMEOUT`, `IDLE_TIMEOUT`, `USER_CANCELLED`, `CLIENT_CLOSED`, `TIMEOUT`, `PERMISSION_CHANGED`, `SERVICE_DISABLED`, `REMOTE_CLOSED`)에는 `next` 를 `endNext[reason]` 으로 준다.
+  - `{ session, status:'closed', reason, next }`. `error` 가 있으면 `error.next` 를 우선한다.
+  - `endNext` 는 `agent-service.cjs` 상수이고 표 S.종료사유를 따른다.
+- `session.wait`:
+  - 요청 `{ session, timeout? }`. timeout은 밀리초 정수 1000-25000이고 기본 25000이다. 다른 값은 `INVALID_REQUEST`.
+  - 반환은 `session.status` 와 같은 형태다. 호출 시점 상태가 ready 또는 closed면 즉시 반환한다. 아니면 status가 바뀌거나 세션이 끝나거나 timeout이 되면 반환한다.
+  - `touched` 를 갱신한다. `activeSession`/`inFlight` 는 설정하지 않는다(설정하면 30초 한도로 세션이 종료된다).
+- CLI `native/agent-cli.swift`:
+  - `methods` 에 `"session.wait": ["session","timeout"]` 를 추가한다.
+  - 파싱에서 `timeout` 은 `Int`, 범위 1000-25000. 필수 검사(`:51`)에서 `after` 처럼 선택 인자로 둔다(`$0 != "after" && $0 != "timeout"`).
+  - usage(`:15-16`)를 `promeftp session status|close|wait --session ID [--timeout MS]` 로 고친다.
+
+### S.종료사유 (스킬·`endNext` 공통)
+| reason | 의미 | 에이전트 행동(next) |
+|---|---|---|
+| `AUTH_TIMEOUT` | 사용자가 시간 안에 인증(OTP 등)을 끝내지 않음 | `ask_user`: 준비됐는지 물은 뒤 새 세션을 한 번 연다 |
+| `USER_CANCELLED` | 사용자가 인증을 취소함 | `ask_user`. 재시도 금지 |
+| `IDLE_TIMEOUT` | 10분 동안 요청이 없음 | `retry`: 필요하면 새 세션(OTP를 다시 요구할 수 있음) |
+| `CLIENT_CLOSED` | 에이전트가 닫음 | 없음 |
+| `TIMEOUT` | 요청 하나가 30초를 넘김 | `retry`: 더 작은 작업으로 새 세션 |
+| `CONNECT_FAILED` | 접속/인증/호스트 키 실패 | `error.next` 를 따른다 |
+| `REMOTE_CLOSED` | 서버가 연결을 끊음 | `retry` 1회 |
+| `PERMISSION_CHANGED` | 사용자가 권한을 바꿈 | `ask_user` |
+| `SERVICE_DISABLED` | 에이전트 접근이 꺼짐 | `ask_user` |
+
+## S.동작 흐름
+1. open → `connecting`. `authDeadline = opened + authWindow`.
+2. 이벤트 `prompt`(`agent-service.cjs:162-166`)로 `waiting_for_user` 가 될 때 `s.authDeadline = Math.min(s.opened + authCeiling, Math.max(s.authDeadline, Date.now() + promptWindow))` 로 늘린다. 호스트 키 확인 다이얼로그는 transport 안에서 처리되어 prompt 이벤트가 오지 않으므로, 다이얼로그 뒤의 OTP 질문에서 연장된다.
+3. 상태가 바뀔 때마다(`s.status = ` 대입 4곳 `:157, :164, :175, :576`, 그리고 `end()`) `wake(s)` 를 호출한다. `wake` 는 `s.waiters` 의 resolve를 모두 호출하고 비운다.
+4. 사용자가 앱에서 OTP를 입력하면 `connecting` → `ready` 가 된다. 에이전트는 같은 세션으로 작업한다.
+5. 에러 흐름은 이렇다.
+   - 한도가 지나면 기존처럼 `AUTH_TIMEOUT`.
+   - wait 중 세션이 끝나면 closed 응답.
+   - wait 중 소켓이 닫히면 waiter를 제거한다(리스너가 새지 않게 `finally` 에서 delete).
+
+## S.스킬 변경 (`skills/promeftp/SKILL.md`)
+2·3단계를 아래 내용으로 바꾸고, "Session lifecycle" 하위 목록을 추가한다(영어). 핵심 문장은 다음과 같다.
+- Open one session per profile and reuse it for every command and file operation. Do not open a new session per command.
+- Status table:
+  - `connecting`: keep waiting.
+  - `waiting_for_user`: tell the user once that PromeFTP is waiting for their answer (for example an OTP), then keep waiting.
+  - `ready`: work.
+  - `closed`: read `reason`/`error`.
+- Wait with `promeftp session wait --session ID --json` (returns within 25 seconds), or poll `session status` every 2-5 seconds. Keep waiting until the status changes or `expires` passes. Never treat `connecting` or `waiting_for_user` as a failure.
+- Never close or reopen a session while it is `connecting` or `waiting_for_user`; reopening asks the user for a new OTP.
+- A session closes after 10 minutes without requests (`IDLE_TIMEOUT`). If you will continue soon, keep it; any request, including `session status`, keeps it open. When the task is done, close it.
+- 종료 사유 표(S.종료사유)를 요약해 넣는다.
+- 기존 "Treat any authentication or trust failure as a stop" 은 "Treat a closed session with an authentication or trust failure as a stop" 으로 고쳐, 대기 상태와 구분한다.
+
+같은 내용을 `docs/AGENTS.md`(53행 근처 CLI 예시), `docs/TROUBLESHOOTING.md`(AUTH_TIMEOUT, "에이전트가 OTP 전에 실패" 항목), `llms.txt`, `llms-full.txt` 에 반영한다. 스킬 매니페스트 서명이 있으면 RELEASE 절차대로 다시 서명한다.
+
+## S.구현 체크리스트
+- [ ] S1: `agent-service.cjs` 를 고친다.
+  - 상수 4개를 추가한다.
+  - `startSession` 에 `opened`, `waiters` 를 넣고, `authDeadline: opened + authWindow` 로 바꾼다.
+  - `wake(s)` 함수를 추가하고 상태 대입 4곳과 `end()` 에서 호출한다.
+  - 확인: 테스트 "status change wakes waiters".
+- [ ] S2: prompt 이벤트 처리(`:162-166`)에 S.동작 흐름 2의 연장식을 넣는다. 확인: 테스트 "prompt extends deadline, capped at 600s".
+- [ ] S3: `session.status` 응답 생성을 함수 `statusOf(s)` 로 빼서 S.데이터 형태를 만든다(`WAIT_MESSAGES`, `retryAfter`, `next`). 끝난 세션 경로(`:295-300`)는 `endNext` 를 붙인다. 확인: 테스트.
+- [ ] S4: `session.wait` 를 추가한다.
+  - `operations` Set(`:258`)과 `allowed` 표(`:269`)에 `'session.wait': ['session','timeout']` 를 넣는다.
+  - 끝난 세션 조회 분기(`:295`) 목록에 `session.wait` 를 넣는다.
+  - work는 `new Promise(resolve => { s.waiters.add(resolve); setTimeout(resolve, timeout) })` 다음 `statusOf(s)` 이고, `finally` 에서 waiter를 제거한다.
+  - `activeSession` 은 설정하지 않는다.
+  - 확인: 테스트 3건(즉시 반환, 변경 시 반환, timeout 반환, 그리고 30초 TIMEOUT으로 세션이 끝나지 않음).
+- [ ] S5: `native/agent-cli.swift` 의 methods, 파싱, 필수 검사, usage를 고친다(S.데이터).
+  - 수동 빌드 확인(스크래치 경로에 출력하고, 앱 번들은 건드리지 않는다):
+    ```sh
+    out=$(mktemp -d)
+    xcrun swiftc -target arm64-apple-macosx13.0 -O native/agent-cli.swift -o "$out/promeftp"
+    "$out/promeftp" --help | grep -q "session status|close|wait"
+    "$out/promeftp" session wait --session X --timeout 999 --json; echo "exit=$?"   # 기대: USAGE, exit=2
+    "$out/promeftp" session wait --session X --timeout 25001 --json; echo "exit=$?" # 기대: USAGE, exit=2
+    "$out/promeftp" session wait --json; echo "exit=$?"                             # 기대: USAGE, exit=2 (session 누락)
+    ```
+  - 이 확인은 앱 실행이나 토큰 없이 할 수 있다. 파싱 단계에서 USAGE로 끝나기 때문이다(`agent-cli.swift:27-51`, 토큰 검사는 그 뒤).
+  - 앱이 켜져 있고 토큰이 있으면 `"$out/promeftp" session wait --session <ID> --json` 이 25초 안에 JSON을 반환하는지도 확인한다.
+- [ ] S6: `skills/promeftp/SKILL.md`, `docs/AGENTS.md`, `docs/TROUBLESHOOTING.md`, `llms.txt`, `llms-full.txt` 를 갱신한다(S.스킬 변경). 확인: `test/doc-links.test.cjs`, `test/agent-skills.test.cjs`.
+- [ ] S7: `test/agent-service.test.cjs` 를 새로 만든다(아래). `npm test` 전체 통과.
+
+## S.테스트 계획
+`test/agent-service.test.cjs`:
+- `createAgentService` 를 임시 디렉터리(`fs.mkdtemp(os.tmpdir())`)로 만든다. `node:sqlite` 는 사용한다.
+- 가짜 `transport.connect(p, grant, mode, notify)` 는 notify를 붙잡아 두고 테스트가 이벤트를 발생시킨다.
+- 요청은 서비스가 노출한 내부 `execute` 경로 또는 소켓 클라이언트로 보낸다. 노출 함수가 없으면 `createAgentService` 반환에 테스트 전용 export를 추가하지 말고, `listen()` 후 실제 Unix 소켓(임시 경로)으로 JSON 요청을 보낸다. 구현자는 먼저 `agent-service.cjs` 의 `listen`/요청 프로토콜을 읽고 따른다.
+- 시간은 `node:test` 의 `mock.timers.enable({ apis: ['Date','setTimeout','setInterval'] })` 로 제어한다.
+
+케이스:
+- 정상: open → status가 `connecting` 이고 `next[0].action==='wait'`, `retryAfter===2`, `expires===opened+120000`.
+- prompt 이벤트 → `waiting_for_user`, expires가 now+180000으로 늘어남.
+- 경계: open 후 590초에 prompt → expires = opened+600000(상한).
+- 정상: ready 이벤트 → status ready, `expires`·`next` 없음.
+- 비정상: 시간 경과 후 `AUTH_TIMEOUT`. 그 뒤 status가 `{status:'closed', reason:'AUTH_TIMEOUT', next:[{action:'ask_user'}]}`.
+- wait: ready 상태면 즉시 반환. connecting에서 대기 중 ready 이벤트가 오면 그 상태로 반환. 변화 없이 timeout 5000 → connecting 반환. 30초 경과 후에도 세션이 살아 있음.
+- wait 입력: `timeout: 999`, `30000`, `'5000'` → INVALID_REQUEST. 빈 값(없음) → 25000.
+- 끝난 세션 wait → 즉시 closed.
+- 사람 인증 경로 무영향: `answer()` 가 연장된 deadline 안에서 동작한다.
+
+## S.수용 기준
+1. `npm test` 가 통과한다(신규 `test/agent-service.test.cjs` 포함).
+2. 인증 질문이 뜬 뒤 최소 180초 동안은 `AUTH_TIMEOUT` 이 나지 않는다. 어떤 경우에도 open 후 600초를 넘기지 않는다(테스트).
+3. ready 전 `session.status` 응답에 `next[0].action==='wait'`, `retryAfter`, `expires` 가 있다. 닫힌 세션 응답에는 사유별 `next` 가 있다(S.종료사유 표의 모든 사유 매핑).
+4. `session.wait` 는 25초 안에 반환하고, 상태 변화 후 1초 안에 반환한다. 이 호출이 세션을 `TIMEOUT` 으로 끝내지 않는다(테스트).
+5. SKILL.md에 상태 표, 대기 방법, "connecting/waiting_for_user에서 닫거나 다시 열지 말 것", 세션 재사용, 10분 유휴 규칙, 종료 사유 표가 있다(리뷰어가 문서로 확인).
+6. CLI는 `session wait` 를 지원하고, timeout 범위 밖이나 session 누락은 USAGE(exit 2)다. S5의 swiftc 명령으로 확인한다.
+
+## S.확정된 결정
+- S.D1: `session.wait` 를 추가한다. 최대 25초, `activeSession`/`inFlight` 로 잡지 않는다.
+- S.D2: 질문 대기 연장은 180초, 상한은 open + 600초다.
+- S.D3: 유휴 한도는 10분 그대로다. 스킬에서 유지/종료 방법을 안내한다.
+
+## S.결정 필요
+(없음)

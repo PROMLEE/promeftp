@@ -77,6 +77,10 @@ When an agent reaches an authentication prompt that PromeFTP did not answer, the
 | `already_used` | The same question was already answered on this connection. The saved answer may be wrong. |
 | `read_failed` | The saved answer could not be read or checked. |
 
+## An agent session ends while waiting for an OTP
+
+A closed session reports `reason` and a `next` list. `AUTH_TIMEOUT` means the authentication window passed without an answer. The window is two minutes from open, and each question extends it by three minutes, up to ten minutes from open. Answer the prompt in PromeFTP, or ask the agent to open one new session. `USER_CANCELLED` means you cancelled the prompt. `IDLE_TIMEOUT` means the session had no requests for ten minutes, and the next session may ask for an OTP again. `TIMEOUT` means one request ran longer than 30 seconds, and the session was closed to stop it.
+
 ## Report a bug
 
 Include your PromeFTP version and build from **Preferences → About**, macOS version, and reproducible steps using sample data. For SSH or SFTP issues, mention whether the connection uses an alias, a jump host, or keyboard-interactive authentication. Remove private hostnames, usernames, fingerprints, passwords, OTPs, keys, terminal output, and config details before posting. [GitHub Issues](https://github.com/PROMLEE/promeftp/issues)
