@@ -1,0 +1,23 @@
+{
+  "heading": "Remote backups, split local panes, and remembered conflict choices",
+  "summary": "Back up remote files with one click, split the local file browser, and stop answering the same overwrite question. Agent settings are also simpler.",
+  "changes": [
+    [
+      "Remote backup",
+      "Right-click a remote file or folder and choose Backup to make a dated copy next to it, keeping permissions and times."
+    ],
+    [
+      "Split local browser",
+      "Split the local file browser into two panes and drop downloads on either one. The split is saved with workspaces."
+    ],
+    [
+      "Remembered conflict choices",
+      "Apply one answer to a whole transfer, remember it for later, or replace only newer files. Reset it in Settings → General."
+    ],
+    [
+      "Simpler agent settings",
+      "Bookmarks are listed with their access status, access survives renames, and the Maximum preset no longer asks before each command."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
