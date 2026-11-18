@@ -57,7 +57,23 @@ Change the shortcut in **Preferences → Shortcuts** if the key is taken, or tur
 
 ## Agent connection failures
 
-Run `session status` for the session. Its `error.code` names the cause, such as `HOST_KEY_UNKNOWN`, `HOST_KEY_CHANGED`, `DNS_FAILED`, `CONNECTION_REFUSED`, or `AUTH_FAILED`. Open the activity history in **Preferences → Agents** and choose **Show log** for the raw OpenSSH output.
+Run `session status` for the session. Its `error.code` names the cause, such as `HOST_KEY_UNKNOWN`, `HOST_KEY_CHANGED`, `HOST_KEY_UNCONFIRMED`, `DNS_FAILED`, `CONNECTION_REFUSED`, or `AUTH_FAILED`. Open the activity history in **Preferences → Agents** and choose **Show log** for the raw OpenSSH output.
+
+`error.next` lists the steps the agent may take. A step with `ask_user` means you must act in PromeFTP, and the agent should not retry it. `HOST_KEY_CHANGED` appears when a server's key differs from the one you trusted. PromeFTP then shows a dialog with both fingerprints, and the agent connects only after you choose **Trust and Connect**. `HOST_KEY_UNCONFIRMED` means the dialog was declined or not answered within 60 seconds. PromeFTP never changes your `~/.ssh/known_hosts`.
+
+When an agent reaches an authentication prompt that PromeFTP did not answer, the `auth.prompt` event records a `savedAuth` reason. The reason never includes the question's answer or any password.
+
+| `savedAuth` | Meaning |
+|---|---|
+| `not_granted` | The bookmark's grant does not allow saved authentication, and no granted global rule matches. |
+| `disabled` | Stored authentication or automatic saved replies is turned off in Preferences. |
+| `not_rememberable` | The prompt did not come from the connection itself, so PromeFTP does not answer it. |
+| `no_endpoint` | PromeFTP could not read the bookmark's effective SSH settings. |
+| `no_saved_reply` | No reply is saved for this exact question on this bookmark. Save one in PromeFTP. |
+| `scope_mismatch` | The saved reply belongs to other SSH settings, or the agent's connection reaches a different server than the app. |
+| `global_rule_not_granted` | A global rule matches, but the grant does not include it. |
+| `already_used` | The same question was already answered on this connection. The saved answer may be wrong. |
+| `read_failed` | The saved answer could not be read or checked. |
 
 ## Report a bug
 
