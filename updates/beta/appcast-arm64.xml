@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.9</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.9</link>
-      <pubDate>Wed, 18 Nov 2026 03:11:38 +0000</pubDate>
-      <sparkle:version>1.1.9</sparkle:version>
-      <sparkle:shortVersionString>1.1.9</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.10</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.10</link>
+      <pubDate>Wed, 18 Nov 2026 09:29:10 +0000</pubDate>
+      <sparkle:version>1.1.10</sparkle:version>
+      <sparkle:shortVersionString>1.1.10</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Optional automatic host key trust and OTP-friendly agent sessions&lt;/h2&gt;
-&lt;p&gt;Each bookmark can let agents trust new or changed host keys without asking, with a clear warning. Agents also wait properly while you enter a one-time password.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Automatic host key trust&lt;/strong&gt;&lt;br&gt;Choose off, new keys only, or new and changed keys for each bookmark. Turning it on shows a warning, and every automatic trust is recorded.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Stale known_hosts entries&lt;/strong&gt;&lt;br&gt;An old key in ~/.ssh/known_hosts or /etc/ssh no longer stops a connection before PromeFTP can ask.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;More time for one-time passwords&lt;/strong&gt;&lt;br&gt;A prompt extends the authentication limit to 3 minutes, and agents can wait for the session with promeftp session wait.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clearer agent guidance&lt;/strong&gt;&lt;br&gt;Status responses and the agent skill explain how to keep a session open and what to do after it ends.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Remote backups, split local panes, and remembered conflict choices&lt;/h2&gt;
+&lt;p&gt;Back up remote files with one click, split the local file browser, and stop answering the same overwrite question. Agent settings are also simpler.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Remote backup&lt;/strong&gt;&lt;br&gt;Right-click a remote file or folder and choose Backup to make a dated copy next to it, keeping permissions and times.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Split local browser&lt;/strong&gt;&lt;br&gt;Split the local file browser into two panes and drop downloads on either one. The split is saved with workspaces.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Remembered conflict choices&lt;/strong&gt;&lt;br&gt;Apply one answer to a whole transfer, remember it for later, or replace only newer files. Reset it in Settings → General.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Simpler agent settings&lt;/strong&gt;&lt;br&gt;Bookmarks are listed with their access status, access survives renames, and the Maximum preset no longer asks before each command.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.9"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.10"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.9/PromeFTP-1.1.9-macos-arm64.zip" length="141058250" type="application/octet-stream" sparkle:edSignature="ly8qGePEq5Joa5cmfLpj1qNZblR3+zYm/x/8sFildhbu7se70NpODeBZyqSjCpSUZxo0pWlXZl6E/SZfywwIBw=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.10/PromeFTP-1.1.10-macos-arm64.zip" length="141078347" type="application/octet-stream" sparkle:edSignature="6eE+swb++SpaQaCdKTX1JX6HDd/GkPGgd3EpgBa/iXJxVQ++8S8m8QnrIb8CPSNPOvSAZjWjTFhJ6tujRTswBA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: KjPA7LVbTzZyZDR5gJqnD+D36Lsob4jOL442oiTBqq4OALconJ1YVjwb/AhECFQ3Ji4FZeFt3jYslej6XoH6Cw==
-length: 3022
+edSignature: HWh65yp5LzmvRGvBGie9Tsh/e+jPyz5h03lxAQePXSSs2N0I1VFI9dHfnMG73qPIVAlea7f1QOpODkodQ1vVDA==
+length: 3021
 -->
