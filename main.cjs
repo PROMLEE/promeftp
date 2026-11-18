@@ -12,6 +12,7 @@ const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { translate, supportedLocale } = require('./localization.js');
 const { createAgentService, historyOf } = require('./agent-service.cjs');
+const { backupStamp, backupName, backupCommand, classifyBackupFailure, collectCommand, copyAttributes } = require('./remote-backup.cjs');
 const { createTransport } = require('./agent-transport.cjs');
 const { manageSkill, agentTargets, detectAgents } = require('./agent-skills.cjs');
 const pathFavorites = require('./path-favorites.cjs');
@@ -286,7 +287,8 @@ handle('save-workspace', async (value, tabs, layout = {}) => {
     const root = tree(item.tree);
     const focus = seen.has(item.focus) && !preceding.has(item.focus) ? item.focus : null;
     const localRatio = Number.isFinite(item.localRatio) ? Math.max(0.2, Math.min(0.75, item.localRatio)) : undefined;
-    return { name: clean(item.name, 80), group: clean(item.group, 40), groupColor: clean(item.groupColor, 16), color: clean(item.color, 16), tree: root, focus, localRatio };
+    return { name: clean(item.name, 80), group: clean(item.group, 40), groupColor: clean(item.groupColor, 16), color: clean(item.color, 16), tree: root, focus, localRatio,
+      localSplit: stateRules.workspaceLocalSplit(item.localSplit) };
   });
   if (panes && seen.size !== entries.length) throw Error('Invalid workspace layout.');
   const saved = {
@@ -1161,6 +1163,22 @@ transferQueue = createTransferService({
       return await upload(channel, job.localPath, job.remotePath, 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource);
     } else if (job.operation === 'download') {
       return await download(channel, job.remotePath, job.localPath, Boolean(job.replace), 0, signal, progress, job.expectedDestination, job.conflictPolicy, job.expectedSource);
+    } else if (job.operation === 'remote-duplicate') {
+      // Fallback for a server without shell commands: download the item, then upload it under its backup name.
+      const stage = await fs.mkdtemp(path.join(app.getPath('temp'), 'promeftp-duplicate-'));
+      try {
+        const local = path.join(stage, path.posix.basename(job.sourcePath));
+        await download(channel, job.sourcePath, local, false, 0, signal, progress, undefined, undefined, job.expectedSource);
+        if (signal.aborted) throw Error('Transfer cancelled.');
+        const uploaded = await upload(channel, local, job.targetPath, 0, signal, progress, { absent: true });
+        if (uploaded?.status !== 'completed') return uploaded;
+        // The upload writes new files, so their mode and dates are copied from the original, as cp -p would.
+        const failures = await copyAttributes(attributeOps(channel), job.sourcePath, job.targetPath);
+        if (!failures.length) return uploaded;
+        const note = `Permissions or dates were not copied for ${failures.length} item(s). First: ${failures[0]}`;
+        console.warn('Backup copy: ' + note);
+        return { ...uploaded, note };
+      } finally { await fs.rm(stage, { recursive: true, force: true }); }
     } else {
       const targetRecord = sessions.get(job.targetSessionId) || [...sessions.values()].find(item => item.mode === 'sftp' && pathFavorites.scopeFor(item.input) === job.targetScope);
       if (job.targetGeneration && targetRecord?.generation !== job.targetGeneration) throw Error('Destination connection changed. Open the matching SFTP connection and retry.');
@@ -1422,9 +1440,91 @@ handle('local-action', async (action, directory, name, nextName) => {
     });
   } else throw Error('Unsupported local file action.');
 });
+// Backups run `cp` on the server through the session's own connection. Limits: one file 60 seconds, one folder 10 minutes.
+const backupLimits = { file: 60_000, folder: 600_000, stderr: 4096, names: 50 };
+// Runs one remote command on the SFTP connection. Resolves with the exit code and the first 4 KiB of stdout and stderr.
+// A command that cannot start (for example the connection dropped) throws, so it is a plain failure.
+function runRemote(connection, command, timeout) {
+  const controller = new AbortController();
+  const child = connection.exec(command, controller.signal);
+  return collectCommand(child, { controller, timeout, limit: backupLimits.stderr });
+}
+// The first name in a free slot. A name that appears on the server after the listing is skipped, not overwritten.
+async function freeBackupName(channel, directory, name, stamp, taken) {
+  for (;;) {
+    const candidate = backupName(name, stamp, taken);
+    const exists = await sftpCall(channel, 'lstat', path.posix.join(directory, candidate)).then(() => true, error => {
+      if (error.code === 2) return false;
+      throw error;
+    });
+    if (!exists) return candidate;
+    taken.add(candidate);
+  }
+}
+// The SFTP calls that copy attributes (see copyAttributes in remote-backup.cjs).
+function attributeOps(channel) {
+  return {
+    lstat: target => sftpCall(channel, 'lstat', target),
+    readdir: target => sftpCall(channel, 'readdir', target).then(rows => rows.map(row => row.filename)),
+    chmod: (target, mode) => sftpCall(channel, 'chmod', target, mode),
+    utimes: (target, atime, mtime) => sftpCall(channel, 'utimes', target, atime, mtime),
+  };
+}
+// Backs up the named items of one folder, one by one. A server that refuses shell commands gets each copy through
+// PromeFTP instead (remote-duplicate), and the session remembers that until it reconnects.
+async function backupRemote(id, directory, names) {
+  if (!Array.isArray(names) || names.length < 1 || names.length > backupLimits.names || !names.every(validName)) throw Error('Invalid name.');
+  const record = sessions.get(id);
+  const channel = record.connection.channel;
+  const taken = new Set((await sftpCall(channel, 'readdir', directory)).map(row => row.filename));
+  const stamp = backupStamp();
+  const results = [];
+  const queueCopy = async (name, backup, source, target, attrs) => {
+    await enqueueTransfer({ operation: 'remote-duplicate', sessionId: id, sourcePath: source, targetPath: target, label: name,
+      ...(attrs.isFile() && { expectedSource: { size: attrs.size, modifiedAt: attrs.mtime * 1000 } }) });
+    return { name, backup, method: 'stream', queued: true };
+  };
+  for (const name of names) {
+    const source = path.posix.join(directory, name);
+    let attrs;
+    try { attrs = await sftpCall(channel, 'lstat', source); }
+    catch (error) { results.push({ name, error: 'FAILED', detail: error.message }); continue; }
+    if (attrs.isSymbolicLink()) { results.push({ name, error: 'LINK' }); continue; }
+    let backup;
+    try { backup = await freeBackupName(channel, directory, name, stamp, taken); }
+    catch (error) { results.push({ name, error: error.agentCode || 'FAILED' }); continue; }
+    taken.add(backup);
+    const target = path.posix.join(directory, backup);
+    // Once a server has refused shell commands, this session copies through PromeFTP without trying cp again.
+    if (record.backupShell !== false) {
+      let outcome;
+      try {
+        outcome = await runRemote(record.connection, backupCommand(source, target, attrs.isDirectory()),
+          attrs.isDirectory() ? backupLimits.folder : backupLimits.file);
+      } catch (error) {
+        // The command never ran (the connection is unavailable). That is a failure; the server is not refusing shells.
+        results.push({ name, error: 'FAILED', detail: error.message.slice(0, 200) });
+        continue;
+      }
+      if (outcome.timedOut) { results.push({ name, error: 'TIMEOUT' }); continue; }
+      if (outcome.code === 0) { results.push({ name, backup, method: 'cp' }); continue; }
+      const reason = classifyBackupFailure(outcome);
+      if (reason !== 'NO_SHELL' && reason !== 'NO_CP') {
+        const firstLine = (outcome.stderr || outcome.stdout || '').split('\n').find(line => line.trim()) || '';
+        results.push({ name, error: reason, detail: firstLine.trim().slice(0, 200) });
+        continue;
+      }
+      // Only a real refusal of shell commands (or a missing cp) moves this session to the fallback.
+      record.backupShell = false;
+    }
+    results.push(await queueCopy(name, backup, source, target, attrs));
+  }
+  return { results };
+}
 handle('sftp', async (id, action, target, name) => {
   const channel = sessions.get(id)?.connection?.channel;
   if (!channel?.readdir) throw Error('SFTP disconnected.');
+  if (action === 'backup') return backupRemote(id, target, name);
   if (action === 'list') {
     const directory = await sftpCall(channel, 'realpath', target);
     const rows = await sftpCall(channel, 'readdir', directory);

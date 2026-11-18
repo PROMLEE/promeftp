@@ -42,4 +42,15 @@ function snippetScope(context, home) {
   return JSON.stringify(['ssh', host.toLowerCase(), hostname || '', username, port, configPath]);
 }
 
-module.exports = { expandHome, profile, bookmarkFolderNames, bookmarkFolderName, workspaceName, snippetScope };
+// The local split saved with a workspace pane. A malformed value is dropped (undefined), so the pane still opens with
+// one local pane. The ratio is kept within 0.1 to 0.9 and the folders are validated like the single local folder.
+function workspaceLocalSplit(value) {
+  if (!value || typeof value !== 'object') return undefined;
+  if (!['row', 'column'].includes(value.axis)) return undefined;
+  if (!Array.isArray(value.directories) || value.directories.length !== 2) return undefined;
+  if (!value.directories.every(item => typeof item === 'string')) return undefined;
+  const ratio = Number.isFinite(value.ratio) ? Math.max(0.1, Math.min(0.9, value.ratio)) : 0.5;
+  return { axis: value.axis, ratio, directories: value.directories.map(item => item.slice(0, 4096)), focus: value.focus === 1 ? 1 : 0 };
+}
+
+module.exports = { expandHome, profile, bookmarkFolderNames, bookmarkFolderName, workspaceName, snippetScope, workspaceLocalSplit };

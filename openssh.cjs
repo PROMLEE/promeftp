@@ -266,7 +266,8 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
     close,
     answer(id, value) { return auth?.reply(id, value); },
     get channel() { return channel; },
-    ...(agent && mode === 'exec' && { exec(command, signal) {
+    // The SFTP connection also runs commands (for backups) on the same ControlMaster socket. Agent exec sessions keep it.
+    ...(((agent && mode === 'exec') || mode === 'sftp') && { exec(command, signal) {
       if (stopped || !isReady) throw Error('SSH session is unavailable.');
       return spawn(ssh, ['-F', '/dev/null', '-S', socket, '-o', 'ProxyCommand=/usr/bin/false',
         '-o', 'BatchMode=yes', '-T', '--', 'localhost', command], { signal, stdio: ['ignore', 'pipe', 'pipe'] });

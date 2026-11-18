@@ -135,6 +135,7 @@ function createTransferService({ file, historyFile, execute, emit, onBusy = () =
       });
       job.state = job.cancel && !controller.signal.committed ? 'cancelled' : result?.status === 'skipped' ? 'skipped' : 'completed';
       if (result?.skippedCount) job.skippedCount = result.skippedCount;
+      if (result?.note) job.note = String(result.note).slice(0, 500);
       job.finishedAt = Date.now(); job.error = undefined;
     } catch (error) {
       const stoppedByQuit = job.shutdown && !controller.signal.committed;
@@ -170,7 +171,7 @@ function createTransferService({ file, historyFile, execute, emit, onBusy = () =
         entry.localPath, entry.remotePath, entry.error, entry.operation, entry.state].some(value => String(value || '').toLowerCase().includes(needle))).slice(0, limit);
     },
     async enqueue(input) {
-      if (!input || !['upload', 'download', 'remote-copy', 'mkdir-local', 'mkdir-remote'].includes(input.operation)) throw Error('Invalid transfer request.');
+      if (!input || !['upload', 'download', 'remote-copy', 'remote-duplicate', 'mkdir-local', 'mkdir-remote'].includes(input.operation)) throw Error('Invalid transfer request.');
       const job = { ...input, id: randomUUID(), state: 'queued', createdAt: Date.now(), attempt: 0 };
       delete job.cancel; jobs.set(job.id, job); await publish(job); void pump(); return job.id;
     },

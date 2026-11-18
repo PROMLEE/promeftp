@@ -664,6 +664,19 @@ Turn on local agent access to change these settings.|이 설정을 바꾸려면 
 This client gets browsing, downloads, commands that run without asking, automatic trust of new host keys, saved authentication and every rule and trigger, for|이 클라이언트는 탐색, 다운로드, 묻지 않는 명령 실행, 새 호스트 키 자동 신뢰, 저장된 인증, 모든 규칙과 트리거를 다음 북마크에 대해 받습니다:|このクライアントは、閲覧、ダウンロード、確認なしで実行されるコマンド、新しいホストキーの自動信頼、保存済み認証、すべてのルールとトリガーを次のブックマークに対して得ます：|此客户端将获得以下书签的浏览、下载、无需询问即可运行的命令、新主机密钥的自动信任、已保存认证以及所有规则和触发器：
 Choose a bookmark.|북마크를 선택하세요.|ブックマークを選んでください。|请选择书签。
 Add an SSH bookmark first.|먼저 SSH 북마크를 추가하세요.|先に SSH ブックマークを追加してください。|请先添加 SSH 书签。
+Backup|백업|バックアップ|备份
+Backing up…|백업 중…|バックアップ中…|正在备份…
+Backed up as|다음 이름으로 백업됨:|次の名前でバックアップしました:|已备份为
+items backed up|개 항목 백업됨|項目をバックアップしました|个项目已备份
+This server doesn't allow shell commands. Copying through PromeFTP instead.|이 서버는 셸 명령을 허용하지 않아 PromeFTP를 거쳐 복사합니다.|このサーバーはシェルコマンドを許可していないため、PromeFTP 経由でコピーします。|此服务器不允许 shell 命令，将通过 PromeFTP 复制。
+Split local pane|로컬 패널 분할|ローカルパネルを分割|拆分本地面板
+Close local pane|로컬 패널 닫기|ローカルパネルを閉じる|关闭本地面板
+Backup failed|백업 실패|バックアップに失敗しました|备份失败
+You don't have permission to write in this folder.|이 폴더에 쓸 권한이 없습니다.|このフォルダーに書き込む権限がありません。|您没有在此文件夹中写入的权限。
+The server is out of disk space.|서버 디스크 공간이 부족합니다.|サーバーのディスク容量が不足しています。|服务器磁盘空间不足。
+Links can't be backed up. Back up the original instead.|링크는 백업할 수 없습니다. 원본을 백업하세요.|リンクはバックアップできません。元のファイルをバックアップしてください。|无法备份链接。请改为备份原始项目。
+Backup took too long and was stopped. Check the folder before retrying.|백업이 너무 오래 걸려 중단했습니다. 다시 시도하기 전에 폴더를 확인하세요.|バックアップに時間がかかりすぎたため中止しました。再試行する前にフォルダーを確認してください。|备份耗时过长已停止。重试前请先检查文件夹。
+Too many backups with this name were made in the same second.|같은 초에 만든 같은 이름의 백업이 너무 많습니다.|同じ秒に同じ名前のバックアップが多すぎます。|同一秒内创建的同名备份过多。
 `.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];

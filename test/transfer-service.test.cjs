@@ -193,3 +193,16 @@ test('without a history file the history is empty and nothing is written', async
   await waitFor(() => env.service.list().length === 0, 'queue empties');
   assert.deepEqual(await env.service.history(), []);
 });
+
+test('T11: a remote-duplicate transfer (backup fallback) is accepted, runs, and is logged', async t => {
+  const seen = [];
+  const env = await setup(async job => { seen.push(job.operation); return { status: 'completed' }; });
+  t.after(env.cleanup);
+  const id = await env.service.enqueue({ operation: 'remote-duplicate', sessionId: 's1', sourcePath: '/srv/app.conf',
+    targetPath: '/srv/app.conf.20261118-153000', label: 'app.conf' });
+  await waitFor(() => env.service.list().length === 0, 'queue empties');
+  assert.deepEqual(seen, ['remote-duplicate']);
+  const history = await env.service.history();
+  assert.equal(history[0].id, id);
+  assert.equal(history[0].state, 'completed');
+});

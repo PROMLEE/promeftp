@@ -301,6 +301,27 @@ body.terminal-transparent .auth-requests { background: var(--paper); }
 .local-file-divider::before { background: var(--line); }
 .remote-file-panes .split-divider { background: var(--paper); }
 .remote-file-panes .split-divider::before { background: var(--line); }
+/* Local panes: one, or two split the same way as the remote panes. The focused local pane gets the accent heading. */
+.local-file-panes { display: flex; min-width: 0; min-height: 0; }
+.local-file-panes > .file-panel, .local-file-panes > .split-node { flex: 1; }
+/* The second pane takes the rest of the split. A zero basis matters: file panes are inline-size containers. */
+.local-file-panes .split-node > :last-child { flex: 1 1 0; min-width: 0; }
+.local-file-panes .split-divider { background: var(--paper); }
+.local-file-panes .split-divider::before { background: var(--line); }
+.local-file-panes:has(.split-node) .file-panel.active-local .file-heading h3 { color: var(--accent); }
+/* A narrow local pane keeps its toolbar on one line (same height as the other pane) and its name column at least
+   120px wide. Below the widths in the container queries, the modified and type columns hide first. */
+.local-file-panes .file-tools { flex-wrap: nowrap; max-width: none; min-width: 0; }
+.local-file-panes .file-tools .icon-button { flex: none; width: 22px; height: 22px; }
+.local-file-panes .file-tools .icon-button svg { width: 13px; height: 13px; }
+.local-file-panes .file-heading h3 { min-width: 0; }
+.local-file-panes .file-name { min-width: 120px; }
+@container (max-width: 395px) {
+  .local-file-panes :is(.file-modified, .file-sort [data-column=modifiedAt]) { display: none; }
+}
+@container (max-width: 277px) {
+  .local-file-panes :is(.file-type, .file-sort [data-column=type]) { display: none; }
+}
 .file-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; container-type: inline-size; }
 .files-pane > .file-panel, .remote-file-panes > .file-panel { flex: 1; }
 .file-panels:has(.split-node) .files-pane.focused .file-heading h3 { color: var(--accent); }

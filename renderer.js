@@ -1051,6 +1051,17 @@ editor.addEventListener('submit', async event => {
   } catch (error) { showError(error); }
 });
 
+// The line shown for a failed backup. Known causes have their own sentence; anything else shows the first stderr line.
+function backupProblemText(item) {
+  switch (item.error) {
+    case 'PERMISSION': return t('You don\'t have permission to write in this folder.');
+    case 'NO_SPACE': return t('The server is out of disk space.');
+    case 'BACKUP_NAME_TAKEN': return t('Too many backups with this name were made in the same second.');
+    case 'LINK': return t('Links can\'t be backed up. Back up the original instead.');
+    case 'TIMEOUT': return t('Backup took too long and was stopped. Check the folder before retrying.');
+    default: return t('Backup failed') + ': ' + (item.detail || item.error);
+  }
+}
 function status(session, value, failed = false) {
   session.status.textContent = t(value);
   session.status.hidden = value === 'Connected' && !failed;
@@ -1333,7 +1344,7 @@ function makeTab(input, mode, options) {
       const session = sessions.get(node.dataset.session);
       if (!session) throw Error('A pane in this tab has closed.');
       const index = entries.length;
-      entries.push({ mode: session.mode, input: session.input, local: session.fileLayout?.directory ?? session.localDirectory,
+      entries.push({ mode: session.mode, input: session.input, local: session.fileLayout?.local?.directory ?? session.localDirectory,
         remote: session.remoteDirectory });
       if (session.id === record.focus) focus = index;
       return index;
@@ -1342,7 +1353,7 @@ function makeTab(input, mode, options) {
     if (!firstPane) return;
     const tree = encode(firstPane);
     restoreWorkspace({ tabs: entries, panes: [{ name: record.name, group: record.group, groupColor: record.groupColor, color: record.color,
-      tree, focus, localRatio: record.fileLayout?.localRatio }], active: focus });
+      tree, focus, localRatio: record.fileLayout?.localRatio, localSplit: record.fileLayout?.localSplitState?.() }], active: focus });
   }
   updateCaption();
   const menu = () => chooseMenu([
@@ -2036,8 +2047,9 @@ try { Object.assign(fileColumnVisibility, JSON.parse(localStorage.getItem('sftp-
 function fileType(entry) {
   if (entry.directory) return t('Folder');
   if (entry.link) return t('Link');
-  const dot = entry.name.lastIndexOf('.');
-  return dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : t('File');
+  // A backup copy shows the type of its original name, so "app.conf.20261118-170909" is CONF.
+  const { extension, backup } = nameTypeOf(entry.name);
+  return extension || (backup ? t('Backup') : t('File'));
 }
 function formatFileSize(size) {
   if (!Number.isFinite(size) || size < 0) return '—';
@@ -2053,7 +2065,22 @@ function makeFileLayout(root, directory, ratio) {
   container.className = 'listing file-panels';
   const remotesRoot = document.createElement('div');
   remotesRoot.className = 'remote-file-panes';
-  const layout = { container, remotesRoot, directory, connections: new Set() };
+  // One local pane, or a split of two. It sits where the single local pane always sat.
+  const localRoot = document.createElement('div');
+  localRoot.className = 'local-file-panes';
+  const layout = {
+    container, localRoot, remotesRoot, localDirectory: directory, connections: new Set(), locals: [], activeLocal: undefined,
+    get local() { return layout.locals[0]; },
+    // The folder the active local pane shows. Transfers and the path bar in the file tools use it.
+    get directory() { return (layout.activeLocal ?? layout.locals[0])?.directory ?? layout.localDirectory; },
+  };
+  // Serialized with a workspace: the split direction, its ratio, both folders, and which pane was focused.
+  layout.localSplitState = () => {
+    const node = localRoot.querySelector(':scope > .split-node');
+    if (!node || layout.locals.length !== 2) return undefined;
+    return { axis: node.axis, ratio: node.ratio, directories: layout.locals.map(side => side.directory || ''),
+      focus: Math.max(0, layout.locals.indexOf(layout.activeLocal ?? layout.locals[0])) };
+  };
   const divider = document.createElement('button');
   divider.type = 'button';
   divider.className = 'split-divider local-file-divider';
@@ -2084,7 +2111,7 @@ function makeFileLayout(root, directory, ratio) {
   layout.refreshDivider = () => {
     if (layout.localRatio === undefined) divider.setAttribute('aria-valuenow', remotesRoot.querySelector('.split-node') ? '40' : '50');
   };
-  container.append(divider, remotesRoot);
+  container.append(localRoot, divider, remotesRoot);
   root.append(container);
   return layout;
 }
@@ -2095,6 +2122,9 @@ function setupFiles(session) {
   const listing = layout.container;
   session.listing = listing;
   layout.connections.add(session);
+  // Every local pane is a side with side.side === 'local'. Remote panes are the others.
+  const isLocal = side => side?.side === 'local';
+  const activeLocal = () => layout.activeLocal ?? layout.locals[0];
   const activeRemote = () => {
     const current = sessions.get(active);
     return layout.connections.has(current) ? current : layout.connections.values().next().value;
@@ -2182,12 +2212,12 @@ function setupFiles(session) {
     header.append(heading, tools);
     body.append(tree, items);
     element.append(header, address, sortBar, body);
-    if (side === 'local') listing.prepend(element);
-    else (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
+    // Local panes are placed by the caller, inside .local-file-panes (one, or two when split).
+    if (side !== 'local') (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
     const entry = {
       side, element, address, location, pathBar, pathSpace, breadcrumbs, favoriteToggle, favorites, history, tools, items, body, tree,
       folders: new Map(), expanded: new Set(['/']), entries: [], selected: new Set(), sortKey: 'name', sortDescending: false,
-      sortName, sortSize, sortModified, sortType, pathHistory: [], pathHistoryIndex: -1, pendingPathIndex: undefined,
+      sortName, sortSize, sortModified, sortType, pathHistory: [], pathHistoryIndex: -1, pendingPathIndex: undefined, localRequest: 0,
     };
     element._fileSide = entry;
     items.addEventListener('click', event => {
@@ -2209,7 +2239,13 @@ function setupFiles(session) {
     updateFileColumns(entry);
     return entry;
   }
-  const local = layout.local ??= panel('Local', 'local');
+  if (first) {
+    const side = panel('Local', 'local');
+    side.directory = layout.localDirectory;
+    layout.locals.push(side);
+    layout.localRoot.append(side.element);
+  }
+  const local = layout.locals[0];
   const remote = panel('Remote', 'remote');
   const remoteHeading = remote.element.querySelector('h3');
   remoteHeading.classList.add('terminal-session-name');
@@ -2242,15 +2278,15 @@ function setupFiles(session) {
   try { hiddenFiles = localStorage.getItem('sftp-show-hidden') !== 'false'; } catch {}
 
   function itemPath(side, name) {
-    const directory = side === local ? layout.directory : session.remoteDirectory;
+    const directory = isLocal(side) ? side.directory : session.remoteDirectory;
     return directory.replace(/\/$/, '') + '/' + name;
   }
 
   function currentDirectory(side) {
-    return side === local ? layout.directory : session.remoteDirectory;
+    return isLocal(side) ? side.directory : session.remoteDirectory;
   }
   const { host, hostname, port, username, configPath } = session.input;
-  const historyKey = side => 'sftp-folders:' + (side === local ? 'local' :
+  const historyKey = side => 'sftp-folders:' + (isLocal(side) ? 'local' :
     JSON.stringify([configPath || '', host, hostname || '', port ?? null, username || '']));
   function recentFolders(side) {
     try {
@@ -2265,7 +2301,7 @@ function setupFiles(session) {
     let legacy = [];
     const key = historyKey(side).replace('sftp-folders:', 'sftp-favorites:');
     try { legacy = JSON.parse(localStorage.getItem(key)) || []; } catch {}
-    const scope = side === local ? 'local' : session.input;
+    const scope = isLocal(side) ? 'local' : session.input;
     const values = await api['sftp-favorites'](scope, legacy);
     favoritesCache.set(side, values);
     if (legacy.length) { try { localStorage.removeItem(key); } catch {} }
@@ -2282,7 +2318,7 @@ function setupFiles(session) {
     side.favoriteToggle.setAttribute('aria-label', t(hint));
   }
   async function mutateFavorite(side, change) {
-    const result = await api['mutate-sftp-favorite'](side === local ? 'local' : session.input, change);
+    const result = await api['mutate-sftp-favorite'](isLocal(side) ? 'local' : session.input, change);
     favoritesCache.set(side, result); syncFavoriteControl(side); return result;
   }
   function toggleFavorite(side) {
@@ -2381,7 +2417,7 @@ function setupFiles(session) {
     if (index < 0 || index >= side.pathHistory.length) return;
     const target = side.pathHistory[index];
     side.pendingPathIndex = index;
-    const task = side === local ? layout.loadLocal(target) : run(() => loadRemote(target));
+    const task = isLocal(side) ? loadLocal(side, target) : run(() => loadRemote(target));
     Promise.resolve(task).catch(error => status(session, error.message, true)).finally(() => {
       if (side.pendingPathIndex === index) side.pendingPathIndex = undefined;
     });
@@ -2436,13 +2472,13 @@ function setupFiles(session) {
     } catch {}
     side.history.disabled = !recentFolders(side).length;
   }
-  async function loadLocal(target) {
-    const request = ++localRequest;
+  async function loadLocal(side, target) {
+    const request = ++side.localRequest;
     const result = await api['local-list'](target);
-    if (request !== localRequest) return;
-    layout.directory = result.directory;
-    showPath(local, result.directory);
-    render(local, hiddenFiles ? result.entries : result.entries.filter(entry => !entry.name.startsWith('.')));
+    if (request !== side.localRequest) return;
+    side.directory = result.directory;
+    showPath(side, result.directory);
+    render(side, hiddenFiles ? result.entries : result.entries.filter(entry => !entry.name.startsWith('.')));
   }
 
   async function loadRemote(target) {
@@ -2512,11 +2548,11 @@ function setupFiles(session) {
       if (!cached) {
         const request = {};
         side.folders.set(path, request);
-        const loading = side === local ? api['local-list'](path) : api.sftp(session.id, 'list', path);
+        const loading = isLocal(side) ? api['local-list'](path) : api.sftp(session.id, 'list', path);
         loading.then(result => {
           if (side.folders.get(path) !== request) return;
           request.children = result.entries.filter(entry => entry.directory && !entry.link &&
-            (side !== local || hiddenFiles || !entry.name.startsWith('.'))).map(entry => ({
+            (!isLocal(side) || hiddenFiles || !entry.name.startsWith('.'))).map(entry => ({
               name: entry.name, path: (path === '/' ? '' : path) + '/' + entry.name,
             }));
           renderTree(side, side.treeBranches);
@@ -2565,9 +2601,9 @@ function setupFiles(session) {
     finally { busy = false; updateControls(); }
   }
 
-  async function transfer(receiving, entries, remoteSource) {
+  async function transfer(receiving, entries, remoteSource, localSide = activeLocal()) {
     if (!entries.length || !session.remoteDirectory || !session.ready) return;
-    const localTarget = layout.directory;
+    const localTarget = localSide.directory;
     const remoteTarget = session.remoteDirectory;
     for (const entry of entries) {
       const localPath = localTarget.replace(/\/$/, '') + '/' + entry.name;
@@ -2584,7 +2620,7 @@ function setupFiles(session) {
   }
 
   function navigate(side, target) {
-    if (side === local) layout.loadLocal(target).catch(localError);
+    if (isLocal(side)) loadLocal(side, target).catch(localError);
     else run(() => loadRemote(target));
   }
 
@@ -2592,10 +2628,47 @@ function setupFiles(session) {
     const prefix = directory.replace(/\/$/, '') + '/';
     for (const key of side.folders.keys()) if (key === directory || key.startsWith(prefix)) side.folders.delete(key);
     if (currentDirectory(side) === directory) {
-      if (side === local) await loadLocal(directory);
+      if (isLocal(side)) await loadLocal(side, directory);
       else await run(() => loadRemote(directory));
     }
     if (!side.tree.hidden) syncTree(side);
+  }
+
+  // Backs up the named items of the current remote folder. Runs one backup at a time per session.
+  async function backupItems(names) {
+    if (!session.ready || session.backupRunning || !names.length) return;
+    session.backupRunning = true;
+    const directory = session.remoteDirectory;
+    status(session, t('Backing up…'));
+    try {
+      const { results } = await api.sftp(session.id, 'backup', directory, names);
+      const done = results.filter(item => item.backup && !item.queued);
+      const failed = results.filter(item => item.error);
+      const queued = results.some(item => item.queued);
+      await refreshFolder(remote, directory);
+      selectNames(remote, done.map(item => item.backup));
+      const summary = !done.length ? '' : failed.length === 0 && done.length === 1 ? `${t('Backed up as')} ${done[0].backup}`
+        : failed.length === 0 ? `${done.length} ${t('items backed up')}` : `${done.length} / ${results.length} ${t('items backed up')}`;
+      const notes = queued ? [t('This server doesn\'t allow shell commands. Copying through PromeFTP instead.')] : [];
+      if (queued) showTransferDrawer();
+      status(session, [summary, ...notes, ...failed.map(item => `${item.name}: ${backupProblemText(item)}`)].filter(Boolean).join(' · '),
+        failed.length > 0);
+    } catch (error) {
+      status(session, error.message, true);
+    } finally { session.backupRunning = false; }
+  }
+  function selectNames(side, names) {
+    side.selected.clear();
+    for (const name of names) if (side.entries.some(entry => entry.name === name)) side.selected.add(name);
+    side.selectionAnchor = undefined;
+    let revealed = false;
+    for (const item of side.items.querySelectorAll('.file-name[aria-pressed]')) {
+      const selected = side.selected.has(item.dataset.name);
+      item.setAttribute('aria-pressed', String(selected));
+      item.parentElement.classList.toggle('selected', selected);
+      if (selected && !revealed) { item.scrollIntoView({ block: 'nearest' }); revealed = true; }
+    }
+    updateControls();
   }
 
   function setSort(side, key) {
@@ -2705,16 +2778,16 @@ function setupFiles(session) {
         });
       }
       const target = itemPath(side, entry.name);
-      const reload = () => side === local ? loadLocal(currentDirectory(side)) : loadRemote(currentDirectory(side));
+      const reload = () => isLocal(side) ? loadLocal(side, currentDirectory(side)) : loadRemote(currentDirectory(side));
       const rename = async () => {
         const next = await askName(entry.name, t('Rename…'));
         if (next === undefined || next === entry.name || !next.trim()) return;
-        if (side === local) await api['local-action']('rename', currentDirectory(side), entry.name, next.trim());
+        if (isLocal(side)) await api['local-action']('rename', currentDirectory(side), entry.name, next.trim());
         else await api.sftp(session.id, 'rename', target, next.trim());
         await reload();
       };
       const remove = async () => {
-        if (side === local) await api['local-action']('trash', currentDirectory(side), entry.name);
+        if (isLocal(side)) await api['local-action']('trash', currentDirectory(side), entry.name);
         else await api.sftp(session.id, 'delete', target);
         await reload();
       };
@@ -2729,10 +2802,12 @@ function setupFiles(session) {
       row.addEventListener('contextmenu', event => {
         event.preventDefault();
         const properties = async () => {
-          if (side === local) await api['local-action']('info', currentDirectory(side), entry.name);
+          if (isLocal(side)) await api['local-action']('info', currentDirectory(side), entry.name);
           else await api.sftp(session.id, 'info', target);
         };
-        const entries = side === local ? [
+        const backupNames = side.selected.has(entry.name) ? selectedRows(side).map(item => item.name) : [entry.name];
+        const backupLabel = backupNames.length > 1 ? t('Backup') + ' (' + backupNames.length + ')' : t('Backup');
+        const entries = isLocal(side) ? [
           ...(entry.directory ? [[t('Open Folder'), () => navigate(side, target)]] : [
             [t('Open'), () => api['local-action']('open', currentDirectory(side), entry.name)],
             [t('Edit'), () => api['local-action']('edit', currentDirectory(side), entry.name)],
@@ -2750,6 +2825,8 @@ function setupFiles(session) {
             [t('Download'), () => api.sftp(session.id, 'download', target)],
             [t('Edit…'), () => api.sftp(session.id, 'edit', target)],
           ]),
+          // A selected item backs up the whole selection. Links are never backed up.
+          ...(entry.link ? [] : [[backupLabel, () => backupItems(backupNames), !session.backupRunning]]),
           [t('Copy Path'), () => api['write-clipboard'](target)],
           [t('Rename…'), rename],
           [t('Delete'), remove],
@@ -2778,7 +2855,8 @@ function setupFiles(session) {
     updateControls();
   }
 
-  for (const side of first ? [local, remote] : [remote]) {
+  const wireSide = side => {
+    if (isLocal(side)) for (const type of ['pointerdown', 'focusin']) side.element.addEventListener(type, () => setActiveLocal(side));
     side.location.addEventListener('focus', () => side.location.select());
     side.location.addEventListener('blur', () => {
       side.location.hidden = true;
@@ -2811,8 +2889,10 @@ function setupFiles(session) {
     const canDrop = () => {
       const source = layout.drag;
       if (!source || source.side === side || layout.transferring) return false;
-      if (source.side !== local && (!source.session.ready || !layout.connections.has(source.session))) return false;
-      return side === local ? Boolean(layout.directory) : session.ready && Boolean(session.remoteDirectory) && !busy;
+      // Local panes never exchange files by dragging: both sides are on this Mac (D6).
+      if (isLocal(source.side) && isLocal(side)) return false;
+      if (!isLocal(source.side) && (!source.session.ready || !layout.connections.has(source.session))) return false;
+      return isLocal(side) ? Boolean(side.directory) : session.ready && Boolean(session.remoteDirectory) && !busy;
     };
     side.element.addEventListener('dragover', event => {
       if (!canDrop()) return;
@@ -2829,50 +2909,123 @@ function setupFiles(session) {
       side.element.classList.remove('drop-target');
       const { side: sourceSide, session: source, entries, directory } = layout.drag;
       layout.drag = undefined;
-      if (side === local) source.transferFiles(true, entries);
-      else if (sourceSide === local) transfer(false, entries);
+      if (isLocal(side)) source.transferFiles(true, entries, undefined, side);
+      else if (isLocal(sourceSide)) transfer(false, entries, undefined, sourceSide);
       else transfer(false, entries, { id: source.id, directory });
     });
-  }
+  };
+  for (const side of first ? [...layout.locals, remote] : [remote]) wireSide(side);
   const receive = iconButton('left', 'Download selection', () => transfer(true, selectedRows(remote)));
   receive.classList.add('transfer-button');
-  if (first) {
-    layout.loadLocal = loadLocal;
-    const send = iconButton('right', 'Upload to selected remote', () => activeRemote()?.transferFiles(false, selectedRows(local)));
+  // The hidden-files state is app-wide, so every local pane's toggle shows the same state.
+  const hiddenButtons = [];
+  function syncHiddenButtons() {
+    const hint = hiddenFiles ? 'Hide hidden files' : 'Show hidden files';
+    for (const control of hiddenButtons) {
+      control.title = t(hint);
+      control.setAttribute('aria-label', t(hint));
+      control.setAttribute('aria-pressed', String(hiddenFiles));
+    }
+  }
+  // The tools every local pane has. Upload sends that pane's own selection.
+  function addLocalTools(side) {
+    const send = iconButton('right', 'Upload to selected remote', () => activeRemote()?.transferFiles(false, selectedRows(side), undefined, side));
     send.classList.add('transfer-button');
-    layout.refreshLocalControls = () => {
-      const current = activeRemote();
-      send.disabled = !current?.canUpload || !selectedRows(local).length;
-      local.address.inert = local.items.inert = layout.transferring;
-    };
+    side.send = send;
     const hidden = iconButton('eye', hiddenFiles ? 'Hide hidden files' : 'Show hidden files', () => {
       hiddenFiles = !hiddenFiles;
       try { localStorage.setItem('sftp-show-hidden', String(hiddenFiles)); } catch {}
-      const hint = hiddenFiles ? 'Hide hidden files' : 'Show hidden files';
-      hidden.title = t(hint);
-      hidden.setAttribute('aria-label', t(hint));
-      hidden.setAttribute('aria-pressed', String(hiddenFiles));
-      local.folders.clear();
-      navigate(local, layout.directory);
+      syncHiddenButtons();
+      for (const pane of layout.locals) { pane.folders.clear(); navigate(pane, pane.directory); }
     });
-    hidden.setAttribute('aria-pressed', String(hiddenFiles));
+    hiddenButtons.push(hidden);
     const chooseLocal = iconButton('folder', 'Choose local folder', async () => {
       try {
-        const chosen = await api['local-directory'](layout.directory);
-        if (chosen) await loadLocal(chosen);
+        const chosen = await api['local-directory'](side.directory);
+        if (chosen) await loadLocal(side, chosen);
       } catch (error) { localError(error); }
     });
-    local.address.append(chooseLocal);
+    side.address.append(chooseLocal);
     const newLocalFolder = iconButton('folderPlus', 'New local folder', async () => {
       const name = await askName('');
       if (name === undefined) return;
       try {
-        await api['local-mkdir'](layout.directory, name);
-        await loadLocal(layout.directory);
+        await api['local-mkdir'](side.directory, name);
+        await loadLocal(side, side.directory);
       } catch (error) { localError(error); }
     });
-    local.tools.append(hidden, newLocalFolder, send);
+    side.split = iconButton('splitRight', 'Split local pane', () => splitLocal(side, 'row'));
+    side.tools.append(hidden, newLocalFolder, send, side.split);
+    // Right-clicking the empty part of a local pane offers the split directions.
+    side.items.addEventListener('contextmenu', event => {
+      if (event.target.closest('.file-row')) return;
+      event.preventDefault();
+      const full = layout.locals.length >= 2;
+      chooseMenu([
+        [t('Split Right'), () => splitLocal(side, 'row'), !full],
+        [t('Split Down'), () => splitLocal(side, 'column'), !full],
+      ]).catch(error => status(session, error.message, true));
+    });
+    syncHiddenButtons();
   }
+  function refreshLocalTools() {
+    const current = activeRemote();
+    for (const side of layout.locals) {
+      if (!side.send) continue;
+      side.send.disabled = !current?.canUpload || !selectedRows(side).length;
+      side.address.inert = side.items.inert = layout.transferring;
+      side.split.disabled = layout.locals.length >= 2;
+    }
+  }
+  function setActiveLocal(side) {
+    layout.activeLocal = side;
+    for (const pane of layout.locals) pane.element.classList.toggle('active-local', pane === side);
+  }
+  // Splits a local pane into two: side by side (row) or stacked (column). At most two local panes.
+  // The new pane starts in the source folder, or in target when a workspace restores its folder.
+  function splitLocal(source = activeLocal(), axis = 'row', ratio = 0.5, target, focusNew = true) {
+    if (!source || layout.locals.length >= 2) return undefined;
+    const side = panel('Local', 'local');
+    side.directory = source.directory;
+    layout.locals.push(side);
+    wireSide(side);
+    addLocalTools(side);
+    side.tools.append(iconButton('close', 'Close local pane', () => closeLocal(side)));
+    layout.localRoot.replaceChildren(makeSplit(source.element, side.element, axis, ratio));
+    setActiveLocal(side);
+    refreshLocalTools();
+    loadLocal(side, target ?? source.directory).catch(error => {
+      localError(error);
+      return loadLocal(side).catch(localError);
+    }).then(() => {
+      if (focusNew) (side.items.querySelector('.file-name') || side.pathSpace).focus();
+    });
+    return side;
+  }
+  // Closes the second local pane. The first pane stays, and its folder is unchanged.
+  function closeLocal(side) {
+    if (layout.locals[1] !== side) return;
+    const remaining = layout.locals[0];
+    layout.locals.splice(1, 1);
+    layout.localRoot.replaceChildren(remaining.element);
+    side.element.remove();
+    setActiveLocal(remaining);
+    refreshLocalTools();
+    updateControls();
+    remaining.pathSpace.focus();
+  }
+  function restoreLocalSplit(saved) {
+    const side = splitLocal(layout.locals[0], saved.axis, saved.ratio ?? 0.5, saved.directories?.[1] || undefined, false);
+    if (side) setActiveLocal(layout.locals[saved.focus === 1 ? 1 : 0]);
+  }
+  if (first) {
+    for (const side of layout.locals) addLocalTools(side);
+    layout.refreshLocalControls = refreshLocalTools;
+  }
+  session.applyFavorites = (scope, items) => {
+    if (scope === 'local') for (const pane of layout.locals) { favoritesCache.set(pane, items || []); syncFavoriteControl(pane); }
+    else { favoritesCache.set(remote, items || []); syncFavoriteControl(remote); }
+  };
   remote.tools.append(iconButton('plus', 'New remote folder', async () => {
     const name = await askName('');
     if (name === undefined) return;
@@ -2888,18 +3041,22 @@ function setupFiles(session) {
     for (const control of [splitRight, splitDown, close]) control.dataset.connectionAction = 'true';
     remote.tools.append(splitRight, splitDown, close);
   }
-  session.applyFavorites = (scope, items) => {
-    if (scope === 'local') { favoritesCache.set(local, items || []); syncFavoriteControl(local); }
-    else { favoritesCache.set(remote, items || []); syncFavoriteControl(remote); }
-  };
   session.load = target => run(() => loadRemote(target));
+  session.refreshRemote = () => refreshFolder(remote, session.remoteDirectory);
   session.transferFiles = transfer;
   session.refreshFileControls = updateControls;
   updateControls();
-  if (first) loadLocal(layout.directory).catch(error => {
-    if (layout.directory) loadLocal().catch(localError);
-    else localError(error);
-  });
+  if (first) {
+    // A workspace saved with two local panes reopens with the same split, folders and focused pane.
+    const saved = session.tabRecord.localSplit;
+    delete session.tabRecord.localSplit;
+    const start = saved?.directories?.[0] || local.directory;
+    loadLocal(local, start).catch(error => {
+      if (start) loadLocal(local).catch(localError);
+      else localError(error);
+    });
+    if (saved) restoreLocalSplit(saved);
+  }
 }
 
 let transferJobs = [];
@@ -3088,13 +3245,16 @@ function trackTransfers(jobs) {
   for (const [id, entry] of transferTracker) {
     if (present.has(id)) continue;
     // A job that leaves the queue while active has finished (or was cancelled).
-    if (entry.state === 'active') entry.state = 'done';
-    else transferTracker.delete(id);
+    if (entry.state === 'active') {
+      entry.state = 'done';
+      // A backup copied through PromeFTP is new in its folder: show it without a manual refresh.
+      if (entry.operation === 'remote-duplicate') sessions.get(entry.sessionId)?.refreshRemote?.();
+    } else transferTracker.delete(id);
   }
   for (const job of jobs) {
     const state = transferIsActive(job) ? 'active' : job.state === 'failed' ? 'failed' : 'interrupted';
     if (state === 'failed' && transferTracker.get(job.id)?.state === 'active') newlyFailed += 1;
-    transferTracker.set(job.id, { batchId: job.batchId || '', state });
+    transferTracker.set(job.id, { batchId: job.batchId || '', state, operation: job.operation, sessionId: job.sessionId });
   }
   return newlyFailed;
 }
@@ -3436,6 +3596,7 @@ function restoreWorkspace(saved) {
     const tab = saved.tabs[first];
     const record = makeTab(tab.input, tab.mode, entry);
     record.localRatio = entry.localRatio;
+    record.localSplit = entry.localSplit;
     function onlySftp(tree) {
       return typeof tree === 'number' ? saved.tabs[tree].mode === 'sftp' : onlySftp(tree.first) && onlySftp(tree.second);
     }
@@ -3643,7 +3804,7 @@ workspaceForm.addEventListener('submit', async event => {
       const { mode, input, localDirectory, remoteDirectory } = session;
       const index = entries.length;
       indices.set(session.id, index);
-      entries.push({ mode, input, local: session.fileLayout?.directory ?? localDirectory, remote: remoteDirectory });
+      entries.push({ mode, input, local: session.fileLayout?.local?.directory ?? localDirectory, remote: remoteDirectory });
       if (session.id === active) activeIndex = index;
       return index;
     }
@@ -3652,7 +3813,7 @@ workspaceForm.addEventListener('submit', async event => {
       const { name, group, color, root, focus, fileLayout } = visibleTabs.get(element);
       const tree = encode((fileLayout?.remotesRoot || root).firstElementChild);
       const { groupColor } = visibleTabs.get(element);
-      return { name, group, groupColor, color, tree, focus: indices.get(focus), localRatio: fileLayout?.localRatio };
+      return { name, group, groupColor, color, tree, focus: indices.get(focus), localRatio: fileLayout?.localRatio, localSplit: fileLayout?.localSplitState?.() };
     });
     await api['save-workspace'](name, entries, { active: activeIndex, panes });
     workspaceForm.elements.name.value = '';

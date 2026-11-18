@@ -128,3 +128,23 @@ test('the sample profiles fixture loads through profile() and lists its folders 
   assert.ok(loaded.filter(item => !item.usesAlias).every(item => item.host.endsWith('.example.invalid')));
   assert.deepEqual([...rules.bookmarkFolderNames(sample)].sort(), ['Archive', 'Ops', 'Staging']);
 });
+
+// T14: the local split saved with a workspace pane (state-rules.cjs workspaceLocalSplit).
+test('T14 workspaceLocalSplit keeps a valid split, with the ratio limited to 0.1 to 0.9', () => {
+  const { workspaceLocalSplit } = require('../state-rules.cjs');
+  assert.deepEqual(workspaceLocalSplit({ axis: 'row', ratio: 0.3, directories: ['/Users/a', '/Users/b'], focus: 1 }),
+    { axis: 'row', ratio: 0.3, directories: ['/Users/a', '/Users/b'], focus: 1 });
+  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: 1.5, directories: ['/a', '/b'] }).ratio, 0.9);
+  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: -2, directories: ['/a', '/b'] }).ratio, 0.1);
+  assert.equal(workspaceLocalSplit({ axis: 'column', directories: ['/a', '/b'] }).ratio, 0.5);
+  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: 0.5, directories: ['/a', '/b'] }).focus, 0);
+});
+
+test('T14 workspaceLocalSplit drops a malformed split (undefined), so the pane opens with one local pane', () => {
+  const { workspaceLocalSplit } = require('../state-rules.cjs');
+  assert.equal(workspaceLocalSplit(undefined), undefined);
+  assert.equal(workspaceLocalSplit({ axis: 'diagonal', ratio: 0.5, directories: ['/a', '/b'] }), undefined);
+  assert.equal(workspaceLocalSplit({ axis: 'row', ratio: 0.5, directories: ['/a'] }), undefined);
+  assert.equal(workspaceLocalSplit({ axis: 'row', ratio: 0.5, directories: ['/a', 3] }), undefined);
+  assert.equal(workspaceLocalSplit('row'), undefined);
+});
