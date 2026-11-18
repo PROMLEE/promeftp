@@ -8,14 +8,35 @@ const { SAVED_AUTH_REASONS } = require('./saved-auth.cjs');
 const protocol = 1;
 const socketLimit = 16384;
 const idle = 10 * 60_000;
+// Authentication windows. A question from OpenSSH (such as an OTP) extends the deadline, never past authCeiling.
+const authWindow = 120_000, promptWindow = 180_000, authCeiling = 600_000, waitLimit = 25_000;
+// Next steps for a session that is still starting. Polling status until expires is the expected behaviour.
+const WAIT_MESSAGES = {
+  connecting: 'Connecting. Keep polling session status every 2-5 seconds until expires. Do not close or reopen the session.',
+  waiting_for_user: 'Waiting for the user to answer an authentication prompt (such as an OTP) in PromeFTP. Tell the user once, then keep polling until expires. Do not close or reopen the session.',
+};
+// Next steps for a closed session, by reason. A failure's own error.next takes precedence.
+const endNext = {
+  AUTH_TIMEOUT: [{ action: 'ask_user', message: 'The user did not finish authentication in time. Ask whether PromeFTP is ready, then open one new session.' }],
+  USER_CANCELLED: [{ action: 'ask_user', message: 'The user cancelled authentication. Do not retry without asking the user.' }],
+  IDLE_TIMEOUT: [{ action: 'retry', message: 'The session closed after 10 minutes without requests. Open a new session if you still need it; the user may be asked for a new OTP.' }],
+  CLIENT_CLOSED: [],
+  TIMEOUT: [{ action: 'retry', message: 'A request took longer than 30 seconds and closed the session. Open a new session and use smaller requests.' }],
+  CONNECT_FAILED: [{ action: 'ask_user', message: 'The connection failed. Follow error.next if it is present.' }],
+  REMOTE_CLOSED: [{ action: 'retry', message: 'The server closed the connection. Retry once with a new session.' }],
+  PERMISSION_CHANGED: [{ action: 'ask_user', message: 'The user changed this client permissions. Ask the user before doing anything else.' }],
+  SERVICE_DISABLED: [{ action: 'ask_user', message: 'Agent access is turned off in PromeFTP. Ask the user to turn it on.' }],
+};
+const fallbackNext = [{ action: 'ask_user', message: 'Ask the user to check PromeFTP, then open a new session.' }];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const clean = value => String(value ?? '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 512);
 const problem = (code, reason) => Object.assign(Error(code), { agentCode: code, ...(reason && { agentReason: reason }) });
 function socketDirectory(uid = process.getuid()) { return '/tmp/promeftp-agent-' + uid; }
 const fields = 'id, time, request, client, profile, session, operation, result, reason, detail';
 
-async function createAgentService({ directory, state, save, profiles, transport, sftpCall, busy, onPrompt = () => {} }) {
-  const dir = socketDirectory();
+async function createAgentService({ directory, state, save, profiles, transport, sftpCall, busy, onPrompt = () => {},
+  socketDir = socketDirectory() }) {
+  const dir = socketDir;
   const socketPath = path.join(dir, 'api.sock');
   const clients = new Set();
   const sessions = new Map();
@@ -106,6 +127,12 @@ async function createAgentService({ directory, state, save, profiles, transport,
       db.prepare('DELETE FROM pending WHERE request=?').run(event.request);
     });
   }
+  // Wakes every session.wait call waiting on this session, so it answers at once with the new state.
+  function wake(s) {
+    const waiters = [...s.waiters];
+    s.waiters.clear();
+    for (const finish of waiters) finish();
+  }
   function close(s) {
     if (s.closed) return;
     s.closed = true;
@@ -113,6 +140,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
     s.connection?.close();
     s.controller.abort();
     busy(sessions.size);
+    wake(s);
   }
   function note(s, operation, result, reason, detail) {
     try { audit(base(s, operation, result, reason, detail)); }
@@ -147,21 +175,25 @@ async function createAgentService({ directory, state, save, profiles, transport,
 
   function startSession(client, p, grant, mode, request) {
     if (sessions.size >= 12 || [...sessions.values()].filter(s => s.client === client).length >= 4) throw problem('SESSION_LIMIT');
-    const s = { id: randomUUID(), request, client, profile: p.id, grant, mode,
-      status: 'connecting', authDeadline: Date.now() + 120_000, touched: Date.now(), controller: new AbortController() };
+    const opened = Date.now();
+    const s = { id: randomUUID(), request, client, profile: p.id, grant, mode, opened,
+      status: 'connecting', authDeadline: opened + authWindow, touched: opened, controller: new AbortController(), waiters: new Set() };
     sessions.set(s.id, s);
     busy(sessions.size);
     const notify = (event, value) => {
       if (s.closed) return;
       if (event === 'ready') {
         s.status = 'ready';
+        wake(s);
         s.endpoint = typeof value?.endpoint === 'string' ? value.endpoint : '';
         s.prompt = undefined;
         note(s, 'session.ready', 'success');
         if (s.mode === 'sftp') resolveRoot(s);
       }
       if (event === 'prompt') {
+        s.authDeadline = Math.min(s.opened + authCeiling, Math.max(s.authDeadline, Date.now() + promptWindow));
         s.status = 'waiting_for_user';
+        wake(s);
         s.prompt = { id: value.id, text: clean(value.prompt) };
         // Only the reason code and the fixed next steps. The question, the reply and any password stay out of the log.
         const promptDetail = {};
@@ -173,6 +205,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (event === 'prompt-clear' && s.prompt?.id === value) {
         s.prompt = undefined;
         s.status = 'connecting';
+        wake(s);
       }
       if (event === 'auth.rule') audit(base(s, event, 'submitted', null, clean(value)));
       if (event === 'hostkey.pinned' || event === 'hostkey.autotrusted') audit(base(s, event, 'success', null, JSON.stringify(value)));
@@ -255,7 +288,34 @@ async function createAgentService({ directory, state, save, profiles, transport,
       WHERE session=? AND client=? AND id>? AND operation IN ('session.ready','session.ended','session.error','auth.prompt','auth.rule','trigger.match','ssh.approval','hostkey.pinned','hostkey.autotrusted')
       ORDER BY id LIMIT 100`).all(id, client, after);
   }
-  const operations = new Set(['profiles.list', 'session.open', 'session.status', 'session.close', 'sftp.list', 'sftp.stat', 'sftp.download', 'events.list', 'ssh.run', 'ssh.command']);
+  const operations = new Set(['profiles.list', 'session.open', 'session.status', 'session.close', 'session.wait', 'sftp.list', 'sftp.stat', 'sftp.download', 'events.list', 'ssh.run', 'ssh.command']);
+  // The status of a live session: ready, or a waiting status with the expiry and the next step.
+  function statusOf(s) {
+    if (s.status === 'ready') return { session: s.id, status: 'ready' };
+    return { session: s.id, status: s.status, expires: s.authDeadline, retryAfter: 2,
+      next: [{ action: 'wait', message: WAIT_MESSAGES[s.status] }] };
+  }
+  function endedReason(id, client) {
+    return db.prepare("SELECT reason FROM events WHERE session=? AND client=? AND operation='session.ended' ORDER BY id DESC LIMIT 1").get(id, client)?.reason;
+  }
+  // A closed session. error.next wins; otherwise the next step follows the reason.
+  function closedOf(id, client, reason) {
+    const failure = failureOf(id, client);
+    return { session: id, status: 'closed', reason, next: failure.error?.next ?? endNext[reason] ?? fallbackNext, ...failure };
+  }
+  function waitMilliseconds(value) {
+    if (value === undefined) return waitLimit;
+    if (!Number.isSafeInteger(value) || value < 1000 || value > waitLimit) throw problem('INVALID_REQUEST');
+    return value;
+  }
+  // Resolves when the session changes state or the timeout passes, whichever comes first.
+  function waitForChange(s, milliseconds) {
+    return new Promise(resolve => {
+      const finish = () => { clearTimeout(timer); s.waiters.delete(finish); resolve(); };
+      const timer = setTimeout(finish, milliseconds);
+      s.waiters.add(finish);
+    });
+  }
   async function execute(client, req, request) {
     const { method, params = {} } = req;
     const clientId = client.id;
@@ -267,10 +327,12 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (!operations.has(method) || !params || typeof params !== 'object' || Array.isArray(params)) throw problem('INVALID_REQUEST');
       const allowed = {
         'profiles.list': [], 'session.open': ['profile','mode'], 'session.status': ['session'], 'session.close': ['session'],
+        'session.wait': ['session','timeout'],
         'sftp.list': ['session','path'], 'sftp.stat': ['session','path'], 'sftp.download': ['session','path'],
         'events.list': ['session','after'], 'ssh.run': ['session','task'], 'ssh.command': ['session','command'],
       }[method];
       if (Object.keys(params).some(key => !allowed.includes(key))) throw problem('INVALID_REQUEST');
+      const waitMs = method === 'session.wait' ? waitMilliseconds(params.timeout) : undefined;
       let work;
       if (method === 'profiles.list') {
         work = () => profiles().filter(p => scopeFor(clientId, p.id)?.fingerprint === stamp(p))
@@ -292,12 +354,12 @@ async function createAgentService({ directory, state, save, profiles, transport,
           return { session: s.id, status: s.status };
         };
       } else {
-        if (['events.list', 'session.status'].includes(method) && !sessions.has(params.session)) {
+        if (['events.list', 'session.status', 'session.wait'].includes(method) && !sessions.has(params.session)) {
           const ended = typeof params.session === 'string' && db.prepare("SELECT reason FROM events WHERE session=? AND client=? AND operation='session.ended' ORDER BY id DESC LIMIT 1").get(params.session, clientId);
           if (!ended) throw problem('SESSION_NOT_FOUND');
           event.session = params.session;
           work = method === 'events.list' ? () => sessionEvents(params.session, clientId, params.after)
-            : () => ({ session: params.session, status: 'closed', reason: ended.reason, ...(failureOf(params.session, clientId)) });
+            : () => closedOf(params.session, clientId, ended.reason);
         }
         const s = sessions.get(params.session);
         if (!work) {
@@ -306,10 +368,16 @@ async function createAgentService({ directory, state, save, profiles, transport,
           event.profile = s.profile;
           event.session = s.id;
           s.touched = Date.now();
-          if (method === 'session.status') work = () => ({ session: s.id, status: s.status, ...(s.status !== 'ready' && { expires: s.authDeadline }) });
+          if (method === 'session.status') work = () => statusOf(s);
           else if (method === 'session.close') work = () => { end(s, 'CLIENT_CLOSED'); return { closed: true }; };
           else if (method === 'events.list') {
             work = () => sessionEvents(s.id, clientId, params.after);
+          } else if (method === 'session.wait') {
+            // Waits without becoming the active request, so the 30 second request limit never closes the session.
+            work = async () => {
+              if (s.status !== 'ready') await waitForChange(s, waitMs);
+              return s.closed ? closedOf(s.id, clientId, endedReason(s.id, clientId)) : statusOf(s);
+            };
           } else {
             if (s.status !== 'ready') throw problem(s.status === 'waiting_for_user' ? 'USER_ACTION_REQUIRED' : 'SESSION_NOT_READY');
             if (s.inFlight) throw problem('SESSION_BUSY');
@@ -574,6 +642,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (!s.connection?.answer(id, value)) throw problem('PROMPT_EXPIRED');
       s.prompt = undefined;
       s.status = 'connecting';
+      wake(s);
       note(s, 'auth.user', 'submitted');
     },
   };

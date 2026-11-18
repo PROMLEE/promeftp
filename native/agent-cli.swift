@@ -13,7 +13,7 @@ func help() -> Never {
     print("""
     promeftp profiles list
     promeftp session open --profile ID --mode sftp|ssh
-    promeftp session status|close --session ID
+    promeftp session status|close|wait --session ID [--timeout MS]
     promeftp sftp list|stat|download --session ID --path PATH
     promeftp ssh run --session ID --task TASK
     promeftp ssh command --session ID --command COMMAND
@@ -29,7 +29,7 @@ guard arguments.count >= 2 else { report("USAGE", exitCode: 2) }
 let method = arguments.prefix(2).joined(separator: ".")
 let methods: [String: [String]] = [
     "profiles.list": [], "session.open": ["profile","mode"], "session.status": ["session"],
-    "session.close": ["session"], "sftp.list": ["session","path"], "sftp.stat": ["session","path"],
+    "session.close": ["session"], "session.wait": ["session","timeout"], "sftp.list": ["session","path"], "sftp.stat": ["session","path"],
     "sftp.download": ["session","path"], "ssh.run": ["session","task"], "ssh.command": ["session","command"],
     "events.list": ["session","after"],
 ]
@@ -45,12 +45,16 @@ while index < arguments.count {
     if key == "after" {
         guard let cursor = Int(arguments[index + 1]), cursor >= 0 else { report("USAGE", exitCode: 2) }
         params[key] = cursor
+    } else if key == "timeout" {
+        // The service waits at most 25 seconds, so the CLI accepts 1 to 25 seconds in milliseconds.
+        guard let milliseconds = Int(arguments[index + 1]), (1000...25000).contains(milliseconds) else { report("USAGE", exitCode: 2) }
+        params[key] = milliseconds
     } else {
         params[key] = arguments[index + 1]
     }
     index += 2
 }
-guard allowed.filter({ $0 != "after" }).allSatisfy({ params[$0] != nil }) else { report("USAGE", exitCode: 2) }
+guard allowed.filter({ $0 != "after" && $0 != "timeout" }).allSatisfy({ params[$0] != nil }) else { report("USAGE", exitCode: 2) }
 func savedToken() -> String? {
     let file = NSHomeDirectory() + "/Library/Application Support/PromeFTP/agent/skill-token.json"
     var metadata = stat()
