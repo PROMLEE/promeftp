@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.7</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.7</link>
-      <pubDate>Tue, 17 Nov 2026 12:44:40 +0000</pubDate>
-      <sparkle:version>1.1.7</sparkle:version>
-      <sparkle:shortVersionString>1.1.7</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.8</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.8</link>
+      <pubDate>Wed, 18 Nov 2026 01:40:51 +0000</pubDate>
+      <sparkle:version>1.1.8</sparkle:version>
+      <sparkle:shortVersionString>1.1.8</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Clearer agent connection errors and shortcut settings&lt;/h2&gt;
-&lt;p&gt;Agents use the host keys you already trusted and report why a connection failed. Shortcuts are easier to change, and the authentication rules are easier to read.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Trusted host keys work for agents&lt;/strong&gt;&lt;br&gt;An agent connects with the host keys you already trusted in PromeFTP instead of reporting an unknown key.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Specific connection errors&lt;/strong&gt;&lt;br&gt;A failed connection reports the cause, such as a wrong key, a changed host key, a refused connection, or a DNS failure, with a short hint.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Faster agent grants&lt;/strong&gt;&lt;br&gt;Permission presets, including an allow-everything preset, speed up granting a bookmark. Access stays limited to the scope you choose.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Editable shortcuts&lt;/strong&gt;&lt;br&gt;Every shortcut can be changed, and a key check shows what your keyboard sends. Default shortcuts are unchanged.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clearer authentication rules&lt;/strong&gt;&lt;br&gt;Rules and saved answers are listed by host, and the rule editor is redesigned.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Agents use your saved sign-in and confirm host keys&lt;/h2&gt;
+&lt;p&gt;Agents fill in saved passwords and answers the way the app does, and a changed host key can be confirmed in a dialog without opening the app.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Saved sign-in for agents&lt;/strong&gt;&lt;br&gt;With saved authentication allowed, agents use your saved passwords, saved answers, and authentication rules as the app does.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Host key confirmation&lt;/strong&gt;&lt;br&gt;A new or changed host key opens a dialog with the previous and new fingerprints. Agents continue only after you confirm.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Stale known_hosts entries&lt;/strong&gt;&lt;br&gt;An old key in ~/.ssh/known_hosts no longer blocks a server whose current key you trusted in PromeFTP.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Next steps in errors&lt;/strong&gt;&lt;br&gt;Failed agent requests list what to do next, and prompts say why they were not answered automatically.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.7"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.8"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.7/PromeFTP-1.1.7-macos-arm64.zip" length="141044772" type="application/octet-stream" sparkle:edSignature="xzODCos5nv+/kr7uoYsEqgT7vwgSH2YLg7wKoVFcPf19afJ2tonodYJVQZafuLw2ak8IkRpa1MG/X47LaeDMDA=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.8/PromeFTP-1.1.8-macos-arm64.zip" length="141052950" type="application/octet-stream" sparkle:edSignature="ck8+C/Bxqi6J4eNMHAoWFAeixRXhpKGkW36G+PmwLyeFJ9ArfnStqWSWNx5wTQ+eENotfQq7UuoXL6v7RWemBA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: KWjVbQImyRX2G1AGGhs+M1g4W9QElL5Ss6Ahxki3xl3gt3AfgVGPD6tOGP3odqPmQ4yBzWIThQcxbTSiGmPgBw==
-length: 3200
+edSignature: 9/XDRGBbsnCVxlh/pMs62sLJY0gN66fgvgJBK1WNhuvInX1LPeeOPAtoW+ImFwIbBPySGCMpQW0v2w18nw7VDg==
+length: 2965
 -->
