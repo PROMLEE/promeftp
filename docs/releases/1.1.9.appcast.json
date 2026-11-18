@@ -1,0 +1,23 @@
+{
+  "heading": "Optional automatic host key trust and OTP-friendly agent sessions",
+  "summary": "Each bookmark can let agents trust new or changed host keys without asking, with a clear warning. Agents also wait properly while you enter a one-time password.",
+  "changes": [
+    [
+      "Automatic host key trust",
+      "Choose off, new keys only, or new and changed keys for each bookmark. Turning it on shows a warning, and every automatic trust is recorded."
+    ],
+    [
+      "Stale known_hosts entries",
+      "An old key in ~/.ssh/known_hosts or /etc/ssh no longer stops a connection before PromeFTP can ask."
+    ],
+    [
+      "More time for one-time passwords",
+      "A prompt extends the authentication limit to 3 minutes, and agents can wait for the session with promeftp session wait."
+    ],
+    [
+      "Clearer agent guidance",
+      "Status responses and the agent skill explain how to keep a session open and what to do after it ends."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
