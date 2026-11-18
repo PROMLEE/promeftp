@@ -46,6 +46,35 @@ async function forgetKnownHost(file, host) {
   return true;
 }
 const execute = promisify(execFile);
+// ssh-keygen -l -F prints "# Host ... found" comments and one "256 SHA256:... host (TYPE)" line per matching key.
+function parseKeygenFingerprints(stdout) {
+  const found = [];
+  for (const line of String(stdout).split('\n')) {
+    if (line.startsWith('#')) continue;
+    const fingerprint = /SHA256:[A-Za-z0-9+/]+={0,2}/.exec(line)?.[0];
+    if (fingerprint && !found.includes(fingerprint)) found.push(fingerprint);
+  }
+  return found;
+}
+// Fingerprints of the keys a known_hosts file holds for a host. A missing file or host gives [].
+async function knownHostFingerprints(file, host) {
+  if (!(await fs.access(file).then(() => true, () => false))) return [];
+  try {
+    const { stdout } = await execute(sshKeygen, ['-l', '-F', host, '-f', file]);
+    return parseKeygenFingerprints(stdout);
+  } catch (error) {
+    if (error.code === 1) return [];
+    throw error;
+  }
+}
+// The options that keep an agent connection to its own settings. The known_hosts file is the agent's own file only.
+// ~/.ssh/known_hosts is never added, so a stale key there cannot stop the agent before the user is asked.
+function agentRestrictedOptions(config) {
+  if (!config.knownHosts) throw Error('Agent connections need their own known_hosts file.');
+  return [...(config.configPath ? ['-F', config.configPath] : []), '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no',
+    '-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none', '-o', 'VerifyHostKeyDNS=no', '-o', 'UpdateHostKeys=no',
+    '-o', 'UserKnownHostsFile=' + sshQuote(config.knownHosts)];
+}
 
 function configArgs(config, includeConfigPath = true) {
   const args = [];
@@ -218,9 +247,7 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
     if (rules.size) authOptions.push('-o', 'PreferredAuthentications=publickey,keyboard-interactive');
     const modeOptions = mode === 'ssh' ? ['-tt'] :
       ['-N', '-o', 'RemoteCommand=none', '-o', 'PermitLocalCommand=no'];
-    const restricted = agent ? [...(config.configPath ? ['-F', config.configPath] : []), '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no',
-      '-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none', '-o', 'VerifyHostKeyDNS=no', '-o', 'UpdateHostKeys=no',
-      ...(config.knownHosts ? ['-o', 'UserKnownHostsFile=' + sshQuote(config.knownHosts) + ' ' + sshQuote('~/.ssh/known_hosts')] : [])] : [];
+    const restricted = agent ? agentRestrictedOptions(config) : [];
     terminal = pty.spawn(ssh, [...restricted, ...masterOptions, ...modeOptions, ...authOptions, ...configArgs(config, !agent), '--', config.host], {
       name: 'xterm-256color', cols: size.cols || 80, rows: size.rows || 24,
       cwd: os.homedir(), env: { ...process.env, ...auth?.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
@@ -273,4 +300,4 @@ function startLocal(size, notify) {
 }
 
 module.exports = { aliases, effective, effectiveOutput, authEndpoint, inspectIdentityFile, start, startLocal,
-  parseHostKeyPrompt, knownHostsContains, forgetKnownHost };
+  parseHostKeyPrompt, knownHostsContains, forgetKnownHost, parseKeygenFingerprints, knownHostFingerprints, agentRestrictedOptions };

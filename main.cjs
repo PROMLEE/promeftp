@@ -19,6 +19,7 @@ const { createTransferService } = require('./transfer-service.cjs');
 const directoryCompare = require('./directory-compare.cjs');
 const { normalizedAuthQuestion, globalPattern, matchesGlobalPattern } = require('./auth-rules.cjs');
 const stateRules = require('./state-rules.cjs');
+const savedAuth = require('./saved-auth.cjs');
 const { bookmarkFolderName, bookmarkFolderNames, workspaceName } = stateRules;
 const expandHome = value => stateRules.expandHome(value, app.getPath('home'));
 const profile = input => stateRules.profile(input, app.getPath('home'));
@@ -520,11 +521,7 @@ handle('export-log', async (label, output) => {
   const result = await dialog.showSaveDialog(window, { defaultPath: (name || 'promeftp') + '.log' });
   if (!result.canceled) await fs.writeFile(result.filePath, output, { mode: 0o600 });
 });
-function authScope(config, endpoint) {
-  return createHash('sha256').update(JSON.stringify([
-    config.host, config.configPath, config.keyPath, endpoint,
-  ])).digest('hex');
-}
+const { authScope, replyKey, findGlobalRule } = savedAuth;
 async function sshPasswordScope(input) {
   const config = profile(input);
   const effective = await openssh.effective(config).catch(() => '');
@@ -614,9 +611,7 @@ handle('saved-auto-setting', () => state.useSavedRepliesAutomatically !== false)
 handle('set-saved-auto-setting', value => updateState(next => {
   next.useSavedRepliesAutomatically = value === true;
 }));
-function autoSavedReply(entry) {
-  return state.useSavedRepliesAutomatically !== false && Boolean((entry?.answer || entry?.ciphertext) && entry.scope);
-}
+const autoSavedReply = entry => savedAuth.autoSavedReply(state, entry);
 
 handle('saved-auth-replies', () => Object.entries(state.authReplies || {})
   .filter(([, entry]) => typeof entry === 'object' && (entry?.answer || entry?.ciphertext))
@@ -862,9 +857,7 @@ async function showAuthPrompt(id, record, config, value) {
       record.authEndpoint ??= openssh.effective(config);
       const endpoint = await record.authEndpoint;
       if (endpoint) {
-        const key = createHash('sha256').update(JSON.stringify([
-          config.host, config.configPath, config.keyPath, endpoint, value.prompt,
-        ])).digest('hex');
+        const key = replyKey(config, endpoint, value.prompt);
         const scope = authScope(config, endpoint);
         const address = /^hostname (.+)$/m.exec(endpoint)?.[1];
         const user = /^user (.+)$/m.exec(endpoint)?.[1];
@@ -905,10 +898,7 @@ async function showAuthPrompt(id, record, config, value) {
     return;
   }
   if (record.globalAuth && state.useStoredAuthOnConnect !== false && value.canRemember && value.prompt) {
-    const rules = state.globalAuthRules || [];
-    globalRule = rules.find(rule => rule.match !== 'regex' && rule.prompt === value.prompt)
-      || rules.find(rule => rule.match !== 'regex' && rule.prompt === question)
-      || rules.find(rule => rule.match === 'regex' && matchesGlobalPattern(rule, question));
+    globalRule = findGlobalRule(state.globalAuthRules || [], value.prompt, matchesGlobalPattern);
     if (globalRule && !record.autoAnswered.has(question) && !record.autoAnswered.has(globalRule.id)) {
       try { globalAnswer = await readAnswer(globalRule); } catch {}
     }
@@ -1689,12 +1679,70 @@ function approveAgentCommand(session, command, profile, client) {
 function agentKnownHostsPath() {
   return path.join(app.getPath('userData'), 'agent', 'known_hosts');
 }
+// Asks the user before an agent connection trusts a host key the app has not trusted. Requests for the same host and
+// fingerprint share one dialog. The dialog closes only when every request waiting on it has been aborted, and each
+// request leaves by its own signal. A dialog that is not answered in 60 seconds counts as declined.
+const agentHostKeyDialogs = new Map();
+function confirmAgentHostKey({ profile: bookmark, host, fingerprint, previous, source, endpoint, signal }) {
+  if (signal?.aborted) return Promise.resolve(false);
+  const key = host + '\n' + fingerprint;
+  let shared = agentHostKeyDialogs.get(key);
+  if (!shared) {
+    const controller = new AbortController();
+    shared = { controller, waiting: 0, result: null };
+    shared.result = (async () => {
+      const target = /^hostname (.+)$/m.exec(endpoint || '')?.[1] || bookmark.host;
+      const user = /^user (.+)$/m.exec(endpoint || '')?.[1];
+      const port = /^port (.+)$/m.exec(endpoint || '')?.[1] || String(bookmark.port || 22);
+      const { response } = await dialog.showMessageBox(preferencesWindow || window, {
+        type: 'warning', message: localized(previous ? 'The server host key changed' : 'Verify SSH host key'),
+        detail: [`${localized('Bookmark')}: ${bookmark.label || bookmark.host}`,
+          `${localized('SSH target')}: ${user ? user + '@' : ''}${target}:${port}`,
+          `${localized('New fingerprint')}: ${fingerprint}`,
+          ...(previous ? [`${localized('Previous fingerprint')}: ${previous}`,
+            `${localized('Source')}: ${source === 'app' ? 'PromeFTP' : '~/.ssh/known_hosts'}`] : []),
+          '', localized('Trust this key only after you verify its fingerprint with the server administrator.')].join('\n'),
+        buttons: [localized('Cancel'), localized('Trust and Connect')], defaultId: 0, cancelId: 0, noLink: true,
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]),
+      });
+      if (response !== 1) return false;
+      await updateState(next => {
+        (next.trustedHostKeys ??= {})['host:' + host] = fingerprint;
+      });
+      return true;
+    })().finally(() => { if (agentHostKeyDialogs.get(key) === shared) agentHostKeyDialogs.delete(key); });
+    agentHostKeyDialogs.set(key, shared);
+  }
+  const entry = shared;
+  entry.waiting++;
+  return new Promise(resolve => {
+    let left = false;
+    const leave = () => {
+      if (left) return;
+      left = true;
+      signal?.removeEventListener('abort', onAbort);
+      entry.waiting--;
+    };
+    function onAbort() {
+      leave();
+      if (entry.waiting === 0) {
+        if (agentHostKeyDialogs.get(key) === entry) agentHostKeyDialogs.delete(key);
+        entry.controller.abort();
+      }
+      resolve(false);
+    }
+    if (signal?.aborted) { onAbort(); return; }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    entry.result.then(result => { leave(); resolve(result); }, () => { leave(); resolve(false); });
+  });
+}
 async function initializeAgent() {
   const directory = path.join(app.getPath('userData'), 'agent');
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   agentTransport = createTransport({
-    directory, state: () => state, authScope, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope,
+    directory, state: () => state, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope,
     approve: approveAgentCommand, knownHosts: agentKnownHostsPath(),
+    profile, userKnownHosts: path.join(os.homedir(), '.ssh', 'known_hosts'), confirmHostKey: confirmAgentHostKey,
   });
   agent = await createAgentService({
     directory, state: () => state, profiles: () => state.profiles, transport: agentTransport, sftpCall,
@@ -1711,7 +1759,8 @@ async function profileTrusted(p) {
   const key = (p.port && Number(p.port) !== 22 ? `[${p.host}]:${p.port}` : p.host).toLowerCase();
   if (state.trustedHostKeys?.['host:' + key]) return true;
   const files = [agentKnownHostsPath(), path.join(os.homedir(), '.ssh', 'known_hosts')];
-  return (await Promise.all(files.map(file => openssh.knownHostsContains(file, key).catch(() => false)))).some(Boolean);
+  return (await Promise.all(files.map(file => openssh.knownHostFingerprints(file, key).catch(() => []))))
+    .some(fingerprints => fingerprints.length > 0);
 }
 handle('agent-info', async () => {
   const service = getAgent();

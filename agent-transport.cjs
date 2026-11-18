@@ -8,6 +8,8 @@ const { stripVTControlCharacters } = require('node:util');
 const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { problem } = require('./agent-service.cjs');
+const { normalizedAuthQuestion } = require('./auth-rules.cjs');
+const { authScope, savedAuthDecision } = require('./saved-auth.cjs');
 
 const limit = 16 * 1024 * 1024;
 
@@ -43,6 +45,34 @@ function classifySshFailure(lines, { exit = null, stage = 'connect' } = {}) {
   return { code: 'CONNECTION_FAILED', stage, hint: 'See the activity log for details.', exit };
 }
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// Next steps returned with a failure, for the agent. Fixed English text that never contains a secret.
+const askUser = message => ({ action: 'ask_user', message });
+const retry = { action: 'retry', message: 'Retry once. If it fails again, stop and report the error code.' };
+const checkInput = { action: 'check_input', message: 'Check the host name, port, and ProxyJump or ProxyCommand settings.' };
+const connectionNext = [retry, checkInput];
+const defaultNext = [askUser('Ask the user to check this bookmark in PromeFTP.')];
+const nextSteps = {
+  HOST_KEY_UNKNOWN: [askUser('Ask the user to confirm the host key in the PromeFTP dialog, or connect once in PromeFTP.'),
+    { action: 'retry', message: 'Retry only after the user has confirmed the host key.' }],
+  HOST_KEY_CHANGED: [askUser('The server key differs from the trusted one. Ask the user to verify the new fingerprint; do not retry automatically.')],
+  HOST_KEY_UNCONFIRMED: [askUser('The user declined or did not answer the host key dialog.')],
+  AUTH_FAILED: [askUser('Saved credentials were rejected. Ask the user to update them in PromeFTP.')],
+  SSH_CONFIG_CHANGED: [{ action: 'refresh_grant', message: "Ask the user to re-save this bookmark's agent permission." }],
+  SFTP_SUBSYSTEM_FAILED: [askUser('Ask the user to check the sftp-server setting and login shell output such as echo in .bashrc.')],
+  DNS_FAILED: connectionNext,
+  HOST_UNREACHABLE: connectionNext,
+  CONNECT_TIMEOUT: connectionNext,
+  CONNECTION_REFUSED: connectionNext,
+  PROXY_FAILED: connectionNext,
+  CONNECTION_FAILED: connectionNext,
+};
+const nextFor = code => nextSteps[code] || defaultNext;
+const withNext = failure => ({ ...failure, next: nextFor(failure.code) });
+// Shown to the agent when a password prompt arrives and no saved answer exists.
+const NO_PROMPT_IN_APP = 'PromeFTP signed in without a prompt (likely ssh-agent). Save the password/answer once in PromeFTP or set an identity file on this bookmark.';
+// Only the lines that decide where OpenSSH connects. Other settings change how a login is authenticated, not where.
+const targetLines = endpoint => endpoint.split('\n').filter(line => /^(hostname|user|port|proxyjump|proxycommand) /.test(line)).join('\n');
+const sameTarget = (a, b) => targetLines(a) === targetLines(b);
 
 function eligibilityReason(p) {
   if (!/^[\w][\w.:%-]*$/.test(p.host)) return 'Use a valid SSH host name or alias.';
@@ -61,7 +91,13 @@ function command(value) {
   return value;
 }
 
-function createTransport({ state, readAnswer, authScope, validAuthAnswer, matchesGlobalPattern, snippetScope, directory, approve, knownHosts }) {
+function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPattern, snippetScope, directory, approve, knownHosts,
+  profile, userKnownHosts, confirmHostKey, ssh = openssh }) {
+  // The same normalization as the app, so the endpoint, the scope and the reply key match what the app computes.
+  function normalized(input) {
+    try { return profile(input); }
+    catch { throw problem('PROFILE_NOT_ELIGIBLE'); }
+  }
   function catalog(p) {
     const scope = snippetScope({ mode: 'ssh', input: p });
     return {
@@ -70,14 +106,42 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
         .map(({ id, name }) => ({ id, name })),
     };
   }
-  // Agent connections never store or ask about new keys. Only a fingerprint the user trusted in the app is accepted.
-  function hostKeyDecision(prompt, scope) {
-    const info = openssh.parseHostKeyPrompt(prompt);
+  // Keys the user trusted for a host: the app's values, and otherwise the user's own known_hosts file (read only).
+  async function trustedFor(host, scope) {
+    const app = [`host:${host}`, scope].filter(Boolean).map(key => state().trustedHostKeys?.[key]).filter(Boolean);
+    const user = await ssh.knownHostFingerprints(userKnownHosts, host).catch(() => []);
+    return { app, user };
+  }
+  // The fingerprints that count as trusted for a host. An app value replaces ~/.ssh entirely, both when deciding a
+  // connection and when cleaning the agent's file. ~/.ssh is only the trust source when the app has no value.
+  const trustOf = ({ app, user }) => (app.length ? app : user);
+  // A key that matches the trusted set is accepted. Any other key is never accepted without the user's confirmation in the app.
+  async function hostKeyDecision(prompt, { scope, profile: bookmark, endpoint, signal }) {
+    const info = ssh.parseHostKeyPrompt(prompt);
     if (!info?.fingerprint) return { code: 'HOST_KEY_UNKNOWN' };
-    const saved = [`host:${info.host}`, scope].filter(Boolean).map(key => state().trustedHostKeys?.[key]).filter(Boolean);
-    if (saved.includes(info.fingerprint)) return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
-    return { code: saved.length ? 'HOST_KEY_CHANGED' : 'HOST_KEY_UNKNOWN',
-      detail: { host: info.host, fingerprint: info.fingerprint, ...(saved.length && { trusted: saved[0] }) } };
+    const trust = await trustedFor(info.host, scope);
+    const trusted = trustOf(trust);
+    if (trusted.includes(info.fingerprint)) return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
+    const previous = trusted[0];
+    const source = trust.app.length ? 'app' : 'user_known_hosts';
+    const detail = { host: info.host, fingerprint: info.fingerprint, ...(previous && { trusted: previous, source }) };
+    if (!confirmHostKey) return { code: previous ? 'HOST_KEY_CHANGED' : 'HOST_KEY_UNKNOWN', detail };
+    const approved = await Promise.resolve()
+      .then(() => confirmHostKey({ profile: bookmark, host: info.host, fingerprint: info.fingerprint,
+        previous, source: previous ? source : undefined, endpoint, signal }))
+      .catch(() => false);
+    if (approved !== true) return { code: 'HOST_KEY_UNCONFIRMED', detail };
+    return { answer: info.accept, host: info.host, fingerprint: info.fingerprint };
+  }
+  // Before an agent connection, the agent's own file loses any key the user has not trusted, so OpenSSH asks again
+  // instead of stopping with "REMOTE HOST IDENTIFICATION HAS CHANGED". No file outside the agent's directory is changed.
+  async function pruneAgentKnownHosts(bookmark, endpoint) {
+    const hostname = /^hostname (.+)$/m.exec(endpoint)?.[1] || bookmark.host;
+    const port = Number(/^port (\d+)$/m.exec(endpoint)?.[1]) || bookmark.port || 22;
+    const name = (port !== 22 ? `[${hostname}]:${port}` : hostname).toLowerCase();
+    const trusted = trustOf(await trustedFor(name, ''));
+    const stored = await ssh.knownHostFingerprints(knownHosts, name);
+    if (stored.some(fingerprint => !trusted.includes(fingerprint))) await ssh.forgetKnownHost(knownHosts, name);
   }
   function validateGrant(value, p) {
     const choices = catalog(p);
@@ -93,21 +157,26 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       commandApproval: value.commandApproval === true, pam: selected('pam'), triggers: selected('triggers'), ...(task && { task }) };
   }
 
-  async function resolve(p, legacy = false) {
+  async function resolve(input, legacy = false) {
+    const p = normalized(input);
     if (!eligible(p)) throw problem('PROFILE_NOT_ELIGIBLE');
     const config = { ...p, configPath: legacy ? '/dev/null' : p.configPath || '', knownHosts };
-    const output = await openssh.effectiveOutput(config);
-    return { config, endpoint: openssh.authEndpoint(output), route: digest(output) };
+    const output = await ssh.effectiveOutput(config);
+    return { config, endpoint: ssh.authEndpoint(output), route: digest(output) };
   }
 
-  async function connect(p, grant, mode, notify, check, signal) {
+  async function connect(input, grant, mode, notify, check, signal) {
+    const p = normalized(input);
     if (!grant.route && (p.usesAlias || p.configPath)) throw problem('ACCESS_DENIED');
-    const { config, endpoint, route } = await resolve(p, !grant.route);
-    if (grant.route && grant.route !== route) throw problem('SSH_CONFIG_CHANGED');
-    const { host, keyPath } = p;
-    const original = { ...config, configPath: p.configPath || '' };
+    const target = await resolve(p, !grant.route);
+    if (grant.route && grant.route !== target.route) throw problem('SSH_CONFIG_CHANGED');
+    // Saved replies are keyed by the endpoint the app computes. A legacy connection uses that same endpoint, but only
+    // when it reaches the same target. Otherwise saved replies are not used for this connection.
+    const identity = grant.route ? target : await resolve(p, false);
+    const mismatch = !sameTarget(target.endpoint, identity.endpoint);
+    const endpoint = identity.endpoint;
+    const scope = endpoint && !mismatch ? authScope(p, endpoint) : '';
     check();
-    const scope = endpoint && authScope(original, endpoint);
     let connection;
     let authenticated = false;
     const answered = new Set();
@@ -121,11 +190,11 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
         if (output.length > 200) output.splice(0, output.length - 200);
         return;
       }
-      if (event === 'ready') { authenticated = true; notify(event, { endpoint }); return; }
+      if (event === 'ready') { authenticated = true; notify(event, { endpoint: target.endpoint }); return; }
       if (event === 'closed' || event === 'prompt-clear') { notify(event, value); return; }
       if (event === 'error') {
         const exit = Number(/\((\d+)\)/.exec(String(value))?.[1]) || null;
-        notify('error', { ...classifySshFailure(output, { exit, stage }), log: scrubLines(output) });
+        notify('error', withNext({ ...classifySshFailure(output, { exit, stage }), log: scrubLines(output) }));
         return;
       }
       if (event !== 'prompt') return;
@@ -133,10 +202,11 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       const handle = async () => {
         check();
         if (value.hostKey) {
-          const decision = hostKeyDecision(value.prompt, scope);
+          const decision = await hostKeyDecision(value.prompt, { scope, profile: p, endpoint: target.endpoint, signal });
           if (decision.code) {
-            notify('error', { code: decision.code, stage: 'hostkey', hint: failureRules.find(rule => rule[0] === decision.code)?.[3],
-              exit: null, detail: decision.detail, log: scrubLines(output) });
+            notify('error', withNext({ code: decision.code, stage: 'hostkey',
+              hint: failureRules.find(rule => rule[0] === decision.code)?.[3] || 'The user did not confirm the host key.',
+              exit: null, detail: decision.detail, log: scrubLines(output) }));
             connection?.answer(value.id, 'no');
           } else {
             notify('hostkey.pinned', { host: decision.host, fingerprint: decision.fingerprint });
@@ -144,29 +214,33 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
           }
           return;
         }
-        if (!authenticated && value.targetProcess && value.canRemember && state().useStoredAuthOnConnect !== false) {
-          const question = value.prompt.replace(/^\([^\r\n)]{1,512}\) /, '');
-          const key = endpoint && digest([host, original.configPath, keyPath || '', endpoint, value.prompt]);
-          const saved = grant.savedAuth && state().useSavedRepliesAutomatically !== false && key && state().authReplies?.[key];
-          const rules = (state().globalAuthRules || []).filter(rule => grant.pam.includes(rule.id));
-          const global = rules.find(rule => rule.match !== 'regex' && (rule.prompt === value.prompt || rule.prompt === question))
-            || rules.find(rule => rule.match === 'regex' && matchesGlobalPattern(rule, question));
-          const entry = saved?.scope === scope && saved ? saved : global;
-          const used = global === entry ? global?.id : key;
-          if (entry && !answered.has(question) && !answered.has(used)) {
-            const answer = await readAnswer(entry).catch(() => '');
+        if (!authenticated) {
+          const question = normalizedAuthQuestion(value.prompt);
+          const rules = state().globalAuthRules || [];
+          const decision = savedAuthDecision({ state: state(), config: p, endpoint, scope, mismatch, prompt: value.prompt,
+            canRemember: value.canRemember, answered, allowSaved: grant.savedAuth,
+            allowedRuleIds: grant.savedAuth ? rules.map(rule => rule.id) : grant.pam, matchesGlobalPattern });
+          let reason = decision.reason;
+          if (decision.entry) {
+            const answer = await readAnswer(decision.entry).catch(() => '');
             check();
-            const latest = global === entry ? state().globalAuthRules?.find(rule => rule.id === used) : state().authReplies?.[key];
-            if (latest === entry && state().useStoredAuthOnConnect !== false &&
-                (global === entry || state().useSavedRepliesAutomatically !== false) && validAuthAnswer(answer)) {
-              notify('auth.rule', used);
+            const latest = decision.source === 'global' ? state().globalAuthRules?.find(rule => rule.id === decision.used)
+              : state().authReplies?.[decision.key];
+            if (latest === decision.entry && state().useStoredAuthOnConnect !== false &&
+                (decision.source === 'global' || state().useSavedRepliesAutomatically !== false) && validAuthAnswer(answer)) {
+              notify('auth.rule', decision.used);
               if (connection?.answer(value.id, answer)) {
                 answered.add(question);
-                answered.add(used);
+                answered.add(decision.used);
                 return;
               }
             }
+            reason = 'read_failed';
           }
+          const lastLine = value.prompt.trim().split(/\r?\n/).at(-1);
+          const next = reason === 'no_saved_reply' && /password|passphrase/i.test(lastLine) ? [askUser(NO_PROMPT_IN_APP)] : undefined;
+          notify('prompt', { ...value, savedAuth: reason, ...(next && { next }) });
+          return;
         }
         notify('prompt', value);
       };
@@ -185,8 +259,10 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       }
     }
     const auditPassword = () => notify('auth.rule', 'saved-password');
-    connection = await openssh.start(config, mode === 'ssh' ? 'exec' : mode, {}, onEvent, [],
-      'ask', false, password, auditPassword, true);
+    try { await pruneAgentKnownHosts(p, target.endpoint); }
+    catch { /* The agent's file is a cache of trust only. OpenSSH still asks for any key it does not know. */ }
+    connection = await ssh.start(target.config, mode === 'ssh' ? 'exec' : mode, {}, onEvent, [],
+      'ask', grant.savedAuth && state().useOpenSSHKeychain === true, password, auditPassword, true);
     if (signal.aborted) connection.close();
     return connection;
   }
@@ -260,6 +336,6 @@ function createTransport({ state, readAnswer, authScope, validAuthAnswer, matche
       throw error;
     }
   }
-  return { eligible, eligibilityReason, resolve, command, catalog, validateGrant, connect, approve, run, download };
+  return { eligible, eligibilityReason, resolve, command, catalog, validateGrant, connect, approve, run, download, nextFor };
 }
-module.exports = { createTransport, classifySshFailure, scrubLines };
+module.exports = { createTransport, classifySshFailure, scrubLines, nextSteps };

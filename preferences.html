@@ -129,8 +129,8 @@
           </fieldset>
           <fieldset class="agent-group">
             <legend>Authentication and triggers</legend>
-            <label class="settings-check"><input id="agent-saved-auth" type="checkbox" data-tip="Uses the saved PAM responses for this host when the agent connects.">Use saved authentication</label>
-            <label data-tip="Choose the host-wide PAM rules the agent connection may use.">PAM rules<select id="agent-pam" multiple size="2"></select></label>
+            <label class="settings-check"><input id="agent-saved-auth" type="checkbox" data-tip="Uses the saved PAM responses for this host and all-host PAM rules when the agent connects. The PAM rules list is ignored while this is on.">Use saved authentication</label>
+            <label data-tip="Choose the host-wide PAM rules the agent connection may use. Ignored while saved authentication is on.">PAM rules<select id="agent-pam" multiple size="2"></select></label>
             <label data-tip="Reports matching output to the agent as an event. It never sends an automatic reply.">Notification triggers<select id="agent-triggers" multiple size="2"></select></label>
           </fieldset>
         </fieldset>

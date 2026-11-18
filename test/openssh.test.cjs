@@ -1,7 +1,7 @@
 // Characterization tests for the pure parsers in openssh.cjs. Functions that start ssh, ssh-keygen or a PTY are not called here.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseHostKeyPrompt, authEndpoint } = require('../openssh.cjs');
+const { parseHostKeyPrompt, authEndpoint, parseKeygenFingerprints, knownHostFingerprints, agentRestrictedOptions } = require('../openssh.cjs');
 
 const question = "Are you sure you want to continue connecting (yes/no/[fingerprint])?";
 
@@ -54,4 +54,47 @@ test('authEndpoint keeps only the connection settings that are safe to show', ()
 test('authEndpoint needs the key followed by a space, so similar keys are dropped', () => {
   assert.equal(authEndpoint('hostnames example.invalid\nuser\nport'), '');
   assert.equal(authEndpoint(''), '');
+});
+
+// Output of `ssh-keygen -l -F host -f file` as OpenSSH 10 prints it for a plain and a hashed entry.
+test('parseKeygenFingerprints reads the SHA256 fingerprint from a real ssh-keygen answer', () => {
+  const plain = '# Host example.invalid found: line 1 \nexample.invalid ED25519 SHA256:2x4rVmPgLrZC3BCyj4QvzB6Q+6EznY3lUyA/oa5tnZg\n';
+  assert.deepEqual(parseKeygenFingerprints(plain), ['SHA256:2x4rVmPgLrZC3BCyj4QvzB6Q+6EznY3lUyA/oa5tnZg']);
+});
+
+test('parseKeygenFingerprints skips comment lines and keeps each fingerprint once', () => {
+  const output = '# Host example.invalid found: line 3\n256 SHA256:abc example.invalid (ED25519)\n256 SHA256:abc example.invalid (ED25519)\n';
+  assert.deepEqual(parseKeygenFingerprints(output), ['SHA256:abc']);
+});
+
+test('parseKeygenFingerprints reads a hashed host line too', () => {
+  assert.deepEqual(parseKeygenFingerprints('256 SHA256:hashed1 |1|abc=|def= (ED25519)\n'), ['SHA256:hashed1']);
+});
+
+test('parseKeygenFingerprints gives an empty list for empty output or a comment only', () => {
+  assert.deepEqual(parseKeygenFingerprints(''), []);
+  assert.deepEqual(parseKeygenFingerprints('# Host example.invalid found: line 3\n'), []);
+});
+
+test('knownHostFingerprints returns an empty list for a file that does not exist', async () => {
+  assert.deepEqual(await knownHostFingerprints('/var/empty-promeftp-test/known_hosts', 'example.invalid'), []);
+});
+
+test('agentRestrictedOptions names only the agent known_hosts file, never ~/.ssh/known_hosts', () => {
+  const args = agentRestrictedOptions({ configPath: '', knownHosts: '/x/k' });
+  assert.ok(args.includes('UserKnownHostsFile="/x/k"'));
+  assert.equal(args.join(' ').includes('~/.ssh/known_hosts'), false);
+  assert.ok(args.includes('IdentityAgent=none'));
+  assert.ok(args.includes('IdentitiesOnly=yes'));
+  assert.equal(args.includes('-F'), false);
+});
+
+test('agentRestrictedOptions adds the config file first and escapes quotes in the path', () => {
+  const args = agentRestrictedOptions({ configPath: '/dev/null', knownHosts: '/x/"k' });
+  assert.deepEqual(args.slice(0, 2), ['-F', '/dev/null']);
+  assert.ok(args.includes('UserKnownHostsFile="/x/\\"k"'));
+});
+
+test('agentRestrictedOptions refuses to run without the agent known_hosts file', () => {
+  assert.throws(() => agentRestrictedOptions({ configPath: '' }), /own known_hosts file/);
 });

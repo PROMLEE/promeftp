@@ -20,10 +20,10 @@ Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump.
 Allows listing and file information only, inside the folder you choose. Files cannot be changed.|지정한 폴더 아래에서만 목록 조회와 파일 정보 확인을 허용합니다. 파일은 수정할 수 없습니다.|選んだフォルダー内でのみ一覧表示とファイル情報の確認を許可します。ファイルの変更はできません。|仅允许在所选文件夹内列出文件和查看文件信息，不能修改文件。
 The top folder the agent can see. It must start with /.|에이전트가 볼 수 있는 최상위 폴더입니다. /로 시작해야 합니다.|エージェントが参照できる最上位のフォルダーです。/ で始まる必要があります。|代理可以查看的顶层文件夹，必须以 / 开头。
 Downloads files up to 16 MiB each into PromeFTP's private staging folder.|파일당 16 MiB까지 PromeFTP 전용 임시 폴더로 내려받습니다.|1 ファイルあたり 16 MiB まで、PromeFTP 専用の一時フォルダーにダウンロードします。|每个文件最大 16 MiB，下载到 PromeFTP 的专用暂存文件夹。
-Uses the saved PAM responses for this host when the agent connects.|에이전트가 연결할 때 이 호스트에 저장된 PAM 응답을 사용합니다.|エージェントの接続時に、このホストに保存された PAM 応答を使用します。|代理连接时使用此主机已保存的 PAM 应答。
+Uses the saved PAM responses for this host and all-host PAM rules when the agent connects. The PAM rules list is ignored while this is on.|에이전트가 연결할 때 이 호스트의 저장된 PAM 응답과 전역 인증 규칙을 사용합니다. 이 옵션이 켜져 있으면 PAM 규칙 목록은 무시됩니다.|エージェントの接続時に、このホストの保存済み PAM 応答と全ホスト向け PAM ルールを使用します。このオプションが有効な間、PAM ルールの一覧は無視されます。|代理连接时使用此主机已保存的 PAM 应答和所有主机的 PAM 规则。开启此选项时将忽略 PAM 规则列表。
 Each command the agent requests runs only after you approve it in a confirmation window.|에이전트가 요청한 명령은 확인 창에서 승인해야 실행됩니다.|エージェントが要求したコマンドは、確認ウィンドウで承認された場合にのみ実行されます。|代理请求的每条命令都必须在确认窗口中审批后才会执行。
 One command that can run without approval, identified by a name the agent uses.|승인 없이 실행할 수 있는 명령 하나를 에이전트가 쓰는 이름으로 등록합니다.|承認なしで実行できるコマンドを 1 つ、エージェントが使う名前で登録します。|注册一条无需审批即可运行的命令，并为其指定代理使用的名称。
-Choose the host-wide PAM rules the agent connection may use.|에이전트 연결에서 사용할 수 있는 모든 호스트 PAM 규칙을 고릅니다.|エージェント接続で使用できる全ホスト向け PAM ルールを選びます。|选择代理连接可以使用的全局主机 PAM 规则。
+Choose the host-wide PAM rules the agent connection may use. Ignored while saved authentication is on.|에이전트 연결에서 사용할 수 있는 모든 호스트 PAM 규칙을 고릅니다. 저장된 인증 사용이 켜져 있으면 무시됩니다.|エージェント接続で使用できる全ホスト向け PAM ルールを選びます。保存済みの認証を使用中は無視されます。|选择代理连接可以使用的全局主机 PAM 规则。开启已保存的身份验证时将忽略此设置。
 Reports matching output to the agent as an event. It never sends an automatic reply.|일치하는 출력을 이벤트로 에이전트에 알립니다. 자동 응답은 보내지 않습니다.|一致した出力をイベントとしてエージェントに通知します。自動応答は送信しません。|将匹配的输出以事件形式通知代理，且从不自动回复。
 Keeps activity for 1–90 days. Commands and passwords are never recorded.|활동 기록을 1–90일 보관합니다. 명령 내용과 비밀번호는 기록하지 않습니다.|アクティビティを 1～90 日間保存します。コマンドとパスワードは記録しません。|活动记录保留 1–90 天。从不记录命令和密码。
 More information|자세히 보기|詳細|更多信息
@@ -619,6 +619,10 @@ Save answer|응답 저장|応答を保存|保存回答
 Send automatically|자동 전송|自動送信|自动发送
 Verify SSH host key|SSH 호스트 키 확인|SSH ホスト鍵を確認|验证 SSH 主机密钥
 Trust and Connect|신뢰하고 연결|信頼して接続|信任并连接
+The server host key changed|서버 호스트 키가 바뀌었습니다|サーバーのホスト鍵が変更されました|服务器主机密钥已更改
+New fingerprint|새 지문|新しいフィンガープリント|新指纹
+Previous fingerprint|이전 지문|以前のフィンガープリント|之前的指纹
+Trust this key only after you verify its fingerprint with the server administrator.|서버 관리자에게 지문을 확인한 뒤에만 이 키를 신뢰하세요.|サーバー管理者にフィンガープリントを確認した後にのみ、この鍵を信頼してください。|只有在与服务器管理员核对指纹后才信任此密钥。
 Don’t ask again for this verified key|이 키를 다시 묻지 않기|確認済みのこの鍵については再確認しない|不再询问此已验证的密钥
 All Groups|모든 그룹|すべてのグループ|所有分组
 Ungrouped|그룹 없음|グループなし|未分组

@@ -3,6 +3,7 @@ const fs = require('node:fs/promises');
 const { DatabaseSync } = require('node:sqlite');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const path = require('node:path');
+const { SAVED_AUTH_REASONS } = require('./saved-auth.cjs');
 
 const protocol = 1;
 const socketLimit = 16384;
@@ -162,7 +163,11 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (event === 'prompt') {
         s.status = 'waiting_for_user';
         s.prompt = { id: value.id, text: clean(value.prompt) };
-        note(s, 'auth.prompt', 'waiting_for_user');
+        // Only the reason code and the fixed next steps. The question, the reply and any password stay out of the log.
+        const promptDetail = {};
+        if (SAVED_AUTH_REASONS.includes(value.savedAuth)) promptDetail.savedAuth = value.savedAuth;
+        if (Array.isArray(value.next)) promptDetail.next = value.next;
+        note(s, 'auth.prompt', 'waiting_for_user', null, Object.keys(promptDetail).length ? JSON.stringify(promptDetail) : undefined);
         if (!s.closed) onPrompt();
       }
       if (event === 'prompt-clear' && s.prompt?.id === value) {
@@ -179,7 +184,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         // Only the classification is recorded and returned to clients. The raw log stays in memory for the app's own view.
         if (failure.log) diagnostics.set(s.id, { time: Date.now(), log: failure.log });
         if (diagnostics.size > 50) diagnostics.delete(diagnostics.keys().next().value);
-        note(s, 'session.error', 'failed', s.failure.code, JSON.stringify({ ...failure.detail, stage: s.failure.stage, exit: s.failure.exit, hint: s.failure.hint }));
+        note(s, 'session.error', 'failed', s.failure.code, JSON.stringify({ ...failure.detail, stage: s.failure.stage, exit: s.failure.exit, hint: s.failure.hint, next: failure.next }));
       }
       if (event === 'closed') end(s, s.status === 'ready' ? 'REMOTE_CLOSED' : 'CONNECT_FAILED');
     };
@@ -187,7 +192,10 @@ async function createAgentService({ directory, state, save, profiles, transport,
       .then(connection => { s.connection = connection; if (s.closed) connection.close(); })
       .catch(error => {
         if (s.closed) return;
-        if (!s.failure) note(s, 'session.error', 'failed', error.agentCode || 'CONNECTION_FAILED');
+        if (!s.failure) {
+          const code = error.agentCode || 'CONNECTION_FAILED';
+          note(s, 'session.error', 'failed', code, JSON.stringify({ next: transport.nextFor(code) }));
+        }
         end(s, 'CONNECT_FAILED');
       });
     return s;
@@ -238,7 +246,8 @@ async function createAgentService({ directory, state, save, profiles, transport,
     if (!row) return {};
     let detail = {};
     try { detail = JSON.parse(row.detail || '{}'); } catch { detail = {}; }
-    return { error: { code: row.reason, stage: detail.stage, hint: detail.hint, ...(Number.isInteger(detail.exit) && { exit: detail.exit }) } };
+    const next = Array.isArray(detail.next) ? detail.next : [{ action: 'ask_user', message: 'Ask the user to check this bookmark in PromeFTP.' }];
+    return { error: { code: row.reason, stage: detail.stage, hint: detail.hint, next, ...(Number.isInteger(detail.exit) && { exit: detail.exit }) } };
   }
   function sessionEvents(id, client, after = 0) {
     if (!Number.isSafeInteger(after) || after < 0) throw problem('INVALID_REQUEST');
