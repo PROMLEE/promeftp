@@ -1,0 +1,19 @@
+{
+  "heading": "Automatic refresh and more local panes",
+  "summary": "File lists update after transfers and backups, and the local file browser splits into up to six panes.",
+  "changes": [
+    [
+      "Automatic refresh",
+      "Uploads, downloads, copies between servers, new folders, and backups show up without a manual refresh."
+    ],
+    [
+      "More local panes",
+      "Split any local pane right or down, up to six panes. The layout is saved with workspaces."
+    ],
+    [
+      "Translated tooltips",
+      "Button tooltips that appeared in English are translated into Korean, Japanese, and Chinese."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
