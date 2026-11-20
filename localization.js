@@ -669,7 +669,8 @@ Backing up…|백업 중…|バックアップ中…|正在备份…
 Backed up as|다음 이름으로 백업됨:|次の名前でバックアップしました:|已备份为
 items backed up|개 항목 백업됨|項目をバックアップしました|个项目已备份
 This server doesn't allow shell commands. Copying through PromeFTP instead.|이 서버는 셸 명령을 허용하지 않아 PromeFTP를 거쳐 복사합니다.|このサーバーはシェルコマンドを許可していないため、PromeFTP 経由でコピーします。|此服务器不允许 shell 命令，将通过 PromeFTP 复制。
-Split local pane|로컬 패널 분할|ローカルパネルを分割|拆分本地面板
+Split local pane right|로컬 패널을 오른쪽으로 분할|ローカルパネルを右に分割|向右拆分本地面板
+Split local pane down|로컬 패널을 아래로 분할|ローカルパネルを下に分割|向下拆分本地面板
 Close local pane|로컬 패널 닫기|ローカルパネルを閉じる|关闭本地面板
 Backup failed|백업 실패|バックアップに失敗しました|备份失败
 You don't have permission to write in this folder.|이 폴더에 쓸 권한이 없습니다.|このフォルダーに書き込む権限がありません。|您没有在此文件夹中写入的权限。

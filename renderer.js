@@ -2971,8 +2971,9 @@ function setupFiles(session) {
         await loadLocal(side, side.directory);
       } catch (error) { localError(error); }
     });
-    side.split = iconButton('splitRight', 'Split local pane', () => splitLocal(side, 'row'));
-    side.tools.append(hidden, newLocalFolder, send, side.split);
+    side.split = iconButton('splitRight', 'Split local pane right', () => splitLocal(side, 'row'));
+    side.splitDown = iconButton('splitDown', 'Split local pane down', () => splitLocal(side, 'column'));
+    side.tools.append(hidden, newLocalFolder, send, side.split, side.splitDown);
     // Right-clicking the empty part of a local pane offers the split directions.
     side.items.addEventListener('contextmenu', event => {
       if (event.target.closest('.file-row')) return;
@@ -2991,7 +2992,7 @@ function setupFiles(session) {
       if (!side.send) continue;
       side.send.disabled = !current?.canUpload || !selectedRows(side).length;
       side.address.inert = side.items.inert = layout.transferring;
-      side.split.disabled = layout.locals.length >= MAX_LOCAL_PANES;
+      side.split.disabled = side.splitDown.disabled = layout.locals.length >= MAX_LOCAL_PANES;
     }
   }
   function setActiveLocal(side) {
