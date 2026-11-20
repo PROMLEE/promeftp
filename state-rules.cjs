@@ -42,15 +42,37 @@ function snippetScope(context, home) {
   return JSON.stringify(['ssh', host.toLowerCase(), hostname || '', username, port, configPath]);
 }
 
-// The local split saved with a workspace pane. A malformed value is dropped (undefined), so the pane still opens with
-// one local pane. The ratio is kept within 0.1 to 0.9 and the folders are validated like the single local folder.
+// The local split saved with a workspace pane: a tree of up to MAX_LOCAL_PANES panes. A malformed value is dropped
+// (undefined), so the pane still opens with one local pane. The ratio is kept within 0.1 to 0.9. Each directory must be
+// a string and is cut to 4096 characters. A node is { directory } or { axis, ratio, first, second }; focus is the index
+// of the focused pane in tree order. The 1.1.10 shape { axis, ratio, directories: [a, b], focus } is read as a two-pane tree.
+// Keep in sync with MAX_LOCAL_PANES in renderer.js
+const MAX_LOCAL_PANES = 6;
 function workspaceLocalSplit(value) {
   if (!value || typeof value !== 'object') return undefined;
-  if (!['row', 'column'].includes(value.axis)) return undefined;
-  if (!Array.isArray(value.directories) || value.directories.length !== 2) return undefined;
-  if (!value.directories.every(item => typeof item === 'string')) return undefined;
-  const ratio = Number.isFinite(value.ratio) ? Math.max(0.1, Math.min(0.9, value.ratio)) : 0.5;
-  return { axis: value.axis, ratio, directories: value.directories.map(item => item.slice(0, 4096)), focus: value.focus === 1 ? 1 : 0 };
+  let tree = value.tree;
+  if ((tree === undefined || tree === null) && Array.isArray(value.directories)) {
+    if (value.directories.length !== 2) return undefined;
+    tree = { axis: value.axis, ratio: value.ratio, first: { directory: value.directories[0] }, second: { directory: value.directories[1] } };
+  }
+  let leaves = 0;
+  const clean = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > MAX_LOCAL_PANES) return undefined;
+    if (typeof node.directory === 'string') {
+      leaves += 1;
+      return leaves > MAX_LOCAL_PANES ? undefined : { directory: node.directory.slice(0, 4096) };
+    }
+    if (!['row', 'column'].includes(node.axis)) return undefined;
+    const first = clean(node.first, depth + 1);
+    const second = first && clean(node.second, depth + 1);
+    if (!second) return undefined;
+    const ratio = Number.isFinite(node.ratio) ? Math.max(0.1, Math.min(0.9, node.ratio)) : 0.5;
+    return { axis: node.axis, ratio, first, second };
+  };
+  const cleaned = clean(tree, 0);
+  if (!cleaned || cleaned.directory !== undefined) return undefined;
+  const focus = Number.isInteger(value.focus) && value.focus >= 0 && value.focus < leaves ? value.focus : 0;
+  return { tree: cleaned, focus };
 }
 
-module.exports = { expandHome, profile, bookmarkFolderNames, bookmarkFolderName, workspaceName, snippetScope, workspaceLocalSplit };
+module.exports = { expandHome, profile, bookmarkFolderNames, bookmarkFolderName, workspaceName, snippetScope, workspaceLocalSplit, MAX_LOCAL_PANES };

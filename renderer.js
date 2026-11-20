@@ -1451,6 +1451,8 @@ function closeTab(record) {
   if (wasActive) activate(tabRecords.at(-1)?.focus);
 }
 
+// Keep in sync with MAX_LOCAL_PANES in state-rules.cjs
+const MAX_LOCAL_PANES = 6;
 function makeSplit(first, second, axis, initial = 0.5) {
   const node = document.createElement('div');
   node.className = 'split-node ' + axis;
@@ -2065,7 +2067,7 @@ function makeFileLayout(root, directory, ratio) {
   container.className = 'listing file-panels';
   const remotesRoot = document.createElement('div');
   remotesRoot.className = 'remote-file-panes';
-  // One local pane, or a split of two. It sits where the single local pane always sat.
+  // One local pane, or a tree of split local panes. It sits where the single local pane always sat.
   const localRoot = document.createElement('div');
   localRoot.className = 'local-file-panes';
   const layout = {
@@ -2074,12 +2076,21 @@ function makeFileLayout(root, directory, ratio) {
     // The folder the active local pane shows. Transfers and the path bar in the file tools use it.
     get directory() { return (layout.activeLocal ?? layout.locals[0])?.directory ?? layout.localDirectory; },
   };
-  // Serialized with a workspace: the split direction, its ratio, both folders, and which pane was focused.
+  // Serialized with a workspace: the split tree (directions, ratios, folders) and which pane was focused.
   layout.localSplitState = () => {
-    const node = localRoot.querySelector(':scope > .split-node');
-    if (!node || layout.locals.length !== 2) return undefined;
-    return { axis: node.axis, ratio: node.ratio, directories: layout.locals.map(side => side.directory || ''),
-      focus: Math.max(0, layout.locals.indexOf(layout.activeLocal ?? layout.locals[0])) };
+    if (layout.locals.length < 2) return undefined;
+    const order = [];
+    const save = element => {
+      if (element.classList.contains('split-node')) {
+        const [first, , second] = element.children;
+        return { axis: element.axis, ratio: element.ratio, first: save(first), second: save(second) };
+      }
+      const side = layout.locals.find(pane => pane.element === element);
+      order.push(side);
+      return { directory: side?.directory || '' };
+    };
+    const tree = save(localRoot.firstElementChild);
+    return { tree, focus: Math.max(0, order.indexOf(layout.activeLocal ?? layout.locals[0])) };
   };
   const divider = document.createElement('button');
   divider.type = 'button';
@@ -2632,7 +2643,10 @@ function setupFiles(session) {
     for (const key of side.folders.keys()) if (key === directory || key.startsWith(prefix)) side.folders.delete(key);
     if (currentDirectory(side) === directory) {
       if (isLocal(side)) await loadLocal(side, directory);
-      else await run(() => loadRemote(directory));
+      // Not through run(): a refresh must not be dropped while another remote action holds the busy flag.
+      else if (session.ready) {
+        try { await loadRemote(directory); } catch (error) { status(session, error.message, true); }
+      }
     }
     if (!side.tree.hidden) syncTree(side);
   }
@@ -2963,7 +2977,7 @@ function setupFiles(session) {
     side.items.addEventListener('contextmenu', event => {
       if (event.target.closest('.file-row')) return;
       event.preventDefault();
-      const full = layout.locals.length >= 2;
+      const full = layout.locals.length >= MAX_LOCAL_PANES;
       chooseMenu([
         [t('Split Right'), () => splitLocal(side, 'row'), !full],
         [t('Split Down'), () => splitLocal(side, 'column'), !full],
@@ -2977,24 +2991,26 @@ function setupFiles(session) {
       if (!side.send) continue;
       side.send.disabled = !current?.canUpload || !selectedRows(side).length;
       side.address.inert = side.items.inert = layout.transferring;
-      side.split.disabled = layout.locals.length >= 2;
+      side.split.disabled = layout.locals.length >= MAX_LOCAL_PANES;
     }
   }
   function setActiveLocal(side) {
     layout.activeLocal = side;
     for (const pane of layout.locals) pane.element.classList.toggle('active-local', pane === side);
   }
-  // Splits a local pane into two: side by side (row) or stacked (column). At most two local panes.
+  // Splits a local pane in place: side by side (row) or stacked (column), up to MAX_LOCAL_PANES panes.
   // The new pane starts in the source folder, or in target when a workspace restores its folder.
   function splitLocal(source = activeLocal(), axis = 'row', ratio = 0.5, target, focusNew = true) {
-    if (!source || layout.locals.length >= 2) return undefined;
+    if (!source || layout.locals.length >= MAX_LOCAL_PANES) return undefined;
     const side = panel('Local', 'local');
     side.directory = source.directory;
     layout.locals.push(side);
     wireSide(side);
     addLocalTools(side);
     side.tools.append(iconButton('close', 'Close local pane', () => closeLocal(side)));
-    layout.localRoot.replaceChildren(makeSplit(source.element, side.element, axis, ratio));
+    const parent = source.element.parentNode;
+    const next = source.element.nextSibling;
+    parent.insertBefore(makeSplit(source.element, side.element, axis, ratio), next);
     setActiveLocal(side);
     refreshLocalTools();
     loadLocal(side, target ?? source.directory).catch(error => {
@@ -3005,21 +3021,33 @@ function setupFiles(session) {
     });
     return side;
   }
-  // Closes the second local pane. The first pane stays, and its folder is unchanged.
+  // Closes a split-off local pane. Its neighbour takes the space; the first pane is never closed.
   function closeLocal(side) {
-    if (layout.locals[1] !== side) return;
-    const remaining = layout.locals[0];
-    layout.locals.splice(1, 1);
-    layout.localRoot.replaceChildren(remaining.element);
-    side.element.remove();
-    setActiveLocal(remaining);
+    const index = layout.locals.indexOf(side);
+    if (index < 1) return;
+    const node = side.element.parentNode;
+    const sibling = [...node.children].find(child => child !== side.element && !child.classList.contains('split-divider'));
+    node.replaceWith(sibling);
+    layout.locals.splice(index, 1);
+    const next = layout.locals.find(pane => sibling === pane.element || sibling.contains(pane.element)) ?? layout.locals[0];
+    if (layout.activeLocal === side || !layout.locals.includes(layout.activeLocal)) setActiveLocal(next);
     refreshLocalTools();
     updateControls();
-    remaining.pathSpace.focus();
+    (layout.activeLocal ?? next).pathSpace.focus();
   }
+  // Rebuilds a saved split tree on top of the first local pane, then focuses the saved pane.
   function restoreLocalSplit(saved) {
-    const side = splitLocal(layout.locals[0], saved.axis, saved.ratio ?? 0.5, saved.directories?.[1] || undefined, false);
-    if (side) setActiveLocal(layout.locals[saved.focus === 1 ? 1 : 0]);
+    const firstFolder = node => node.directory !== undefined ? node.directory : firstFolder(node.first);
+    const build = (node, side) => {
+      if (!side || node.directory !== undefined) return;
+      const added = splitLocal(side, node.axis, node.ratio ?? 0.5, firstFolder(node.second) || undefined, false);
+      build(node.first, side);
+      build(node.second, added);
+    };
+    build(saved.tree, layout.locals[0]);
+    const order = [...layout.localRoot.querySelectorAll('.file-panel')];
+    const focused = layout.locals.find(pane => pane.element === order[saved.focus]);
+    setActiveLocal(focused ?? layout.locals[0]);
   }
   if (first) {
     for (const side of layout.locals) addLocalTools(side);
@@ -3045,15 +3073,18 @@ function setupFiles(session) {
     remote.tools.append(splitRight, splitDown, close);
   }
   session.load = target => run(() => loadRemote(target));
-  session.refreshRemote = () => refreshFolder(remote, session.remoteDirectory);
+  session.refreshRemote = () => session.remoteDirectory && refreshFolder(remote, session.remoteDirectory);
+  session.refreshLocal = () => Promise.all(layout.locals.filter(side => side.directory).map(side => refreshFolder(side, side.directory)));
   session.transferFiles = transfer;
   session.refreshFileControls = updateControls;
   updateControls();
   if (first) {
-    // A workspace saved with two local panes reopens with the same split, folders and focused pane.
+    // A workspace saved with split local panes reopens with the same splits, folders and focused pane.
     const saved = session.tabRecord.localSplit;
     delete session.tabRecord.localSplit;
-    const start = saved?.directories?.[0] || local.directory;
+    let firstLeaf = saved?.tree;
+    while (firstLeaf && firstLeaf.directory === undefined) firstLeaf = firstLeaf.first;
+    const start = firstLeaf?.directory || local.directory;
     loadLocal(local, start).catch(error => {
       if (start) loadLocal(local).catch(localError);
       else localError(error);
@@ -3275,16 +3306,45 @@ function trackTransfers(jobs) {
     // A job that leaves the queue while active has finished (or was cancelled).
     if (entry.state === 'active') {
       entry.state = 'done';
-      // A backup copied through PromeFTP is new in its folder: show it without a manual refresh.
-      if (entry.operation === 'remote-duplicate') sessions.get(entry.sessionId)?.refreshRemote?.();
+      scheduleTransferRefresh(entry);
     } else transferTracker.delete(id);
   }
   for (const job of jobs) {
     const state = transferIsActive(job) ? 'active' : job.state === 'failed' ? 'failed' : 'interrupted';
     if (state === 'failed' && transferTracker.get(job.id)?.state === 'active') newlyFailed += 1;
-    transferTracker.set(job.id, { batchId: job.batchId || '', state, operation: job.operation, sessionId: job.sessionId });
+    transferTracker.set(job.id, { batchId: job.batchId || '', state, operation: job.operation, sessionId: job.sessionId, targetSessionId: job.targetSessionId });
   }
   return newlyFailed;
+}
+// A finished job changed its destination folder: reload that pane once the burst of finishing jobs settles.
+const pendingTransferRefresh = new Set();
+let transferRefreshTimer = 0;
+function scheduleTransferRefresh(entry) {
+  const remoteTargets = { upload: entry.sessionId, 'mkdir-remote': entry.sessionId, 'remote-duplicate': entry.sessionId, 'remote-copy': entry.targetSessionId };
+  if (remoteTargets[entry.operation]) pendingTransferRefresh.add(`remote:${remoteTargets[entry.operation]}`);
+  // A local job without a session id (mkdir-local from main.cjs) refreshes every open local pane.
+  else if (entry.operation === 'download' || entry.operation === 'mkdir-local') pendingTransferRefresh.add(`local:${entry.sessionId || '*'}`);
+  else return;
+  clearTimeout(transferRefreshTimer);
+  transferRefreshTimer = setTimeout(() => {
+    const keys = [...pendingTransferRefresh];
+    pendingTransferRefresh.clear();
+    const refreshedLayouts = new Set();
+    for (const key of keys) {
+      const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+      if (kind === 'remote') {
+        Promise.resolve(sessions.get(id)?.refreshRemote?.()).catch(() => {});
+        continue;
+      }
+      for (const target of id === '*' ? [...sessions.values()] : [sessions.get(id)]) {
+        // Sessions that share a file layout show the same local folders, so each layout is refreshed once.
+        const layout = target?.fileLayout || target;
+        if (!target || refreshedLayouts.has(layout)) continue;
+        refreshedLayouts.add(layout);
+        Promise.resolve(target.refreshLocal?.()).catch(() => {});
+      }
+    }
+  }, 300);
 }
 // When the last active transfer ends, report the result and close the drawer if nothing failed.
 function finishTransferRun() {

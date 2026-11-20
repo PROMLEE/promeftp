@@ -130,14 +130,27 @@ test('the sample profiles fixture loads through profile() and lists its folders 
 });
 
 // T14: the local split saved with a workspace pane (state-rules.cjs workspaceLocalSplit).
-test('T14 workspaceLocalSplit keeps a valid split, with the ratio limited to 0.1 to 0.9', () => {
+test('T14 workspaceLocalSplit reads the 1.1.10 two-pane shape as a tree, with the ratio limited to 0.1 to 0.9', () => {
   const { workspaceLocalSplit } = require('../state-rules.cjs');
   assert.deepEqual(workspaceLocalSplit({ axis: 'row', ratio: 0.3, directories: ['/Users/a', '/Users/b'], focus: 1 }),
-    { axis: 'row', ratio: 0.3, directories: ['/Users/a', '/Users/b'], focus: 1 });
-  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: 1.5, directories: ['/a', '/b'] }).ratio, 0.9);
-  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: -2, directories: ['/a', '/b'] }).ratio, 0.1);
-  assert.equal(workspaceLocalSplit({ axis: 'column', directories: ['/a', '/b'] }).ratio, 0.5);
+    { tree: { axis: 'row', ratio: 0.3, first: { directory: '/Users/a' }, second: { directory: '/Users/b' } }, focus: 1 });
+  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: 1.5, directories: ['/a', '/b'] }).tree.ratio, 0.9);
+  assert.equal(workspaceLocalSplit({ axis: 'column', ratio: -2, directories: ['/a', '/b'] }).tree.ratio, 0.1);
+  assert.equal(workspaceLocalSplit({ axis: 'column', directories: ['/a', '/b'] }).tree.ratio, 0.5);
   assert.equal(workspaceLocalSplit({ axis: 'column', ratio: 0.5, directories: ['/a', '/b'] }).focus, 0);
+  assert.deepEqual(workspaceLocalSplit({ tree: null, axis: 'row', ratio: 0.3, directories: ['/a', '/b'] }).tree, { axis: 'row', ratio: 0.3, first: { directory: '/a' }, second: { directory: '/b' } });
+});
+
+test('T14 workspaceLocalSplit keeps a nested tree up to six panes and drops a larger one', () => {
+  const { workspaceLocalSplit } = require('../state-rules.cjs');
+  const leaf = directory => ({ directory });
+  const three = { axis: 'row', ratio: 0.5, first: leaf('/a'), second: { axis: 'column', ratio: 0.4, first: leaf('/b'), second: leaf('/c') } };
+  assert.deepEqual(workspaceLocalSplit({ tree: three, focus: 2 }), { tree: three, focus: 2 });
+  assert.equal(workspaceLocalSplit({ tree: three, focus: 7 }).focus, 0);
+  let tree = leaf('/0');
+  for (let index = 1; index < 7; index += 1) tree = { axis: 'row', ratio: 0.5, first: tree, second: leaf('/' + index) };
+  assert.equal(workspaceLocalSplit({ tree }), undefined);
+  assert.equal(workspaceLocalSplit({ tree: leaf('/a') }), undefined);
 });
 
 test('T14 workspaceLocalSplit drops a malformed split (undefined), so the pane opens with one local pane', () => {
