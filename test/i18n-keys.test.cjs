@@ -63,3 +63,63 @@ test('T11: every message in the agent code-message table has ko, ja and zh trans
   }
   assert.deepEqual(missing, [], `missing translations:\n${missing.join('\n')}`);
 });
+
+// UI labels: the second argument of iconButton('…', label, …), the literal assigned to .title or set as aria-label in the
+// renderer scripts, the title, aria-label and placeholder attributes in the HTML pages, and the data-tip texts and infoTip
+// literals that show as info tips. Each one is shown to the user, so each needs a translation row, the same as a t('…') key.
+// Example values that are not sentences (a path, a font, a command name) are listed in exampleValues.
+const exampleValues = new Set(['/srv/releases', 'service-status', 'sftp.list', '~/.ssh/config', 'Menlo']);
+
+// Returns the source text of an argument that starts at `rest`, up to the comma or closing bracket that ends it.
+// Quoted strings are skipped, so commas inside them do not end the argument.
+function argumentText(rest) {
+  let depth = 0;
+  for (let i = 0; i < rest.length; i++) {
+    const char = rest[i];
+    if (char === "'") {
+      for (i++; i < rest.length && rest[i] !== "'"; i++) if (rest[i] === '\\') i++;
+    } else if ('([{'.includes(char)) depth++;
+    else if (')]}'.includes(char)) { if (depth === 0) return rest.slice(0, i); depth--; }
+    else if (char === ',' && depth === 0) return rest.slice(0, i);
+  }
+  return rest.slice(0, 200);
+}
+
+function uiLabels() {
+  const found = new Map();
+  const add = (text, where) => { if (!found.has(text)) found.set(text, where); };
+  const literal = /'((?:[^'\\\n]|\\.)+)'/g;
+  for (const name of fs.readdirSync(root).filter(file => /\.js$/.test(file) && file !== 'localization.js')) {
+    const text = fs.readFileSync(path.join(root, name), 'utf8');
+    for (const match of text.matchAll(/iconButton\(\s*'[a-zA-Z]+',\s*/g)) {
+      for (const label of argumentText(text.slice(match.index + match[0].length)).matchAll(literal)) add(label[1].replace(/\\'/g, "'"), name);
+    }
+    for (const match of text.matchAll(/\.title = '((?:[^'\\\n]|\\.)+)'/g)) add(match[1], name);
+    for (const match of text.matchAll(/setAttribute\('aria-label', '((?:[^'\\\n]|\\.)+)'\)/g)) add(match[1], name);
+    for (const match of text.matchAll(/infoTip\('((?:[^'\\\n]|\\.)+)'\)/g)) add(match[1], name);
+  }
+  for (const name of fs.readdirSync(root).filter(file => /\.html$/.test(file))) {
+    const text = fs.readFileSync(path.join(root, name), 'utf8');
+    for (const match of text.matchAll(/\s(?:title|aria-label|placeholder|data-tip)="([^"\n]+)"/g)) add(match[1], name);
+  }
+  return found;
+}
+
+test('every UI label, info tip and placeholder has ko, ja and zh translations', () => {
+  const found = uiLabels();
+  // The scan must find the labels it is meant to find; an empty scan would pass the check below without checking anything.
+  assert.ok(found.size >= 100, `only ${found.size} UI labels found`);
+  const exclusions = new Set(exampleValues);
+  assert.deepEqual([...exclusions].filter(text => !found.has(text)), [], 'exclusion list has entries that no longer appear in the UI code');
+  const missing = [];
+  for (const [text, where] of found) {
+    if (exclusions.has(text)) continue;
+    const fields = rowByKey.get(text);
+    if (!fields) { missing.push(`${text} (no row; ${where})`); continue; }
+    for (const [language, column] of languages) {
+      const index = { ko: 1, ja: 2, zh: 3 }[column];
+      if (!fields[index]?.trim()) missing.push(`${language}: ${text} (${where})`);
+    }
+  }
+  assert.deepEqual(missing, [], `missing translations:\n${missing.join('\n')}`);
+});

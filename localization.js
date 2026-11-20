@@ -690,6 +690,36 @@ PromeFTP uses this choice without asking. Choose Ask each time to see the questi
 Skip|건너뛰기|スキップ|跳过
 Replace|덮어쓰기|置き換え|替换
 Apply to the rest of this transfer|이번 전송의 나머지 항목에도 적용|この転送の残りの項目にも適用|应用于本次传输的其余项目
+Authentication activity|인증 활동|認証アクティビティ|身份验证活动
+Automatic reply|자동 응답|自動応答|自动回复
+Close effective config|적용된 설정 닫기|有効な設定を閉じる|关闭生效配置
+Create a separate bookmark from these details|이 정보로 별도 북마크 만들기|この内容で別のブックマークを作成|用这些详细信息创建单独书签
+Edit config directives|설정 지시문 편집|設定ディレクティブを編集|编辑配置指令
+Edit folder path|폴더 경로 편집|フォルダーのパスを編集|编辑文件夹路径
+Exact prompt|정확한 프롬프트|完全一致のプロンプト|完整的提示
+Find in terminal|터미널에서 찾기|ターミナルで検索|在终端中查找
+Links|링크|リンク|链接
+OpenSSH alias|OpenSSH 별칭|OpenSSH エイリアス|OpenSSH 别名
+Parent folder|상위 폴더|親フォルダー|上级文件夹
+Parent folder (..)|상위 폴더 (..)|親フォルダー (..)|上级文件夹 (..)
+Remove directive|지시문 삭제|ディレクティブを削除|移除指令
+Remove rule|규칙 삭제|ルールを削除|移除规则
+Remove snippet|스니펫 삭제|スニペットを削除|移除代码片段
+Resize local file pane|로컬 파일 패널 크기 조절|ローカルファイルパネルの幅を変更|调整本地文件面板大小
+Resize panes|패널 크기 조절|パネルのサイズを変更|调整面板大小
+SSH config directive|SSH 설정 지시문|SSH 設定ディレクティブ|SSH 配置指令
+Save changes to the selected bookmark|선택한 북마크의 변경 사항 저장|選択したブックマークへの変更を保存|保存对所选书签的更改
+Save reusable answers on this Mac. Leave off for one-time codes.|이 Mac에 재사용할 응답을 저장합니다. 일회용 코드는 끄세요.|この Mac に再利用できる応答を保存します。一回限りのコードの場合はオフにしてください。|在此 Mac 上保存可重复使用的回答。一次性验证码请关闭。
+Split SFTP down|SFTP 아래로 분할|SFTP を下に分割|向下拆分 SFTP
+Split SFTP right|SFTP 오른쪽으로 분할|SFTP を右に分割|向右拆分 SFTP
+Split down (⌘⇧D)|아래로 분할 (⌘⇧D)|下に分割 (⌘⇧D)|向下拆分 (⌘⇧D)
+Split right (⌘D)|오른쪽으로 분할 (⌘D)|右に分割 (⌘D)|向右拆分 (⌘D)
+Trigger response|트리거 응답|トリガー応答|触发器回答
+Type a path and press Return|경로를 입력하고 Return을 누르세요|パスを入力して Return キーを押してください|输入路径后按 Return 键
+Use a regular expression|정규식 사용|正規表現を使用|使用正则表达式
+e.g. Password prompt|예: Password 프롬프트|例: Password プロンプト|例如：Password 提示
+Collapse {name}|{name} 접기|{name} を折りたたむ|折叠 {name}
+Expand {name}|{name} 펼치기|{name} を展開|展开 {name}
 `.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];

@@ -1704,7 +1704,7 @@ api.onSession(({ id, event, value }) => {
     session.autoReplies.unshift({ ...value, time: Date.now() });
     if (session.autoReplies.length > 50) session.autoReplies.pop();
     session.authActivityButton.hidden = false;
-    session.authActivityButton.title = 'Authentication activity · ' + session.autoReplies.length;
+    session.authActivityButton.title = t('Authentication activity') + ' · ' + session.autoReplies.length;
     if (authActivityDialog.open && activitySession === session) renderAuthActivity(session);
     status(session, 'Replied automatically');
   }
@@ -2528,7 +2528,9 @@ function setupFiles(session) {
       const expanded = side.expanded.has(path);
       const row = document.createElement('div');
       row.className = 'file-tree-row';
-      const toggle = iconButton('chevron', (expanded ? 'Collapse ' : 'Expand ') + name, () => {
+      // The translated sentence holds {name}, so each language sets the word order.
+      const label = (expanded ? t('Collapse {name}') : t('Expand {name}')).replace('{name}', () => name);
+      const toggle = iconButton('chevron', label, () => {
         if (!side.expanded.delete(path)) side.expanded.add(path);
         renderTree(side, branches);
       });
