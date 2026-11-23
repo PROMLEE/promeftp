@@ -19,7 +19,13 @@ Revokes this client's token and all of its bookmark permissions.|이 클라이�
 Connects with this bookmark's OpenSSH settings, including aliases and ProxyJump. ProxyCommand may start a local process.|이 북마크의 OpenSSH 설정(alias, ProxyJump 포함)으로 연결합니다. ProxyCommand는 로컬 프로세스를 시작할 수 있습니다.|このブックマークの OpenSSH 設定（エイリアスと ProxyJump を含む）で接続します。ProxyCommand はローカルプロセスを起動する場合があります。|使用此书签的 OpenSSH 设置（包括别名和 ProxyJump）连接。ProxyCommand 可能会启动本地进程。
 Allows listing and file information only, inside the folder you choose. Files cannot be changed.|지정한 폴더 아래에서만 목록 조회와 파일 정보 확인을 허용합니다. 파일은 수정할 수 없습니다.|選んだフォルダー内でのみ一覧表示とファイル情報の確認を許可します。ファイルの変更はできません。|仅允许在所选文件夹内列出文件和查看文件信息，不能修改文件。
 The top folder the agent can see. It must start with /.|에이전트가 볼 수 있는 최상위 폴더입니다. /로 시작해야 합니다.|エージェントが参照できる最上位のフォルダーです。/ で始まる必要があります。|代理可以查看的顶层文件夹，必须以 / 开头。
-Downloads files up to 16 MiB each into PromeFTP's private staging folder.|파일당 16 MiB까지 PromeFTP 전용 임시 폴더로 내려받습니다.|1 ファイルあたり 16 MiB まで、PromeFTP 専用の一時フォルダーにダウンロードします。|每个文件最大 16 MiB，下载到 PromeFTP 的专用暂存文件夹。
+Downloads files into PromeFTP's private staging folder, within the limits below.|아래 한도 안에서 PromeFTP 전용 임시 폴더로 파일을 내려받습니다.|下記の上限内で、PromeFTP 専用の一時フォルダーにファイルをダウンロードします。|在下方限制内，将文件下载到 PromeFTP 的专用暂存文件夹。
+Largest file (MiB)|최대 파일 크기(MiB)|最大ファイルサイズ (MiB)|最大文件大小 (MiB)
+Files larger than this are refused. 1–1024 MiB, 16 by default. A download must still finish within the 30-second request limit.|이보다 큰 파일은 거부합니다. 1–1024 MiB, 기본값 16. 다운로드는 여전히 요청당 30초 안에 끝나야 합니다.|これより大きいファイルは拒否します。1–1024 MiB、既定値は 16。ダウンロードは 1 リクエスト 30 秒以内に終わる必要があります。|大于此大小的文件将被拒绝。1–1024 MiB，默认 16。下载仍须在每个请求 30 秒内完成。
+Staged files|임시 보관 파일 수|一時保管ファイル数|暂存文件数
+Downloads stop while the staging folder holds this many files. Files older than a day are cleared. 1–256, 64 by default.|임시 폴더의 파일이 이 개수에 이르면 다운로드를 멈춥니다. 하루 지난 파일은 지워집니다. 1–256, 기본값 64.|一時フォルダーのファイルがこの数に達するとダウンロードを止めます。1 日以上前のファイルは削除されます。1–256、既定値は 64。|暂存文件夹中的文件达到此数量时停止下载。超过一天的文件会被清除。1–256，默认 64。
+Enter a whole number from 1 to 1024.|1에서 1024 사이의 정수를 입력하세요.|1 から 1024 までの整数を入力してください。|请输入 1 到 1024 之间的整数。
+Enter a whole number from 1 to 256.|1에서 256 사이의 정수를 입력하세요.|1 から 256 までの整数を入力してください。|请输入 1 到 256 之间的整数。
 Uses the saved PAM responses for this host and all-host PAM rules when the agent connects. The PAM rules list is ignored while this is on.|에이전트가 연결할 때 이 호스트의 저장된 PAM 응답과 전역 인증 규칙을 사용합니다. 이 옵션이 켜져 있으면 PAM 규칙 목록은 무시됩니다.|エージェントの接続時に、このホストの保存済み PAM 応答と全ホスト向け PAM ルールを使用します。このオプションが有効な間、PAM ルールの一覧は無視されます。|代理连接时使用此主机已保存的 PAM 应答和所有主机的 PAM 规则。开启此选项时将忽略 PAM 规则列表。
 Each command the agent requests runs only after you approve it in a confirmation window.|에이전트가 요청한 명령은 확인 창에서 승인해야 실행됩니다.|エージェントが要求したコマンドは、確認ウィンドウで承認された場合にのみ実行されます。|代理请求的每条命令都必须在确认窗口中审批后才会执行。
 One command that can run without approval, identified by a name the agent uses.|승인 없이 실행할 수 있는 명령 하나를 에이전트가 쓰는 이름으로 등록합니다.|承認なしで実行できるコマンドを 1 つ、エージェントが使う名前で登録します。|注册一条无需审批即可运行的命令，并为其指定代理使用的名称。

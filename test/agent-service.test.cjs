@@ -627,3 +627,12 @@ test('V13: touchFromUser keeps a viewed session from idling out, and adds no aud
   assert.equal(ctx.service.touchFromUser(session), false);
   assert.equal(ctx.service.touchFromUser('missing'), false);
 });
+
+test('D5: profiles.list tells the agent its per-file download limit: the grant value, or 16 MiB for an older grant', async t => {
+  const ctx = await start(t);
+  assert.equal((await ctx.call({ method: 'profiles.list' })).data[0].downloadMaxMiB, 16);
+  ctx.st.agent.clients[0].grants.p1.maxMiB = 128;
+  assert.equal((await ctx.call({ method: 'profiles.list' })).data[0].downloadMaxMiB, 128);
+  ctx.st.agent.clients[0].grants.p1.download = false;
+  assert.equal((await ctx.call({ method: 'profiles.list' })).data[0].downloadMaxMiB, undefined);
+});

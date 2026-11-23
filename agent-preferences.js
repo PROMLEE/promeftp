@@ -5,7 +5,10 @@ const agentElement = name => byId('agent-' + name);
 const agentValue = name => agentElement(name).value;
 const agentChecked = name => agentElement(name).checked;
 const agentStatus = message => { agentElement('message').textContent = t(message); };
-const agentFieldErrors = { root: 'agent-root-error', task: 'agent-task-error', 'task-command': 'agent-task-command-error' };
+const agentFieldErrors = { root: 'agent-root-error', task: 'agent-task-error', 'task-command': 'agent-task-command-error',
+  'max-mib': 'agent-max-mib-error', 'staged-files': 'agent-staged-files-error' };
+// Per-grant download limits, matching downloadLimits in agent-service.cjs. A grant without them uses the defaults.
+const agentDownloadLimits = { 'max-mib': { key: 'maxMiB', fallback: 16, min: 1, max: 1024 }, 'staged-files': { key: 'stagedFiles', fallback: 64, min: 1, max: 256 } };
 const tokenDialog = byId('agent-token-dialog');
 const tokenField = byId('agent-token-value');
 let tokenClientId;
@@ -225,6 +228,7 @@ function loadAgentGrantForm(p, grant) {
   agentElement('sftp').checked = grant ? grant.sftp !== false : false;
   for (const field of Object.keys(agentFieldErrors)) setAgentFieldError(field, '');
   agentElement('download').checked = grant?.download === true;
+  for (const [field, rule] of Object.entries(agentDownloadLimits)) agentElement(field).value = String(grant?.[rule.key] ?? rule.fallback);
   agentElement('saved-auth').checked = grant?.savedAuth === true;
   setHostKeyTrust(grant?.hostKeyTrust || 'off');
   agentElement('approve-commands').checked = grant?.commandApproval === true;
@@ -242,6 +246,8 @@ function loadAgentGrantForm(p, grant) {
 function updateAgentSftpFields() {
   agentElement('sftp-fields').hidden = !agentChecked('sftp');
   if (!agentChecked('sftp')) setAgentFieldError('root', '');
+  agentElement('download-fields').hidden = !agentChecked('download');
+  if (!agentChecked('download')) for (const field of Object.keys(agentDownloadLimits)) setAgentFieldError(field, '');
 }
 function renderAgentPrompts(prompts) {
   agentElement('prompts').closest('section').hidden = prompts.length === 0;
@@ -310,6 +316,7 @@ function grantFieldsFrom(grant) {
   return { root: grant.root || '', sftp: grant.sftp !== false, download: grant.download === true, savedAuth: grant.savedAuth === true,
     commandApproval: grant.commandApproval === true, commandAutoApprove: grant.commandAutoApprove === true,
     pam: grant.pam || [], triggers: grant.triggers || [], hostKeyTrust: grant.hostKeyTrust || 'off',
+    ...Object.fromEntries(Object.values(agentDownloadLimits).map(rule => [rule.key, grant[rule.key] ?? rule.fallback])),
     ...(grant.task ? { task: grant.task } : {}) };
 }
 async function renewStaleGrants() {
@@ -452,6 +459,7 @@ agentElement('enabled').addEventListener('change', () => agentAction(async () =>
 agentElement('client').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); renderAgentProfiles(); showAgentGrant(); });
 agentElement('profile').addEventListener('change', () => { setGrantStatus(''); rememberAgentChoice(); showAgentGrant(); });
 agentElement('sftp').addEventListener('change', updateAgentSftpFields);
+agentElement('download').addEventListener('change', updateAgentSftpFields);
 agentElement('approve-commands').addEventListener('change', updateAgentAutoApprove);
 agentElement('auto-approve').addEventListener('change', updateAgentAutoApprove);
 agentElement('saved-auth').addEventListener('change', renderSavedAuthNote);
@@ -499,6 +507,12 @@ function checkAgentGrant() {
     setAgentFieldError('root', rootProblem),
     setAgentFieldError('task', taskProblem || (command && !name ? pairMessage : '')),
     setAgentFieldError('task-command', name && !command ? pairMessage : ''),
+    ...Object.entries(agentDownloadLimits).map(([field, rule]) => {
+      const text = agentValue(field).trim();
+      const value = Number(text);
+      const ok = !sftp || !agentChecked('download') || (/^\d+$/.test(text) && value >= rule.min && value <= rule.max);
+      return setAgentFieldError(field, ok ? '' : rule.max === 1024 ? 'Enter a whole number from 1 to 1024.' : 'Enter a whole number from 1 to 256.');
+    }),
   ].find(Boolean);
   if (invalid) { invalid.focus(); return false; }
   const hasTask = Boolean(name && command && !taskProblem);
@@ -508,6 +522,12 @@ function checkAgentGrant() {
   }
   return true;
 }
+// The number typed in a download limit field. An empty or unusable field falls back to the default, which is always valid.
+function agentLimitValue(field) {
+  const rule = agentDownloadLimits[field];
+  const text = agentValue(field).trim();
+  return agentChecked('download') && /^\d+$/.test(text) ? Number(text) : rule.fallback;
+}
 function agentGrantFields() {
   const name = agentValue('task').trim();
   const command = agentValue('task-command');
@@ -516,6 +536,7 @@ function agentGrantFields() {
     commandApproval: agentChecked('approve-commands'), commandAutoApprove: agentChecked('approve-commands') && agentChecked('auto-approve'),
     pam: selectedIds('pam'), triggers: selectedIds('triggers'),
     hostKeyTrust: agentValue('host-key-trust'),
+    ...Object.fromEntries(Object.entries(agentDownloadLimits).map(([field, rule]) => [rule.key, agentLimitValue(field)])),
     ...(name || command ? { task: { name, command } } : {}),
   };
 }

@@ -28,8 +28,12 @@ Each failure response includes `error.next`, a list of steps the agent may take.
 
 - Turn on **Allow SFTP browsing** and enter an absolute remote directory for
   listing and stat operations. Enable downloads separately. Downloads go to the
-  app's private staging folder (16 MiB per file, up to 64 staged files). Old
-  staging folders are cleared on subsequent downloads.
+  app's private staging folder. **Largest file (MiB)** sets the per-file limit
+  (1–1024, 16 by default) and **Staged files** sets how many files the folder
+  may hold before downloads stop (1–256, 64 by default). Staging folders older
+  than a day are cleared on subsequent downloads. Every download must still
+  finish within the 30-second request limit, so a large file on a slow link
+  can end the session with `TIMEOUT` even under the size limit.
 - Set a task name and a fixed SSH command to expose a reusable operation.
   Enable **Allow SSH commands with approval** to let the agent request a
   different command. The app shows the client, server, and exact command before
@@ -69,7 +73,15 @@ reopening asks the user for a new OTP.
 
 Open a session with `--mode sftp` for `sftp list`, `sftp stat`, and
 `sftp download`. Each takes `--session` and `--path`. The SFTP API does
-not accept file modification requests. Commands are single executions
+not accept file modification requests. `profiles list` returns
+`downloadMaxMiB` for a profile that allows downloads.
+
+The installed skill tells agents to inspect remote files over SSH first, with
+read-only commands such as `ls -l`, `head`, or `grep`, and to download over
+SFTP only when that inspection cannot answer the task. If a profile has no SSH
+permission, the agent asks you before downloading. To let an agent inspect
+files without asking for each command, register a fixed SSH task or allow SSH
+commands with approval for the bookmark. Commands are single executions
 with stdout, stderr, exit code, and truncation status. An arbitrary command
 request has a 30-second budget including approval.
 

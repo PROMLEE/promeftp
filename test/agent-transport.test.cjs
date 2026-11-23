@@ -596,3 +596,50 @@ test('M4: a mirror that throws does not change the result', async () => {
   setImmediate(() => child.emit('close', 0, null));
   assert.equal((await result).stdout, 'hi');
 });
+
+test('D1: download limits default to 16 MiB and 64 staged files, and only whole numbers in range are kept', async () => {
+  const s = await open({});
+  const grantOf = value => s.transport.validateGrant({ sftp: true, root: '/', download: true, ...value }, pOld);
+  assert.deepEqual([grantOf({}).maxMiB, grantOf({}).stagedFiles], [16, 64]);
+  assert.deepEqual([grantOf({ maxMiB: 1024, stagedFiles: 1 }).maxMiB, grantOf({ maxMiB: 1024, stagedFiles: 1 }).stagedFiles], [1024, 1]);
+  for (const bad of [{ maxMiB: 0 }, { maxMiB: 1025 }, { maxMiB: 1.5 }, { maxMiB: '16' }, { stagedFiles: 0 }, { stagedFiles: 257 }]) {
+    assert.throws(() => grantOf(bad), { message: 'INVALID_REQUEST' }, JSON.stringify(bad));
+  }
+});
+
+// download(): a fake SFTP channel that streams the given bytes, into a staging folder of the test's own.
+async function downloadWith(grant, bytes, size = bytes.length) {
+  const { Readable } = require('node:stream');
+  const directory = await fs.mkdtemp(path.join(tmp, 'download-'));
+  const transport = createTransport({ state: () => ({ profiles: [], terminalTriggers: [] }), snippetScope: () => '', directory,
+    readAnswer: async () => '', validAuthAnswer: () => true, matchesGlobalPattern, approve: async () => true });
+  const session = { controller: new AbortController(), grant };
+  const channel = { createReadStream: () => Readable.from([bytes]) };
+  return { directory, get: () => transport.download(session, '/srv/file.bin', channel, size) };
+}
+
+test('D2: a grant without limits refuses a file over 16 MiB before staging it, and accepts one under it', async () => {
+  const big = await downloadWith({}, Buffer.alloc(1), 16 * 1024 * 1024 + 1);
+  await assert.rejects(big.get(), { message: 'FILE_LIMIT' });
+  await assert.rejects(fs.readdir(path.join(big.directory, 'downloads')), { code: 'ENOENT' });
+  const small = await downloadWith({}, Buffer.from('hello'));
+  assert.equal((await small.get()).bytes, 5);
+});
+
+test('D3: the grant limit applies to the stat size and to the bytes actually read', async () => {
+  const mib = 1024 * 1024;
+  const allowed = await downloadWith({ maxMiB: 2 }, Buffer.alloc(mib + 1));
+  assert.equal((await allowed.get()).bytes, mib + 1);
+  const statTooBig = await downloadWith({ maxMiB: 1 }, Buffer.alloc(1), mib + 1);
+  await assert.rejects(statTooBig.get(), { message: 'FILE_LIMIT' });
+  const grewWhileRead = await downloadWith({ maxMiB: 1 }, Buffer.alloc(mib + 1), 10);
+  await assert.rejects(grewWhileRead.get(), { message: 'FILE_LIMIT' });
+  assert.deepEqual(await fs.readdir(path.join(grewWhileRead.directory, 'downloads')), []);
+});
+
+test('D4: downloads stop when the staging folder holds the grant\'s staged file count', async () => {
+  const two = await downloadWith({ stagedFiles: 2 }, Buffer.from('x'));
+  await two.get();
+  await two.get();
+  await assert.rejects(two.get(), { message: 'FILE_LIMIT' });
+});

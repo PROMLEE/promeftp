@@ -125,7 +125,13 @@
             <div id="agent-sftp-fields" hidden>
               <label>Remote directory<input id="agent-root" placeholder="/srv/releases" data-tip="The top folder the agent can see. It must start with /." aria-describedby="agent-root-error"></label>
               <p class="field-error" id="agent-root-error" role="alert" hidden></p>
-              <label class="settings-check"><input id="agent-download" type="checkbox" data-tip="Downloads files up to 16 MiB each into PromeFTP's private staging folder.">Allow downloads</label>
+              <label class="settings-check"><input id="agent-download" type="checkbox" data-tip="Downloads files into PromeFTP's private staging folder, within the limits below.">Allow downloads</label>
+              <div id="agent-download-fields" hidden>
+                <label data-tip="Files larger than this are refused. 1–1024 MiB, 16 by default. A download must still finish within the 30-second request limit.">Largest file (MiB)<input id="agent-max-mib" type="number" min="1" max="1024" step="1" aria-describedby="agent-max-mib-error"></label>
+                <p class="field-error" id="agent-max-mib-error" role="alert" hidden></p>
+                <label data-tip="Downloads stop while the staging folder holds this many files. Files older than a day are cleared. 1–256, 64 by default.">Staged files<input id="agent-staged-files" type="number" min="1" max="256" step="1" aria-describedby="agent-staged-files-error"></label>
+                <p class="field-error" id="agent-staged-files-error" role="alert" hidden></p>
+              </div>
             </div>
           </fieldset>
           <fieldset class="agent-group">
