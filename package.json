@@ -7,7 +7,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper && electron .",
-    "test": "node --test test/"
+    "test": "node --test test/*.test.cjs"
   },
   "type": "commonjs",
   "dependencies": {

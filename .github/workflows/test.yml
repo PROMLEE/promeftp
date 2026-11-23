@@ -1,0 +1,28 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # node-pty ships prebuilt binaries for macOS and Windows only, and the app targets Apple Silicon.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Tests do not launch Electron, so skip its binary download.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Run tests
+        run: npm test
