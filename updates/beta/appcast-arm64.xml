@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.12</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.12</link>
-      <pubDate>Mon, 23 Nov 2026 02:23:22 +0000</pubDate>
-      <sparkle:version>1.1.12</sparkle:version>
-      <sparkle:shortVersionString>1.1.12</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.13</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.13</link>
+      <pubDate>Mon, 23 Nov 2026 08:57:22 +0000</pubDate>
+      <sparkle:version>1.1.13</sparkle:version>
+      <sparkle:shortVersionString>1.1.13</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Find SSH config hosts by IP&lt;/h2&gt;
-&lt;p&gt;Search SSH config aliases by host name, IP address, or user.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Search by IP&lt;/strong&gt;&lt;br&gt;Type part of a host name or IP address, or a user name, to find the alias that connects there.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Host names in the list&lt;/strong&gt;&lt;br&gt;Each alias shows the host it connects to, resolved the same way OpenSSH resolves it.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Watch agent SSH sessions live&lt;/h2&gt;
+&lt;p&gt;Agent SSH sessions open a live tab you can watch and type in.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Live agent tabs&lt;/strong&gt;&lt;br&gt;See each command an agent runs and its output as it happens, and type in the same session yourself.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clearer agent errors&lt;/strong&gt;&lt;br&gt;A denied agent request now says why, such as missing or outdated permission.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Double-click bookmarks&lt;/strong&gt;&lt;br&gt;Double-click a bookmark to open an SSH tab.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.12"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.13"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.12/PromeFTP-1.1.12-macos-arm64.zip" length="141083304" type="application/octet-stream" sparkle:edSignature="6TBS4wz2VhMyFpJueE7qN3BG/YfG4HVZijxZymmw4/YELWTIIeBg8+aXCU6GSq9pdt2j4u6b4IOhE4WRJLk5Ag=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.13/PromeFTP-1.1.13-macos-arm64.zip" length="141087672" type="application/octet-stream" sparkle:edSignature="UxCta1xIyKx0TjgXKSAwAz2rVWAHwXPuJ06c9ELeDzht9Ar6zqf6n8Kb9OistK3HLCOKC6whaMWbRDw2bwn7DA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: bClbQGfChmx5+zRwVSNwuMB/rz289YzpHUm9vJP+aYIkMmzTeDN57ZDwrAMp6vrlnLceCapysSFGT1kxnn+JBg==
-length: 2423
+edSignature: Zc20cLNRCnu1J9ydZCK2JuM5sPhgIfOch7k2CFAr1L3Ri0KEafQCO1KNRMpVqzkhkQpcJD/AgYgRMP2rTN0EAw==
+length: 2549
 -->
