@@ -1,0 +1,19 @@
+{
+  "heading": "Reconnect split panes and set agent download limits",
+  "summary": "Reconnecting a split SFTP pane keeps the tab, and agent download limits are now settings.",
+  "changes": [
+    [
+      "Reconnect keeps the tab",
+      "Reconnecting a split remote pane no longer hides the tab or its files."
+    ],
+    [
+      "Agent download limits",
+      "Set the largest file and the number of staged files per bookmark in Settings → Agents."
+    ],
+    [
+      "SSH inspection first",
+      "The agent skill now has agents inspect files over SSH before downloading them."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
