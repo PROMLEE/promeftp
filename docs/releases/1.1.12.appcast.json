@@ -1,0 +1,15 @@
+{
+  "heading": "Find SSH config hosts by IP",
+  "summary": "Search SSH config aliases by host name, IP address, or user.",
+  "changes": [
+    [
+      "Search by IP",
+      "Type part of a host name or IP address, or a user name, to find the alias that connects there."
+    ],
+    [
+      "Host names in the list",
+      "Each alias shows the host it connects to, resolved the same way OpenSSH resolves it."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
