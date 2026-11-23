@@ -1,0 +1,19 @@
+{
+  "heading": "Watch agent SSH sessions live",
+  "summary": "Agent SSH sessions open a live tab you can watch and type in.",
+  "changes": [
+    [
+      "Live agent tabs",
+      "See each command an agent runs and its output as it happens, and type in the same session yourself."
+    ],
+    [
+      "Clearer agent errors",
+      "A denied agent request now says why, such as missing or outdated permission."
+    ],
+    [
+      "Double-click bookmarks",
+      "Double-click a bookmark to open an SSH tab."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
