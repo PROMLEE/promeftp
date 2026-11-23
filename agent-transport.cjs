@@ -299,7 +299,7 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
     return connection;
   }
 
-  function run(s, value, notify) {
+  function run(s, value, notify, mirror = () => {}) {
     const child = s.connection.exec(value, s.controller.signal);
     const scope = snippetScope({ mode: 'ssh', input: state().profiles.find(p => p.id === s.profile) });
     const matches = new Set();
@@ -323,8 +323,13 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
         }
         const bytes = Buffer.from(chunk);
         const count = Math.min(remaining, bytes.length);
-        output[key] += bytes.subarray(0, count).toString();
+        const kept = bytes.subarray(0, count).toString();
+        output[key] += kept;
         remaining -= count;
+        if (count) {
+          const text = stripVTControlCharacters(kept);
+          if (text) try { mirror(key, text); } catch {}
+        }
         if (count < bytes.length) {
           truncated = true;
           child.kill();

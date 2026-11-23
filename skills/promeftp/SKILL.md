@@ -47,6 +47,11 @@ in PromeFTP → Settings → Agents.
    | `REMOTE_CLOSED` | The server closed the connection | Retry once |
    | `PERMISSION_CHANGED` | The user changed this client's permissions | Ask the user |
    | `SERVICE_DISABLED` | Agent access is turned off | Ask the user to turn it on |
+   `ACCESS_DENIED` comes with a `reason`. Report it to the user and stop:
+   `NO_GRANT` (this client has no permission for the bookmark), `GRANT_STALE` or
+   `GRANT_CHANGED` (the bookmark's host, user, key or config changed; the user must
+   re-save the permission), `SSH_NOT_ALLOWED` / `SFTP_NOT_ALLOWED` (that mode is not
+   permitted), `TASK_NOT_ALLOWED`, `COMMAND_APPROVAL_OFF`, `SESSION_NOT_SSH`.
 4. For SFTP, use `promeftp sftp list|stat|download --session ID --path /allowed/path --json`.
    Use the returned local path after an authorized download.
 5. For SSH, use `promeftp ssh run --session ID --task TASK --json` for a

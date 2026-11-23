@@ -260,6 +260,18 @@ Operation|작업|操作|操作
 Request ID|요청 ID|リクエスト ID|请求 ID
 Session ID|세션 ID|セッション ID|会话 ID
 Agent|에이전트|エージェント|智能体
+waiting for approval|승인 대기|承認待ち|等待批准
+denied by user|사용자가 거부함|ユーザーが拒否|用户已拒绝
+timed out|시간 초과|タイムアウト|已超时
+Shell closed. The agent session stays open.|셸이 종료되었습니다. 에이전트 세션은 유지됩니다.|シェルが終了しました。エージェントセッションは維持されます。|Shell 已退出，智能体会话保持打开。
+Agent session ended|에이전트 세션 종료|エージェントセッション終了|智能体会话已结束
+The server closed the connection|서버가 연결을 종료했습니다|サーバーが接続を閉じました|服务器已关闭连接
+Idle for 10 minutes|10분 동안 사용 없음|10 分間操作なし|闲置 10 分钟
+A request took too long|요청이 너무 오래 걸렸습니다|リクエストに時間がかかりすぎました|请求耗时过长
+The agent closed the session|에이전트가 세션을 닫았습니다|エージェントがセッションを閉じました|智能体已关闭会话
+Agent permissions changed|에이전트 권한이 변경되었습니다|エージェントの権限が変更されました|智能体权限已更改
+Agent access turned off|에이전트 접근이 꺼졌습니다|エージェントのアクセスがオフになりました|智能体访问已关闭
+Agent service stopped|에이전트 서비스가 중지되었습니다|エージェントサービスが停止しました|智能体服务已停止
 Scope|범위|範囲|范围
 User|사용자|ユーザー|用户
 Project|프로젝트|プロジェクト|项目

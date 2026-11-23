@@ -50,26 +50,26 @@ function request(dir, body) {
 let counter = 0;
 // Starts a service with mock timers enabled first, so its interval and the socket timers are controlled by the test.
 // profiles and permission(profile) default to the test bookmark with its older-style grant.
-async function start(t, { profiles = [p1], permission = p => grant(p) } = {}) {
+async function start(t, { profiles = [p1], permission = p => grant(p), onView } = {}) {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'] });
   const dir = path.join(root, `case-${++counter}`);
   await fs.mkdir(dir, { mode: 0o700 });
   const st = { agent: { enabled: true, clients: [{ id: 'c1', name: 'test', digest: hash(token),
     grants: Object.fromEntries(profiles.map(p => [p.id, permission(p)])) }] } };
-  const fake = { notify: null, connection: null, answers: [], downloads: 0, approvals: [], approved: true, runs: 0 };
+  const fake = { notify: null, connection: null, answers: [], downloads: 0, approvals: [], approved: true, runs: 0, mirror: null, shells: [] };
   const transport = {
     eligible: () => true,
     nextFor: () => [{ action: 'ask_user', message: 'Check PromeFTP.' }],
     connect(p, g, mode, notify) {
       fake.notify = notify;
-      fake.connection = { channel: {}, close() {}, answer(id, value) { fake.answers.push([id, value]); return true; } };
+      fake.connection = { channel: {}, close() { fake.closes = (fake.closes || 0) + 1; }, shell(...args) { fake.shells.push(args); return { close() {} }; }, answer(id, value) { fake.answers.push([id, value]); return true; } };
       return Promise.resolve(fake.connection);
     },
     // Never resolves, so a request holds the active slot until the 30 second limit.
     download() { fake.downloads++; return new Promise(() => {}); },
     command: value => value,
     approve: async (...args) => { fake.approvals.push(args); return fake.approved; },
-    run: async () => { fake.runs++; return { exitCode: 0, truncated: false }; },
+    run: async (s, command, notify, mirror) => { fake.runs++; if (fake.hang) return new Promise(() => {}); fake.mirror?.(mirror); return { exitCode: 0, truncated: false }; },
   };
   const sftpCall = async (channel, op, arg) => {
     if (op === 'realpath') return arg;
@@ -79,7 +79,7 @@ async function start(t, { profiles = [p1], permission = p => grant(p) } = {}) {
   // Applies each change to the in-memory settings, as the app's save does before the service reads them again.
   const saves = { count: 0 };
   const service = await createAgentService({ directory: dir, state: () => st, save: async change => { saves.count++; change(st.agent); },
-    profiles: () => profiles, transport, sftpCall, busy: () => {}, socketDir: dir });
+    profiles: () => profiles, transport, sftpCall, busy: () => {}, socketDir: dir, ...(onView && { onView }) });
   await service.listen();
   t.after(() => service.stop());
   const call = body => request(dir, body);
@@ -483,4 +483,147 @@ test('T10: a grant saved before commandAutoApprove existed still asks for approv
   assert.equal(ctx.fake.approvals.length, 1);
   assert.deepEqual(ctx.service.history({ session, operation: 'ssh.approval' }).map(row => [row.result, row.reason]),
     [['waiting_for_user', null], ['allowed', null]]);
+});
+
+// Live view events for the terminal tab (onView).
+function viewStart(t, options = {}) {
+  const events = [];
+  return start(t, { onView: event => events.push(event), ...options }).then(ctx => ({ ...ctx, events }));
+}
+const viewTypes = events => events.map(event => event.type);
+
+test('V1: an ssh session sends one open event when it is ready, with the bookmark label and the client name', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  assert.deepEqual(ctx.events, [{ session, type: 'open', label: 'Test', client: 'test' }]);
+});
+
+test('V2: an sftp session sends no view events, not even when it closes', async t => {
+  const ctx = await viewStart(t);
+  const session = await ctx.open();
+  ctx.fake.notify('ready', { endpoint: '' });
+  await ctx.call({ method: 'session.close', params: { session } });
+  assert.deepEqual(ctx.events, []);
+});
+
+test('V3: a refused approval sends approval then failed USER_DENIED, and no command or output', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  ctx.fake.approved = false;
+  const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.equal(res.error, 'USER_DENIED');
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'approval', 'failed']);
+  assert.deepEqual(ctx.events[1], { session, type: 'approval', command: 'uptime' });
+  assert.deepEqual(ctx.events[2], { session, type: 'failed', code: 'USER_DENIED' });
+});
+
+test('V4: an approved command sends approval, command (approved), output and result in order', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  ctx.fake.mirror = mirror => mirror('stdout', 'hello\n');
+  const session = await openSsh(ctx);
+  const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.deepEqual(res.data, { exitCode: 0, truncated: false });
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'approval', 'command', 'output', 'result']);
+  assert.deepEqual(ctx.events[2], { session, type: 'command', command: 'uptime', how: 'approved' });
+  assert.deepEqual(ctx.events[3], { session, type: 'output', stream: 'stdout', text: 'hello\n' });
+  assert.equal(ctx.events[4].exitCode, 0);
+  assert.equal(ctx.events[4].truncated, false);
+});
+
+test('V5: an auto-approved command skips the approval event and says how it was approved', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true, commandAutoApprove: true }) });
+  const session = await openSsh(ctx);
+  await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'command', 'result']);
+  assert.equal(ctx.events[1].how, 'auto');
+});
+
+test('V6: a named task sends command with how task and the task name', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), task: { name: 'disk', command: 'df -h' } }) });
+  const session = await openSsh(ctx);
+  const res = await ctx.call({ method: 'ssh.run', params: { session, task: 'disk' } });
+  assert.equal(res.error, undefined);
+  assert.deepEqual(ctx.events[1], { session, type: 'command', command: 'df -h', how: 'task', task: 'disk' });
+});
+
+test('V7: a throwing onView does not change the result of the request', async t => {
+  const ctx = await start(t, { permission: p => ({ ...grant(p), commandApproval: true, commandAutoApprove: true }),
+    onView: () => { throw Error('view failed'); } });
+  const session = await openSsh(ctx);
+  const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
+  assert.deepEqual(res.data, { exitCode: 0, truncated: false });
+  assert.equal(res.error, undefined);
+});
+
+test('V8: closeFromUser ends the session as USER_CLOSED with its next step and sends closed once', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  assert.equal(ctx.service.closeFromUser(session), true);
+  assert.deepEqual(ctx.events.filter(event => event.type === 'closed'), [{ session, type: 'closed', reason: 'USER_CLOSED' }]);
+  assert.equal(ctx.fake.closes, 1);
+  const { data } = await ctx.status(session);
+  assert.equal(data.status, 'closed');
+  assert.equal(data.reason, 'USER_CLOSED');
+  assert.equal(data.next[0].action, 'ask_user');
+  assert.match(data.next[0].message, /closed this session/);
+  assert.deepEqual(ctx.service.history({ session, operation: 'session.ended' }).map(row => row.reason), ['USER_CLOSED']);
+});
+
+test('V9: closeFromUser on a session that is already closed or unknown does nothing', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  await ctx.call({ method: 'session.close', params: { session } });
+  const before = ctx.events.length;
+  assert.equal(ctx.service.closeFromUser(session), false);
+  assert.equal(ctx.service.closeFromUser('missing'), false);
+  assert.equal(ctx.events.length, before);
+  assert.deepEqual(ctx.service.history({ session, operation: 'session.ended' }).map(row => row.reason), ['CLIENT_CLOSED']);
+});
+
+test('V10: a remote close sends closed with REMOTE_CLOSED', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  ctx.fake.notify('closed');
+  assert.deepEqual(ctx.events.at(-1), { session, type: 'closed', reason: 'REMOTE_CLOSED' });
+});
+
+test('V11: openShell reaches the connection only for a viewed, ready session, and the shell data stays with the caller', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  const onData = () => {};
+  const onExit = () => {};
+  ctx.service.openShell(session, { cols: 90, rows: 30 }, onData, onExit);
+  assert.deepEqual(ctx.fake.shells, [[{ cols: 90, rows: 30 }, onData, onExit]]);
+  assert.throws(() => ctx.service.openShell('missing', {}, onData, onExit), { agentCode: 'SESSION_NOT_FOUND' });
+  ctx.service.closeFromUser(session);
+  assert.throws(() => ctx.service.openShell(session, {}, onData, onExit), { agentCode: 'SESSION_NOT_FOUND' });
+});
+
+test('V12: a command that runs past 30 seconds sends failed TIMEOUT before closed TIMEOUT, and no result', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true, commandAutoApprove: true }) });
+  ctx.fake.hang = true;
+  const session = await openSsh(ctx);
+  const pending = ctx.call({ method: 'ssh.command', params: { session, command: 'sleep 99' } });
+  await until(() => ctx.fake.runs === 1);
+  t.mock.timers.tick(30_000);
+  assert.equal((await pending).error, 'TIMEOUT');
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'command', 'failed', 'closed']);
+  assert.equal(ctx.events[2].code, 'TIMEOUT');
+  assert.equal(ctx.events[3].reason, 'TIMEOUT');
+});
+
+test('V13: touchFromUser keeps a viewed session from idling out, and adds no audit row', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const session = await openSsh(ctx);
+  const rows = () => ctx.service.history({ session }).length;
+  const before = rows();
+  t.mock.timers.tick(9 * 60_000);
+  assert.equal(ctx.service.touchFromUser(session), true);
+  assert.equal(rows(), before);
+  t.mock.timers.tick(9 * 60_000);
+  assert.equal((await ctx.status(session)).data.status, 'ready');
+  t.mock.timers.tick(11 * 60_000);
+  assert.equal((await ctx.status(session)).data.reason, 'IDLE_TIMEOUT');
+  assert.equal(ctx.service.touchFromUser(session), false);
+  assert.equal(ctx.service.touchFromUser('missing'), false);
 });

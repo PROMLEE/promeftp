@@ -44,6 +44,8 @@ const transferConflictGroups = new Map();
 const decisionGroups = conflicts.createDecisionGroups();
 let agentConnections = 0;
 let agent;
+// Terminal tabs for agent SSH sessions, by view id ('agent:' + session id). The user's own shell opens on the first resize.
+const agentViews = new Map();
 let agentTransport;
 let agentStartupError;
 const sessions = new Map();
@@ -105,6 +107,33 @@ function handle(name, fn) {
 }
 function tell(id, event, value) {
   if (window && !window.isDestroyed()) window.webContents.send('session', { id, event, value });
+}
+
+const agentViewId = session => 'agent:' + session;
+// Shows an agent SSH session in a terminal tab. Only lifecycle, command and output events arrive here. The user's shell
+// output goes straight to the tab and never reaches the agent service.
+function onAgentView({ session, type, ...payload }) {
+  const id = agentViewId(session);
+  if (type === 'open') agentViews.set(id, { session, shell: null, shellEnded: false });
+  const view = agentViews.get(id);
+  if (!view) return;
+  if (type === 'closed') {
+    agentViews.delete(id);
+    view.shell?.close();
+    view.shell = null;
+  }
+  tell(id, 'agent-' + type, payload);
+}
+function openAgentShell(id, view, cols, rows) {
+  if (view.shell || view.shellEnded || !agent) return;
+  try {
+    view.shell = agent.openShell(view.session, { cols, rows },
+      data => tell(id, 'data', data),
+      () => { view.shell = null; view.shellEnded = true; tell(id, 'agent-shell-closed'); });
+  } catch {
+    view.shellEnded = true;
+    tell(id, 'agent-shell-closed');
+  }
 }
 
 function favoriteScope(input) {
@@ -800,6 +829,14 @@ handle('open-sponsors', openSponsors);
 handle('open-project-license', () => shell.openPath(path.join(app.getAppPath(), 'LICENSE')));
 handle('open-license-notices', () => shell.openPath(path.join(app.getAppPath(), 'THIRD-PARTY-NOTICES.md')));
 handle('disconnect', id => {
+  const view = agentViews.get(id);
+  if (view) {
+    // Closing the tab ends the agent session too, so no hidden session stays behind.
+    agentViews.delete(id);
+    view.shell?.close();
+    agent?.closeFromUser(view.session);
+    return;
+  }
   const record = sessions.get(id);
   sessions.delete(id);
   for (const dialog of record?.hostKeyDialogs.values() || []) dialog.abort();
@@ -959,8 +996,23 @@ handle('auth-answer', async (id, prompt, value, remember) => {
     record.remembered.delete(key);
   }
 });
-handle('input', (id, data) => sessions.get(id)?.connection?.input(data));
-handle('resize', (id, cols, rows) => sessions.get(id)?.connection?.resize(cols, rows));
+handle('input', (id, data) => {
+  const record = sessions.get(id);
+  if (record) return record.connection?.input(data);
+  const view = agentViews.get(id);
+  if (typeof data === 'string' && view?.shell) {
+    view.shell.input(data);
+    agent?.touchFromUser(view.session);
+  }
+});
+handle('resize', (id, cols, rows) => {
+  const record = sessions.get(id);
+  if (record) return record.connection?.resize(cols, rows);
+  const view = agentViews.get(id);
+  if (!view || !Number.isInteger(cols) || !Number.isInteger(rows) || cols < 1 || rows < 1 || cols > 1000 || rows > 1000) return;
+  if (view.shell) view.shell.resize(cols, rows);
+  else openAgentShell(id, view, cols, rows);
+});
 handle('context-menu', entries => new Promise(resolve => {
   const items = entries.map(item => item === null ? { type: 'separator' } : {
     label: item.label,
@@ -1916,6 +1968,7 @@ async function initializeAgent() {
     save: change => updateState(next => change(next.agent ??= {})),
     busy: count => { agentConnections = count; syncUpdateBusy(); },
     onPrompt: () => openPreferences('agent'),
+    onView: onAgentView,
   });
   // Not awaited: the app keeps starting while the socket is busy, for example just after an update when the old
   // process still holds it. The preferences window shows the offline state and offers a retry.

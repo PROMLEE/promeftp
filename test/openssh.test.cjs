@@ -136,3 +136,25 @@ test('knownHostKeyEntries: a missing file has no entries, but a directory is a r
     await require('node:fs/promises').rm(dir, { recursive: true, force: true });
   }
 });
+
+// shell() starts a PTY on the agent ControlMaster socket, so it is checked from the source text instead of running ssh.
+const sshSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'openssh.cjs'), 'utf8');
+const shellBlock = sshSource.slice(sshSource.indexOf('shell(shellSize, onData, onExit)'), sshSource.indexOf('input(data) { if (!stopped) terminal.write(data); }'));
+
+test('shell is exposed only on agent exec connections', () => {
+  assert.match(sshSource, /\(\(agent && mode === 'exec'\) && \{ shell\(shellSize, onData, onExit\)/);
+  assert.equal((sshSource.match(/shell\(shellSize, onData, onExit\)/g) || []).length, 1);
+});
+
+test('shell reuses the existing socket as an interactive session without authentication', () => {
+  assert.ok(shellBlock.length > 100);
+  for (const option of ["'-tt'", "'BatchMode=yes'", "'ProxyCommand=/usr/bin/false'", "'-S', socket"]) assert.ok(shellBlock.includes(option), option);
+  assert.match(shellBlock, /stopped \|\| !isReady\) throw Error\('SSH session is unavailable\.'\)/);
+  // No askpass environment, so a password or OTP prompt can never be answered from here.
+  assert.equal(/auth\??\.env|SSH_ASKPASS|askpass/i.test(shellBlock), false);
+});
+
+test('closing the master kills every open user shell', () => {
+  const closeBlock = sshSource.slice(sshSource.indexOf('function close() {'), sshSource.indexOf('function ready() {'));
+  assert.match(closeBlock, /for \(const shell of shells\)[\s\S]*shell\.kill\(\)/);
+});

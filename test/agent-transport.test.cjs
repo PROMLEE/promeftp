@@ -536,3 +536,63 @@ test('an agent value that differs from the server key is still a change, reporte
   assert.equal(event.value.source, 'app');
   assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
 });
+
+// run(): a fake connection.exec with an EventEmitter child and PassThrough streams. No ssh runs.
+function runWith(emit) {
+  const { EventEmitter } = require('node:events');
+  const { PassThrough } = require('node:stream');
+  const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), killed: false,
+    kill() { this.killed = true; } });
+  const transport = createTransport({ state: () => ({ profiles: [], terminalTriggers: [] }), snippetScope: () => '', directory: tmp,
+    readAnswer: async () => '', validAuthAnswer: () => true, matchesGlobalPattern, approve: async () => true });
+  const session = { connection: { exec: () => child }, controller: new AbortController(), profile: 'none', grant: { triggers: [] } };
+  const mirrored = [];
+  const result = transport.run(session, 'cmd', () => {}, (key, text) => mirrored.push([key, text]));
+  emit(child);
+  return { result, mirrored, child };
+}
+
+test('M1: mirror receives stdout and stderr in the order they arrive, without terminal control codes', async () => {
+  const { result, mirrored } = runWith(child => {
+    child.stdout.write('out1\n');
+    child.stderr.write('err1\n');
+    child.stdout.write('\x1b[31mred\x1b[0m\n');
+    setImmediate(() => { child.stdout.end(); child.stderr.end(); child.emit('close', 0, null); });
+  });
+  const value = await result;
+  assert.deepEqual(mirrored.map(entry => entry[0]), ['stdout', 'stderr', 'stdout']);
+  assert.deepEqual(mirrored.map(entry => entry[1]), ['out1\n', 'err1\n', 'red\n']);
+  assert.equal(value.stdout, 'out1\nred\n');
+  assert.equal(value.exitCode, 0);
+});
+
+test('M2: 70 KB of output mirrors exactly 65536 bytes, kills the command and reports truncated', async () => {
+  const { result, mirrored, child } = runWith(child => {
+    child.stdout.write('a'.repeat(70_000));
+    setImmediate(() => child.emit('close', null, 'SIGTERM'));
+  });
+  const value = await result;
+  assert.equal(mirrored.reduce((sum, entry) => sum + Buffer.byteLength(entry[1]), 0), 65536);
+  assert.equal(value.truncated, true);
+  assert.equal(value.stdout.length, 65536);
+  assert.equal(child.killed, true);
+});
+
+test('M3: no output means mirror is never called and the result is unchanged', async () => {
+  const { result, mirrored } = runWith(child => setImmediate(() => child.emit('close', 0, null)));
+  assert.deepEqual(await result, { stdout: '', stderr: '', exitCode: 0, signal: null, truncated: false });
+  assert.deepEqual(mirrored, []);
+});
+
+test('M4: a mirror that throws does not change the result', async () => {
+  const { EventEmitter } = require('node:events');
+  const { PassThrough } = require('node:stream');
+  const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill() {} });
+  const transport = createTransport({ state: () => ({ profiles: [], terminalTriggers: [] }), snippetScope: () => '', directory: tmp,
+    readAnswer: async () => '', validAuthAnswer: () => true, matchesGlobalPattern, approve: async () => true });
+  const session = { connection: { exec: () => child }, controller: new AbortController(), profile: 'none', grant: { triggers: [] } };
+  const result = transport.run(session, 'cmd', () => {}, () => { throw Error('mirror failed'); });
+  child.stdout.write('hi');
+  setImmediate(() => child.emit('close', 0, null));
+  assert.equal((await result).stdout, 'hi');
+});

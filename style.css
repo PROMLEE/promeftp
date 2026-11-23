@@ -186,6 +186,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .tab > button:first-child { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); max-width: 180px; }
 .tab > button:first-child > span { overflow: hidden; text-overflow: ellipsis; }
 .tab .icon-button { width: 22px; height: 24px; }
+.tab.agent-unseen > button:first-child::after { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .tab .tab-close { opacity: 0; pointer-events: none; transition: opacity 100ms ease; }
 .tab:hover .tab-close, .tab:focus-within .tab-close { opacity: 1; pointer-events: auto; }
 .tab .tab-close:focus-visible { opacity: 1; }
@@ -280,6 +281,11 @@ body.terminal-transparent .auth-requests { background: var(--paper); }
 }
 .session-tools-leading, .session-tools-actions { display: flex; align-items: center; min-width: 0; }
 .session-tools-actions { justify-content: flex-end; flex-wrap: wrap; }
+.agent-badge {
+  margin-left: var(--space-3); padding: 0 var(--space-3); border-radius: var(--radius-xs); font-size: var(--fs-xs); line-height: 18px;
+  color: var(--accent); background: var(--selection); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.agent-badge[hidden] { display: none; }
 .terminal-session-name { display: none; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 .split-node .session-tools { grid-template-columns: minmax(155px, 1fr) minmax(0, 1fr) minmax(155px, 1fr); }
 .split-node .terminal-session-name { display: block; }

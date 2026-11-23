@@ -227,11 +227,14 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
   let stopped = false;
   let isReady = false;
   let checking = false;
+  const shells = new Set();
 
   function close() {
     if (stopped) return;
     stopped = true;
     clearInterval(timer);
+    for (const shell of shells) { try { shell.kill(); } catch {} }
+    shells.clear();
     channel?.destroy();
     auth?.close();
     try { terminal?.kill(); } catch {}
@@ -303,9 +306,31 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
       return spawn(ssh, ['-F', '/dev/null', '-S', socket, '-o', 'ProxyCommand=/usr/bin/false',
         '-o', 'BatchMode=yes', '-T', '--', 'localhost', command], { signal, stdio: ['ignore', 'pipe', 'pipe'] });
     } }),
+    // Agent sessions can also open an interactive user shell on the same socket (no re-authentication, no askpass).
+    ...((agent && mode === 'exec') && { shell(shellSize, onData, onExit) {
+      if (stopped || !isReady) throw Error('SSH session is unavailable.');
+      const shell = pty.spawn(ssh, ['-F', '/dev/null', '-S', socket, '-o', 'ProxyCommand=/usr/bin/false',
+        '-o', 'BatchMode=yes', '-tt', '--', 'localhost'], {
+        name: 'xterm-256color', cols: shellSize?.cols || 80, rows: shellSize?.rows || 24,
+        cwd: os.homedir(), env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+      });
+      shells.add(shell);
+      let ended = false;
+      shell.onData(data => { if (!ended) onData(data); });
+      shell.onExit(({ exitCode }) => {
+        shells.delete(shell);
+        if (ended) return;
+        ended = true;
+        onExit(exitCode);
+      });
+      return {
+        input(data) { if (!ended) shell.write(data); },
+        resize(cols, rows) { if (!ended && cols > 0 && rows > 0) shell.resize(cols, rows); },
+        close() { if (!ended) { ended = true; shells.delete(shell); try { shell.kill(); } catch {} } },
+      };
+    } }),
     input(data) { if (!stopped) terminal.write(data); },
     resize(cols, rows) { if (!stopped && cols > 0 && rows > 0) terminal.resize(cols, rows); },
-
   };
 }
 

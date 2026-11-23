@@ -25,6 +25,7 @@ const endNext = {
   CONNECT_FAILED: [{ action: 'ask_user', message: 'The connection failed. Follow error.next if it is present.' }],
   REMOTE_CLOSED: [{ action: 'retry', message: 'The server closed the connection. Retry once with a new session.' }],
   PERMISSION_CHANGED: [{ action: 'ask_user', message: 'The user changed this client permissions. Ask the user before doing anything else.' }],
+  USER_CLOSED: [{ action: 'ask_user', message: 'The user closed this session in PromeFTP. Ask before opening a new one.' }],
   SERVICE_DISABLED: [{ action: 'ask_user', message: 'Agent access is turned off in PromeFTP. Ask the user to turn it on.' }],
 };
 const fallbackNext = [{ action: 'ask_user', message: 'Ask the user to check PromeFTP, then open a new session.' }];
@@ -41,7 +42,7 @@ function socketDirectory(uid = process.getuid()) { return '/tmp/promeftp-agent-'
 const fields = 'id, time, request, client, profile, session, operation, result, reason, detail';
 
 async function createAgentService({ directory, state, save, profiles, transport, sftpCall, busy, onPrompt = () => {},
-  socketDir = socketDirectory() }) {
+  onView = () => {}, socketDir = socketDirectory() }) {
   const dir = socketDir;
   const socketPath = path.join(dir, 'api.sock');
   const clients = new Set();
@@ -140,13 +141,19 @@ async function createAgentService({ directory, state, save, profiles, transport,
     s.waiters.clear();
     for (const finish of waiters) finish();
   }
-  function close(s) {
+  // Live view events for the app's terminal tab. Only sessions that sent 'open' have a view. A throwing listener never affects the session.
+  function view(s, type, data) {
+    if (!s.viewed) return;
+    try { onView({ session: s.id, type, ...data }); } catch {}
+  }
+  function close(s, reason = 'SERVICE_ERROR') {
     if (s.closed) return;
     s.closed = true;
     sessions.delete(s.id);
     s.connection?.close();
     s.controller.abort();
     busy(sessions.size);
+    view(s, 'closed', { reason });
     wake(s);
   }
   function note(s, operation, result, reason, detail) {
@@ -154,14 +161,14 @@ async function createAgentService({ directory, state, save, profiles, transport,
     catch { close(s); }
   }
   function end(s, reason) {
-    close(s);
+    close(s, reason);
     note(s, 'session.ended', 'closed', reason);
   }
   function current(s) {
     const grant = scopeFor(s.client, s.profile);
     const p = profileFor(s.profile);
     if (s.closed || !settings().enabled || (grant !== s.grant && JSON.stringify(grant) !== JSON.stringify(s.grant)) ||
-        !p || stamp(p) !== s.grant.fingerprint) throw problem('ACCESS_DENIED');
+        !p || stamp(p) !== s.grant.fingerprint) throw problem('ACCESS_DENIED', 'GRANT_CHANGED');
     return grant;
   }
   function reconcile() {
@@ -195,6 +202,11 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.endpoint = typeof value?.endpoint === 'string' ? value.endpoint : '';
         s.prompt = undefined;
         note(s, 'session.ready', 'success');
+        if (s.mode === 'ssh' && !s.closed) {
+          s.viewed = true;
+          view(s, 'open', { label: clean(profileFor(s.profile)?.label || profileFor(s.profile)?.host || ''),
+            client: clean(settings().clients?.find(item => item.id === s.client)?.name || '') });
+        }
         if (s.mode === 'sftp') resolveRoot(s);
       }
       if (event === 'prompt') {
@@ -329,6 +341,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
     const event = { request, client: clientId, operation: operations.has(method) ? method : 'unknown' };
     let started = false;
     let activeSession;
+    let viewing = null;
     let timeout;
     try {
       if (!operations.has(method) || !params || typeof params !== 'object' || Array.isArray(params)) throw problem('INVALID_REQUEST');
@@ -350,9 +363,10 @@ async function createAgentService({ directory, state, save, profiles, transport,
         const p = profileFor(params.profile);
         const grant = p && scopeFor(clientId, p.id);
         if (p && grant) event.profile = p.id;
-        if (!grant || stamp(p) !== grant.fingerprint) throw problem('ACCESS_DENIED');
+        if (!grant) throw problem('ACCESS_DENIED', 'NO_GRANT');
+        if (stamp(p) !== grant.fingerprint) throw problem('ACCESS_DENIED', 'GRANT_STALE');
         const allowedMode = params.mode === 'sftp' ? grant.sftp !== false : params.mode === 'ssh' && (grant.task || grant.commandApproval);
-        if (!allowedMode) throw problem('ACCESS_DENIED');
+        if (!allowedMode) throw problem('ACCESS_DENIED', params.mode === 'sftp' ? 'SFTP_NOT_ALLOWED' : 'SSH_NOT_ALLOWED');
         event.profile = p.id;
         event.detail = params.mode;
         work = () => {
@@ -391,14 +405,17 @@ async function createAgentService({ directory, state, save, profiles, transport,
             activeSession = s;
             if (method === 'ssh.run' || method === 'ssh.command') {
               const arbitrary = method === 'ssh.command';
-              if (s.mode !== 'ssh') throw problem('ACCESS_DENIED');
-              if (arbitrary ? !grant.commandApproval : !grant.task || params.task !== grant.task.name) throw problem('ACCESS_DENIED');
+              if (s.mode !== 'ssh') throw problem('ACCESS_DENIED', 'SESSION_NOT_SSH');
+              if (arbitrary ? !grant.commandApproval : !grant.task || params.task !== grant.task.name) throw problem('ACCESS_DENIED', arbitrary ? 'COMMAND_APPROVAL_OFF' : 'TASK_NOT_ALLOWED');
               const command = arbitrary ? transport.command(params.command) : grant.task.command;
               // An auto-approved command is recorded as such. Its approval id stays in the ssh.approval row.
               const autoApproved = arbitrary && grant.commandAutoApprove === true;
               event.detail = arbitrary ? (autoApproved ? 'auto-approved command' : 'user-approved command') : grant.task.name;
               work = async () => {
                 let approval;
+                let how = arbitrary ? 'auto' : 'task';
+                // Set once the view has been told about this command, cleared when it has its result or failure.
+                viewing = s;
                 if (arbitrary) {
                   approval = randomUUID();
                   if (autoApproved) {
@@ -406,16 +423,21 @@ async function createAgentService({ directory, state, save, profiles, transport,
                     audit(base(s, 'ssh.approval', 'allowed', 'AUTO_APPROVED', approval, request));
                   } else {
                     audit(base(s, 'ssh.approval', 'waiting_for_user', null, approval, request));
+                    view(s, 'approval', { command });
                     const approved = await transport.approve(s, command, profileFor(s.profile), client.name);
                     current(s);
                     audit(base(s, 'ssh.approval', approved ? 'allowed' : 'denied', null, approval, request));
                     if (!approved) throw problem('USER_DENIED');
+                    how = 'approved';
                   }
                 }
+                view(s, 'command', { command, how, ...(!arbitrary && { task: grant.task.name }) });
                 const result = await transport.run(s, command, (kind, detail) => {
                   try { audit(base(s, kind, 'success', null, clean(detail), request)); }
                   catch { close(s); }
-                });
+                }, (stream, text) => view(s, 'output', { stream, text }));
+                viewing = null;
+                view(s, 'result', { exitCode: result.exitCode, signal: result.signal, truncated: result.truncated });
                 if (approval && !autoApproved) event.detail = JSON.stringify({ approval });
                 return result;
               };
@@ -450,6 +472,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (activeSession) activeSession.inFlight = true;
       const data = await Promise.race([Promise.resolve().then(work), new Promise((_, reject) => {
         timeout = setTimeout(() => {
+          if (viewing) { view(viewing, 'failed', { code: 'TIMEOUT' }); viewing = null; }
           if (activeSession) end(activeSession, 'TIMEOUT');
           reject(problem('TIMEOUT'));
         }, 30_000);
@@ -462,8 +485,9 @@ async function createAgentService({ directory, state, save, profiles, transport,
       return data;
     } catch (error) {
       const reason = error.agentCode || 'OPERATION_FAILED';
+      if (viewing) { view(viewing, 'failed', { code: reason }); viewing = null; }
       if (started) finish(event, reason === 'TIMEOUT' ? 'unknown' : 'failed', reason);
-      else audit({ ...event, result: 'denied', reason });
+      else audit({ ...event, result: 'denied', reason, ...(error.agentReason && { detail: error.agentReason }) });
       throw problem(reason, error.agentReason);
     } finally {
       clearTimeout(timeout);
@@ -671,6 +695,27 @@ async function createAgentService({ directory, state, save, profiles, transport,
       await save(g => { g.days = days; });
       transaction(prune);
       audit({ operation: 'history.retention', result: 'success', detail: String(days) });
+    },
+    // Opens the user's own shell on a viewed session's connection. The callbacks belong to the caller. Nothing it types or
+    // reads passes through this service, so none of it reaches the agent or the audit log.
+    openShell(session, size, onData, onExit) {
+      const s = sessions.get(session);
+      if (!s?.viewed || s.closed || s.status !== 'ready' || typeof s.connection?.shell !== 'function') throw problem('SESSION_NOT_FOUND');
+      return s.connection.shell(size, onData, onExit);
+    },
+    // The user typed in the session's terminal tab. Only the fact of activity is passed on, never the input, and nothing is logged.
+    touchFromUser(session) {
+      const s = sessions.get(session);
+      if (!s?.viewed || s.closed) return false;
+      s.touched = Date.now();
+      return true;
+    },
+    // The user closed the session's terminal tab. Ends the session so the agent cannot keep using a connection the user dismissed.
+    closeFromUser(session) {
+      const s = sessions.get(session);
+      if (!s) return false;
+      end(s, 'USER_CLOSED');
+      return true;
     },
     answer(session, id, value) {
       const s = sessions.get(session);

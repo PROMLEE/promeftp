@@ -128,6 +128,7 @@ function bookmarkRow(entry) {
       await refresh();
     }],
   ]).catch(showError);
+  open.addEventListener('dblclick', event => { event.preventDefault(); start(entry, 'ssh'); });
   row.append(open);
   row.addEventListener('contextmenu', event => { event.preventDefault(); menu(); });
   row.addEventListener('dragstart', event => {
@@ -230,6 +231,7 @@ function activate(id, focus = true) {
   const session = sessions.get(id);
   const selectedTab = session?.tabRecord;
   if (selectedTab) selectedTab.focus = id;
+  selectedTab?.element.classList.remove('agent-unseen');
   for (const tab of tabRecords) {
     const inFilter = selectedTabGroup === '*' || (selectedTabGroup === '_' ? !tab.group : tab.group === selectedTabGroup);
     tab.root.hidden = tab !== selectedTab || !inFilter;
@@ -239,6 +241,11 @@ function activate(id, focus = true) {
   for (const pane of sessions.values()) pane.pane.classList.toggle('focused', pane === session);
   if (session && !session.area.hidden) {
     session.fit.fit();
+    // The user's shell on an agent session opens on the first resize, so the first time the tab is shown.
+    if (session.agent && !session.shellRequested && !session.closed && session.terminal.cols > 0) {
+      session.shellRequested = true;
+      api.resize(id, session.terminal.cols, session.terminal.rows).catch(() => {});
+    }
     if (focus) (session.auth.querySelector('input') || session.terminal).focus();
   }
   session?.fileLayout?.refreshLocalControls?.();
@@ -1225,6 +1232,8 @@ function paneKind(node) {
 function canMoveInto(target) {
   if (!draggedTab || !target) return false;
   const sourceRecord = draggedTab.tabRecord || draggedTab.tab;
+  // Agent tabs mirror one agent session. Nothing moves into them or out of them.
+  if (target.agent || draggedTab.agent || sourceRecord?.agent) return false;
   const source = draggedTab.pane || (sourceRecord.fileLayout
     ? sourceRecord.fileLayout.remotesRoot.firstElementChild : sourceRecord.root.firstElementChild);
   const kind = source && paneKind(source);
@@ -1317,7 +1326,7 @@ function bindLayoutDrop(element, resolveDrop) {
   });
 }
 function bookmarkSplitDrop(session, edge) {
-  if (!draggedBookmark || !session || (session.mode === 'sftp' && !session.tabRecord.fileLayout) ||
+  if (!draggedBookmark || !session || session.agent || (session.mode === 'sftp' && !session.tabRecord.fileLayout) ||
       session.tabRecord.root.querySelectorAll('.pane').length >= 20) return;
   const bookmark = draggedBookmark;
   return { zone: edge, effect: 'copy', apply: () => {
@@ -1326,6 +1335,7 @@ function bookmarkSplitDrop(session, edge) {
   } };
 }
 function paneDrop(session, event) {
+  if (session.agent) return;
   if (!draggedBookmark && !canMoveInto(session)) return;
   const rect = session.pane.getBoundingClientRect();
   const x = (event.clientX - rect.left) / rect.width;
@@ -1342,17 +1352,20 @@ function makeTab(input, mode, options) {
   const record = {
     element, mode, name: options.name || '',
     label: input.label || input.host, group: options.group || '', groupColor: options.groupColor || '', color: options.color || '',
+    agent: options.agent === true,
   };
+  // An agent tab already says AGENT in its label, so it has no mode suffix.
+  const modeSuffix = record.agent ? '' : ' · ' + mode.toUpperCase();
   const select = button(t(''), () => activate(record.focus));
   select.setAttribute('role', 'tab');
   const caption = document.createElement('span');
   const modeIcon = icon(mode === 'sftp' ? 'folder' : 'terminal');
   modeIcon.setAttribute('aria-hidden', 'true');
-  select.setAttribute('aria-label', (record.label || mode.toUpperCase()) + ' · ' + mode.toUpperCase());
+  select.setAttribute('aria-label', (record.label || mode.toUpperCase()) + modeSuffix);
   select.append(modeIcon, caption);
   function updateCaption() {
     caption.textContent = record.name || record.label;
-    select.title = caption.textContent + ' · ' + mode.toUpperCase();
+    select.title = caption.textContent + modeSuffix;
     const tint = validColor(record.color);
     element.style.setProperty('--tab-color', tint || 'transparent');
     record.root?.style.setProperty('--pane-tint', tint || 'transparent');
@@ -1383,7 +1396,7 @@ function makeTab(input, mode, options) {
       const name = await askName(record.name || record.label, 'Tab name (blank to reset)', true);
       if (name !== undefined) { record.name = name.trim().slice(0, 80); updateCaption(); select.blur(); }
     }],
-    [t('Duplicate Tab'), () => duplicateTab().catch(showError)],
+    ...(record.agent ? [] : [[t('Duplicate Tab'), () => duplicateTab().catch(showError)]]),
     ['Set Group…', async () => {
       const group = await askName(record.group, 'Tab group (blank to ungroup)', true);
       if (group !== undefined) {
@@ -1527,7 +1540,7 @@ byId('cancel-split-connect').addEventListener('click', () => {
   if (target && sessions.has(target.id)) activate(target.id);
 });
 async function splitSession(session, axis) {
-  if (!sessions.has(session.id) || session.tabRecord.root.querySelectorAll('.pane').length >= 20 || splitDialog.open) return;
+  if (session.agent || !sessions.has(session.id) || session.tabRecord.root.querySelectorAll('.pane').length >= 20 || splitDialog.open) return;
   const list = byId('split-host-list');
   const search = byId('split-host-search');
   const configPath = session.input.configPath || '';
@@ -1632,8 +1645,8 @@ function closePane(session) {
 }
 
 function start(input, mode, options = {}) {
-  const id = crypto.randomUUID();
-  const label = (input.label || input.host) + ' · ' + mode.toUpperCase();
+  const id = options.id || crypto.randomUUID();
+  const label = options.agent ? input.label : (input.label || input.host) + ' · ' + mode.toUpperCase();
   const tabRecord = options.tabRecord || makeTab(input, mode, options);
   if (!options.tabRecord) includeTabInSelectedGroup(tabRecord);
   const pane = options.pane || document.createElement('section');
@@ -1654,6 +1667,7 @@ function start(input, mode, options = {}) {
   const session = {
     id, tabRecord, pane, status: line, ready: false, input, mode, fileLayout,
     localDirectory: options.local, remoteDirectory: options.remote, autoReplies: [],
+    agent: options.agent ? { client: options.agent } : undefined,
   };
   const auth = document.createElement('div');
   auth.className = 'auth-requests';
@@ -1668,6 +1682,11 @@ function start(input, mode, options = {}) {
   setupTerminal(session, label);
   if (mode === 'sftp') setupFiles(session);
   if (!options.deferActivation) activate(id);
+  // An agent tab shows a session the agent already opened. There is nothing to connect.
+  if (options.agent) {
+    session.status.hidden = true;
+    return id;
+  }
   api.connect(id, input, mode, { cols: session.terminal?.cols, rows: session.terminal?.rows }, options.rules || [],
     options.password || '', options.rememberPassword === true).then(() => {
     if (!sessions.has(id)) return api.disconnect(id);
@@ -1687,7 +1706,9 @@ api.onSession(({ id, event, value }) => {
     presentTransferConflict(value); return;
   }
   if (event === 'sftp-favorites') session?.applyFavorites?.(value.scope, value.items);
+  if (event === 'agent-open') { startAgentView(id, value); return; }
   if (!session) return;
+  if (session.agent && event.startsWith('agent-')) { showAgentEvent(session, event, value); return; }
   if (event === 'prompt') {
     const form = document.createElement('form');
     const label = document.createElement('label');
@@ -1808,6 +1829,58 @@ api.onSession(({ id, event, value }) => {
     session.refreshFileControls?.();
   }
 });
+
+// A terminal tab for an SSH session the agent opened. Its id is the main process view id. The tab does not take focus.
+function startAgentView(id, value) {
+  if (sessions.has(id)) return;
+  const name = agentText(value?.label) || 'SSH';
+  start({ label: name + ' · AGENT', host: name }, 'ssh', { id, agent: agentText(value?.client) || t('Agent'), deferActivation: true });
+  // The tab is added without being selected, so it stays hidden and shows a dot until the user opens it.
+  const record = sessions.get(id)?.tabRecord;
+  if (record) {
+    record.root.hidden = true;
+    record.element.classList.add('agent-unseen');
+  }
+}
+// Text from the agent or the server is shown as plain text: no control characters.
+const agentText = value => String(value ?? '').replace(/[\p{C}]/gu, '');
+const agentOutputText = value => String(value ?? '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, '').replace(/\r?\n/g, '\r\n');
+function agentEndText(reason) {
+  return ({
+    REMOTE_CLOSED: t('The server closed the connection'), IDLE_TIMEOUT: t('Idle for 10 minutes'), TIMEOUT: t('A request took too long'),
+    CLIENT_CLOSED: t('The agent closed the session'), PERMISSION_CHANGED: t('Agent permissions changed'),
+    SERVICE_DISABLED: t('Agent access turned off'), SERVICE_ERROR: t('Agent service stopped'),
+  })[reason] || agentText(reason);
+}
+function showAgentEvent(session, event, value) {
+  const terminal = session.terminal;
+  const client = session.agent.client;
+  if (event === 'agent-approval') terminal.write('\r\n\x1b[33m[agent] ' + t('waiting for approval') + ': ' + agentText(value.command) + '\x1b[0m\r\n');
+  if (event === 'agent-command') terminal.write('\r\n\x1b[1;35m[agent ' + agentText(client) + '] $ ' + agentText(value.command) + '\x1b[0m\r\n');
+  if (event === 'agent-output') {
+    const text = agentOutputText(value.text);
+    terminal.write(value.stream === 'stderr' ? '\x1b[31m' + text + '\x1b[0m' : text);
+  }
+  if (event === 'agent-result') {
+    terminal.write('\r\n\x1b[2m[agent] exit ' + (value.exitCode ?? '-') + (value.signal ? ' signal ' + agentText(value.signal) : '') +
+      (value.truncated ? ' truncated' : '') + '\x1b[0m\r\n');
+  }
+  if (event === 'agent-failed') {
+    const text = value.code === 'USER_DENIED' ? t('denied by user') : value.code === 'TIMEOUT' ? t('timed out') : agentText(value.code);
+    terminal.write('\x1b[31m[agent] ' + text + '\x1b[0m\r\n');
+  }
+  if (event === 'agent-shell-closed') {
+    session.shellEnded = true;
+    status(session, t('Shell closed. The agent session stays open.'));
+  }
+  if (event === 'agent-closed') {
+    session.closed = true;
+    session.ready = false;
+    const text = t('Agent session ended') + ': ' + agentEndText(value?.reason);
+    terminal.write('\r\n\x1b[2m[agent] ' + text + '\x1b[0m\r\n');
+    status(session, text, true);
+  }
+}
 
 function terminalOptions() {
   const { font, size, scrollback, optionMeta } = terminalPreferences;
@@ -1984,16 +2057,22 @@ function setupTerminal(session, label) {
     name.className = 'terminal-session-name';
     name.textContent = session.input.label || session.input.host;
     name.title = name.textContent;
+    const badge = document.createElement('span');
+    badge.className = 'agent-badge';
+    badge.hidden = !session.agent;
+    badge.textContent = session.agent ? t('Agent') + ': ' + session.agent.client : '';
     const actions = document.createElement('div');
     actions.className = 'session-tools-actions';
-    actions.append(iconButton('splitRight', 'Split right (⌘D)', () => splitSession(session, 'row')),
-      iconButton('splitDown', 'Split down (⌘⇧D)', () => splitSession(session, 'column')), iconButton('search', 'Find (⌘F)', showSearch),
+    if (!session.agent) actions.append(iconButton('splitRight', 'Split right (⌘D)', () => splitSession(session, 'row')),
+      iconButton('splitDown', 'Split down (⌘⇧D)', () => splitSession(session, 'column')));
+    actions.append(iconButton('search', 'Find (⌘F)', showSearch),
       iconButton('code', 'Snippets (⌘P)', () => showSnippets(session)), iconButton('trigger', 'Terminal Triggers', () => showTriggers(session)),
     iconButton('download', 'Export session log', async () => {
       try { await api['export-log'](label, session.log || ''); }
       catch (error) { status(session, error.message, true); }
     }));
     actions.append(iconButton('close', 'Close pane', () => closePane(session)));
+    leading.append(badge);
     tools.append(leading, name, actions);
     pane.append(tools);
     pane.append(find);
@@ -2022,8 +2101,7 @@ function setupTerminal(session, label) {
         ['Clear Buffer', () => { search.clearDecorations(); terminal.clear(); terminal.focus(); }],
         ['Clear Scrollback', () => { search.clearDecorations(); terminal.write('\x1b[3J'); terminal.focus(); }],
         null,
-        ['Split Right', () => splitSession(session, 'row')],
-        ['Split Down', () => splitSession(session, 'column')],
+        ...(session.agent ? [] : [['Split Right', () => splitSession(session, 'row')], ['Split Down', () => splitSession(session, 'column')]]),
         ['Close Pane', () => closePane(session)],
       ]).catch(error => status(session, error.message, true));
     });
@@ -2046,7 +2124,7 @@ function setupTerminal(session, label) {
     return false;
   });
   terminal.onData(data => {
-    if (!session.closed && (mode !== 'sftp' || !session.ready)) api.input(id, data).catch(error => status(session, error.message, true));
+    if (!session.closed && !session.shellEnded && (mode !== 'sftp' || !session.ready)) api.input(id, data).catch(error => status(session, error.message, true));
   });
   terminal.onResize(({ cols, rows }) => {
     if (!session.closed) api.resize(id, cols, rows).catch(error => status(session, error.message, true));
@@ -3759,7 +3837,7 @@ let workspaceTabChoices = [];
 function renderWorkspaceTabChoices() {
   const list = byId('workspace-tabs');
   list.replaceChildren();
-  workspaceTabChoices = [...tabRecords];
+  workspaceTabChoices = tabRecords.filter(tab => !tab.agent);
   const groups = new Map();
   for (const [index, tab] of workspaceTabChoices.entries()) {
     const name = tab.group || '';
