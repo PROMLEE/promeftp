@@ -176,7 +176,7 @@ handle('choose-key', async () => {
   return result.filePaths[0];
 });
 
-// Without names: the alias names (array of strings), as before. With names: { name, hostname, user, port } for those aliases.
+// Without names: the alias names (array of strings), as before. With names: { name, hostname, user } for those aliases.
 handle('config-aliases', (configPath, names) => Array.isArray(names)
   ? openssh.aliasDetails(expandHome(configPath), names)
   : openssh.aliases(expandHome(configPath)));

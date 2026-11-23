@@ -1,4 +1,4 @@
-// The HostName, User and Port of each alias come from ssh -G with a temporary config file (never ~/.ssh or /etc/ssh).
+// The HostName and User of each alias come from ssh -G with a temporary config file (never ~/.ssh or /etc/ssh).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -28,21 +28,21 @@ test.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
 
 test('parseAliasDetails reads the lines of ssh -G output and keeps the first value of each key', () => {
   const stdout = 'host web-01\nhostname 10.0.1.23\nuser deploy\nport 2222\nport 22\r\nidentityfile ~/.ssh/id_ed25519\n';
-  assert.deepEqual(parseAliasDetails(stdout), { hostname: '10.0.1.23', user: 'deploy', port: '2222' });
+  assert.deepEqual(parseAliasDetails(stdout), { hostname: '10.0.1.23', user: 'deploy' });
 });
 
 test('parseAliasDetails gives empty strings for keys that are missing', () => {
-  assert.deepEqual(parseAliasDetails(''), { hostname: '', user: '', port: '' });
-  assert.deepEqual(parseAliasDetails('hostname example.test\n'), { hostname: 'example.test', user: '', port: '' });
+  assert.deepEqual(parseAliasDetails(''), { hostname: '', user: '' });
+  assert.deepEqual(parseAliasDetails('hostname example.test\n'), { hostname: 'example.test', user: '' });
 });
 
-test('aliasDetails resolves HostName, User and Port with ssh -G for the aliases in the config file', async () => {
+test('aliasDetails resolves HostName and User with ssh -G for the aliases in the config file', async () => {
   const results = await aliasDetails(configPath, ['web-01', 'db.example.test', 'bare']);
   const byName = new Map(results.map(item => [item.name, item]));
-  assert.deepEqual(byName.get('web-01'), { name: 'web-01', hostname: '10.0.1.23', user: 'deploy', port: '2222' });
+  assert.deepEqual(byName.get('web-01'), { name: 'web-01', hostname: '10.0.1.23', user: 'deploy' });
   assert.equal(byName.get('db.example.test').hostname, 'db.internal.example.test');
   assert.equal(byName.get('db.example.test').user, 'backup');
-  assert.equal(byName.get('db.example.test').port, '22');
+  assert.equal(Object.hasOwn(byName.get('db.example.test'), 'port'), false);
   assert.equal(byName.get('bare').hostname, 'bare');
   assert.equal(results.length, 3);
 });
@@ -56,8 +56,8 @@ test('an alias that fails to resolve keeps its name with empty details', async (
   // A config file that does not exist makes ssh -G fail for every alias, so each one falls back to its name.
   const results = await aliasDetails(path.join(sandbox, 'missing-config'), ['web-01', 'bare']);
   assert.deepEqual(results, [
-    { name: 'web-01', hostname: '', user: '', port: '' },
-    { name: 'bare', hostname: '', user: '', port: '' },
+    { name: 'web-01', hostname: '', user: '' },
+    { name: 'bare', hostname: '', user: '' },
   ]);
 });
 

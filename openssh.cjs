@@ -138,14 +138,14 @@ async function effective(config) {
   return authEndpoint(await effectiveOutput(config));
 }
 
-// The HostName, User and Port that ssh -G prints. Each key is printed once; a missing key is an empty string.
+// The HostName and User that ssh -G prints. Each key is printed once; a missing key is an empty string.
 function parseAliasDetails(stdout) {
   const values = {};
   for (const line of String(stdout).split('\n')) {
-    const match = /^(hostname|user|port) (.+)$/.exec(line.trim());
+    const match = /^(hostname|user) (.+)$/.exec(line.trim());
     if (match && !Object.hasOwn(values, match[1])) values[match[1]] = match[2];
   }
-  return { hostname: values.hostname ?? '', user: values.user ?? '', port: values.port ?? '' };
+  return { hostname: values.hostname ?? '', user: values.user ?? '' };
 }
 
 // Resolves each alias with ssh -G for the alias search, eight at a time. Only plain alias names are run (no wildcards,
