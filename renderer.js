@@ -13,6 +13,8 @@ let draggedTab;
 let selected;
 let profiles = [];
 let configAliases = [];
+// HostName, User and Port per alias name, filled after the names are listed (see loadAliasDetails).
+let configAliasDetails = new Map();
 let aliasRequest = 0;
 
 function syncTerminalTransparency() {
@@ -781,11 +783,13 @@ byId('rail-sftp').addEventListener('click', () => edit(undefined, 'sftp'));
 byId('reload-aliases').addEventListener('click', refreshConfigDialog);
 editor.elements.namedItem('configPath').addEventListener('change', () => refreshAliases().catch(showError));
 function renderAliases() {
-  const query = byId('alias-search').value.toLowerCase();
+  const query = byId('alias-search').value;
   const list = byId('aliases');
   const configPath = editor.elements.namedItem('configPath').value;
   list.replaceChildren();
-  for (const alias of configAliases.filter(name => name.toLowerCase().includes(query))) {
+  for (const alias of configAliases) {
+    const details = configAliasDetails.get(alias);
+    if (!aliasMatchesSearch(query, alias, details)) continue;
     const item = button(alias, () => {
       configDialog.addEventListener('close', () => {
         destinationField.focus();
@@ -795,6 +799,12 @@ function renderAliases() {
       edit({ label: alias, host: alias, configPath, usesAlias: true }, editor.dataset.intent === 'sftp' ? 'sftp' : 'ssh', splitDraft);
     });
     item.className = 'host alias';
+    if (details?.hostname && details.hostname.toLowerCase() !== alias.toLowerCase()) {
+      const hostname = document.createElement('small');
+      hostname.textContent = details.hostname;
+      item.append(hostname);
+      item.title = details.hostname;
+    }
     list.append(item);
   }
 }
@@ -804,7 +814,19 @@ async function refreshAliases() {
   const names = await api['config-aliases'](file);
   if (request !== aliasRequest) return;
   configAliases = names;
+  configAliasDetails = new Map();
   renderAliases();
+  loadAliasDetails(file, names, request);
+}
+// The names are already listed. ssh -G resolves the details in the background (main process, eight at a time), and
+// the list is filtered again when they arrive. The dialog does not wait for this.
+function loadAliasDetails(file, names, request) {
+  if (!names.length) return;
+  api['config-aliases'](file, names).then(details => {
+    if (request !== aliasRequest) return;
+    configAliasDetails = new Map(details.map(item => [item.name, item]));
+    renderAliases();
+  }, () => {});
 }
 byId('choose-config').addEventListener('click', async () => {
   try {
@@ -1528,6 +1550,8 @@ async function splitSession(session, axis) {
     item.dataset.search = [profile.label, profile.host, profile.hostname, profile.username, profile.group].filter(Boolean).join(' ');
     list.append(item);
   }
+  const aliasItems = new Map();
+  const splitAliasDetails = new Map();
   for (const alias of aliases) {
     const item = button(alias, () => {
       splitDialog.close();
@@ -1535,6 +1559,8 @@ async function splitSession(session, axis) {
     });
     item.title = 'OpenSSH alias';
     item.dataset.search = alias;
+    item.dataset.alias = alias;
+    aliasItems.set(alias, item);
     list.append(item);
   }
   if (session.mode === 'local') list.append(button(t('Local Shell'), () => {
@@ -1549,11 +1575,33 @@ async function splitSession(session, axis) {
   search.oninput = () => {
     const query = search.value.trim().toLowerCase();
     const choices = [...list.querySelectorAll('[data-search]')];
-    for (const item of choices) item.hidden = !item.dataset.search.toLowerCase().includes(query);
+    for (const item of choices) {
+      item.hidden = item.dataset.alias !== undefined
+        ? !aliasMatchesSearch(query, item.dataset.alias, splitAliasDetails.get(item.dataset.alias))
+        : !item.dataset.search.toLowerCase().includes(query);
+    }
     empty.hidden = choices.some(item => !item.hidden);
   };
   splitDialog.showModal();
   search.focus();
+  // Details fill in after the dialog is shown. Items from an earlier dialog are no longer connected and are skipped.
+  if (aliases.length) {
+    api['config-aliases'](configPath, aliases).then(details => {
+      let updated = false;
+      for (const detail of details) {
+        const item = aliasItems.get(detail.name);
+        if (!item?.isConnected) continue;
+        splitAliasDetails.set(detail.name, detail);
+        if (detail.hostname && detail.hostname.toLowerCase() !== detail.name.toLowerCase()) {
+          item.title = detail.hostname;
+          // The tooltip script sets aria-description only once, from the first title, so it is updated here too.
+          item.setAttribute('aria-description', detail.hostname);
+        }
+        updated = true;
+      }
+      if (updated && search.value.trim()) search.oninput();
+    }, () => {});
+  }
 }
 function bookmarkTabDrop() {
   const bookmark = draggedBookmark;

@@ -420,7 +420,7 @@ Add config file|설정 파일 추가|設定ファイルを追加|添加配置文
 Open in text editor|텍스트 편집기에서 열기|テキストエディタで開く|在文本编辑器中打开
 Remove from list|목록에서 제거|リストから削除|从列表移除
 Refresh aliases|별칭 새로고침|エイリアスを更新|刷新别名
-Find alias|별칭 검색|エイリアスを検索|查找别名
+Find alias, host, or IP|별칭, 호스트, IP 검색|エイリアス、ホスト、IPを検索|搜索别名、主机或 IP
 Split Connection|분할 연결|分割接続|拆分连接
 New Connection…|새 연결…|新規接続…|新建连接…
 Find a host|호스트 검색|ホストを検索|查找主机

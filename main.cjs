@@ -176,7 +176,10 @@ handle('choose-key', async () => {
   return result.filePaths[0];
 });
 
-handle('config-aliases', configPath => openssh.aliases(expandHome(configPath)));
+// Without names: the alias names (array of strings), as before. With names: { name, hostname, user, port } for those aliases.
+handle('config-aliases', (configPath, names) => Array.isArray(names)
+  ? openssh.aliasDetails(expandHome(configPath), names)
+  : openssh.aliases(expandHome(configPath)));
 handle('effective-config', input => openssh.effective(profile(input)));
 handle('inspect-identity-file', value => openssh.inspectIdentityFile(value));
 handle('choose-config', async () => {

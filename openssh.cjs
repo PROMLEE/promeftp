@@ -138,6 +138,37 @@ async function effective(config) {
   return authEndpoint(await effectiveOutput(config));
 }
 
+// The HostName, User and Port that ssh -G prints. Each key is printed once; a missing key is an empty string.
+function parseAliasDetails(stdout) {
+  const values = {};
+  for (const line of String(stdout).split('\n')) {
+    const match = /^(hostname|user|port) (.+)$/.exec(line.trim());
+    if (match && !Object.hasOwn(values, match[1])) values[match[1]] = match[2];
+  }
+  return { hostname: values.hostname ?? '', user: values.user ?? '', port: values.port ?? '' };
+}
+
+// Resolves each alias with ssh -G for the alias search, eight at a time. Only plain alias names are run (no wildcards,
+// negations, whitespace or leading dash). An alias that fails to resolve keeps its name and gets empty details.
+const aliasDetailConcurrency = 8;
+const aliasDetailLimit = 2000;
+async function aliasDetails(configPath, names) {
+  const plain = names
+    .filter(name => typeof name === 'string' && name && !name.startsWith('-') && !/[\s?*!]/.test(name))
+    .slice(0, aliasDetailLimit);
+  const results = new Array(plain.length);
+  let next = 0;
+  async function worker() {
+    while (next < plain.length) {
+      const index = next++;
+      const details = await effectiveOutput({ configPath, host: plain[index] }).then(parseAliasDetails, () => parseAliasDetails(''));
+      results[index] = { name: plain[index], ...details };
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(aliasDetailConcurrency, plain.length) }, worker));
+  return results;
+}
+
 async function inspectIdentityFile(value) {
   const file = String(value || '').trim();
   if (!file || file === 'none') return null;
@@ -302,5 +333,5 @@ function startLocal(size, notify) {
   };
 }
 
-module.exports = { aliases, effective, effectiveOutput, authEndpoint, inspectIdentityFile, start, startLocal,
+module.exports = { aliases, aliasDetails, parseAliasDetails, effective, effectiveOutput, authEndpoint, inspectIdentityFile, start, startLocal,
   parseHostKeyPrompt, parseKeygenEntries, parseKeygenFingerprints, knownHostKeyEntries, knownHostFingerprints, agentRestrictedOptions };
