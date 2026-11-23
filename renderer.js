@@ -1121,8 +1121,15 @@ function reconnect(session) {
   session.terminal?.dispose();
   sessions.delete(session.id);
   refreshTransferBanner();
-  pane.replaceChildren();
-  return start(input, mode, { tabRecord, pane, fileLayout, local: localDirectory, remote: remoteDirectory });
+  // The new session gets a fresh pane in the same place. The old pane still carries listeners bound to the
+  // closed session (focus, pointer and drop handlers), and those would activate or move a session that no longer exists.
+  const fresh = document.createElement('section');
+  pane.replaceWith(fresh);
+  // A shared file layout lives in the tab and survives. A layout of its own lived inside the old pane, so it is rebuilt.
+  const sharedLayout = fileLayout && fileLayout === tabRecord.fileLayout ? fileLayout : undefined;
+  const local = sharedLayout ? localDirectory : fileLayout?.directory ?? localDirectory;
+  if (tabRecord.focus === session.id) tabRecord.focus = undefined;
+  return start(input, mode, { tabRecord, pane: fresh, fileLayout: sharedLayout, local, remote: remoteDirectory });
 }
 const tabColors = { red: '#ef626b', orange: '#e68c45', yellow: '#d5a631', green: '#55ab73', blue: '#559cf2', purple: '#a582e5', pink: '#e879a8', cyan: '#48b9c7', indigo: '#7777e8', teal: '#32a995', lime: '#98b94d', brown: '#b17a57' };
 function validColor(value) {
@@ -2086,7 +2093,7 @@ function setupTerminal(session, label) {
   terminal.open(surface);
   if (mode !== 'sftp') {
     function selectPane() {
-      if (active !== id) activate(id, false);
+      if (active !== id && sessions.get(id) === session) activate(id, false);
     }
     pane.addEventListener('focusin', selectPane);
     area.addEventListener('contextmenu', event => {
@@ -2392,7 +2399,7 @@ function setupFiles(session) {
   remoteHeading.title = session.input.hostname || session.input.host;
   remote.element.querySelector('.file-heading').classList.add('session-tools', 'sftp-session-tools');
   for (const event of ['pointerdown', 'focusin']) session.pane.addEventListener(event, () => {
-    if (active !== session.id && !session.tabRecord.root.hidden) activate(session.id, false);
+    if (active !== session.id && sessions.get(session.id) === session && !session.tabRecord.root.hidden) activate(session.id, false);
   });
   remote.breadcrumbs.textContent = t('Waiting for connection');
   remote.element.insertBefore(session.area, remote.body);
