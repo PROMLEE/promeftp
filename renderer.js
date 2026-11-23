@@ -1850,6 +1850,8 @@ function agentEndText(reason) {
     REMOTE_CLOSED: t('The server closed the connection'), IDLE_TIMEOUT: t('Idle for 10 minutes'), TIMEOUT: t('A request took too long'),
     CLIENT_CLOSED: t('The agent closed the session'), PERMISSION_CHANGED: t('Agent permissions changed'),
     SERVICE_DISABLED: t('Agent access turned off'), SERVICE_ERROR: t('Agent service stopped'),
+    USER_CLOSED: t('You closed this tab'), AUTH_TIMEOUT: t('Authentication was not finished in time'),
+    USER_CANCELLED: t('Authentication was cancelled'),
   })[reason] || agentText(reason);
 }
 function showAgentEvent(session, event, value) {

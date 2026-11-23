@@ -272,6 +272,9 @@ The agent closed the session|에이전트가 세션을 닫았습니다|エージ
 Agent permissions changed|에이전트 권한이 변경되었습니다|エージェントの権限が変更されました|智能体权限已更改
 Agent access turned off|에이전트 접근이 꺼졌습니다|エージェントのアクセスがオフになりました|智能体访问已关闭
 Agent service stopped|에이전트 서비스가 중지되었습니다|エージェントサービスが停止しました|智能体服务已停止
+You closed this tab|이 탭을 닫았습니다|このタブを閉じました|您关闭了此标签页
+Authentication was not finished in time|인증이 시간 안에 끝나지 않았습니다|認証が時間内に完了しませんでした|未在规定时间内完成认证
+Authentication was cancelled|인증이 취소되었습니다|認証がキャンセルされました|认证已取消
 Scope|범위|範囲|范围
 User|사용자|ユーザー|用户
 Project|프로젝트|プロジェクト|项目
