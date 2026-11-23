@@ -52,14 +52,31 @@ in PromeFTP → Settings → Agents.
    `GRANT_CHANGED` (the bookmark's host, user, key or config changed; the user must
    re-save the permission), `SSH_NOT_ALLOWED` / `SFTP_NOT_ALLOWED` (that mode is not
    permitted), `TASK_NOT_ALLOWED`, `COMMAND_APPROVAL_OFF`, `SESSION_NOT_SSH`.
-4. For SFTP, use `promeftp sftp list|stat|download --session ID --path /allowed/path --json`.
-   Use the returned local path after an authorized download.
+4. Inspect remote files over SSH first. This is required. Before you read,
+   compare, or download any remote file, open an SSH session and look at it
+   there with read-only commands, such as `ls -l`, `stat`, `wc -c`, `head`,
+   `tail`, `grep`, or `sha256sum`. Most questions are answered this way, and
+   the file never leaves the server.
+   - Avoid `promeftp sftp download`. Download only when SSH inspection cannot
+     answer the task, for example when a local tool needs the whole file. Say
+     why the download is needed before you run it.
+   - If the profile does not allow SSH commands, do not fall back to a
+     download on your own. Tell the user that SSH inspection is not available
+     and ask whether to download instead.
+   - For browsing, use `promeftp sftp list|stat --session ID --path /allowed/path --json`.
+   - A download goes to PromeFTP's private staging folder. `profiles list`
+     returns `downloadMaxMiB`, the largest file this profile allows. A larger
+     file fails with `FILE_LIMIT`, as does a full staging folder. A download
+     must also finish within the 30-second request limit. Use the returned
+     local path after an authorized download.
 5. For SSH, use `promeftp ssh run --session ID --task TASK --json` for a
    registered task. When a different command is necessary and the profile
    permits interactive approval, use
    `promeftp ssh command --session ID --command 'COMMAND' --json`.
    The user must approve that exact command in PromeFTP. Respect denial and
-   report the exit code and any truncated output.
+   report the exit code and any truncated output. Output is cut at 64 KiB, so
+   narrow large files with `head`, `tail`, `grep`, or `sed -n` instead of
+   printing them whole.
 6. Inspect rule activity with `promeftp events list --session ID --after 0 --json`.
    Host key events are `hostkey.pinned` (a key the user already trusted) and
    `hostkey.autotrusted` (a key PromeFTP trusted without asking, under the

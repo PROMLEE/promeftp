@@ -37,6 +37,16 @@ const stampFields = p => ({ host: p.host, hostname: p.hostname || '', port: p.po
 const stamp = p => hash(JSON.stringify(stampFields(p)));
 const legacyStamp = p => hash(JSON.stringify(p));
 const clean = value => String(value ?? '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 512);
+// Agent download limits. Each grant may set its own values within these bounds; a grant saved by an older version has none
+// and gets the defaults, which are the limits that applied before they could be set.
+const downloadLimits = {
+  maxMiB: { fallback: 16, min: 1, max: 1024 },
+  stagedFiles: { fallback: 64, min: 1, max: 256 },
+};
+function downloadLimitsOf(grant) {
+  const value = field => Number.isSafeInteger(grant?.[field]) ? grant[field] : downloadLimits[field].fallback;
+  return { maxMiB: value('maxMiB'), stagedFiles: value('stagedFiles') };
+}
 const problem = (code, reason) => Object.assign(Error(code), { agentCode: code, ...(reason && { agentReason: reason }) });
 function socketDirectory(uid = process.getuid()) { return '/tmp/promeftp-agent-' + uid; }
 const fields = 'id, time, request, client, profile, session, operation, result, reason, detail';
@@ -358,7 +368,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         work = () => profiles().filter(p => scopeFor(clientId, p.id)?.fingerprint === stamp(p))
           .map(p => { const g = scopeFor(clientId, p.id); return { id: p.id, name: clean(p.label), root: g.root,
             modes: [...(g.sftp !== false ? ['sftp'] : []), ...(g.task || g.commandApproval ? ['ssh'] : [])], download: g.download,
-            tasks: g.task ? [g.task.name] : [], commandApproval: g.commandApproval }; });
+            ...(g.download && { downloadMaxMiB: downloadLimitsOf(g).maxMiB }), tasks: g.task ? [g.task.name] : [], commandApproval: g.commandApproval }; });
       } else if (method === 'session.open') {
         const p = profileFor(params.profile);
         const grant = p && scopeFor(clientId, p.id);
@@ -457,8 +467,8 @@ async function createAgentService({ directory, state, save, profiles, transport,
                   return { entries: list.filter(x => x.filename && !/[\/\x00-\x1f\x7f]/.test(x.filename) && !['.','..'].includes(x.filename))
                     .slice(0, 500).map(x => ({ name: x.filename, ...stat(x.attrs) })), truncated: list.length > 500 };
                 }
-                if (!attrs.isFile() || attrs.size > 16 * 1024 * 1024) throw problem('FILE_LIMIT');
-                const result = await transport.download(s, target, channel);
+                if (!attrs.isFile()) throw problem('FILE_LIMIT');
+                const result = await transport.download(s, target, channel, attrs.size);
                 event.detail = JSON.stringify({ path: target, bytes: result.bytes });
                 return result;
               };
@@ -737,4 +747,4 @@ async function createAgentService({ directory, state, save, profiles, transport,
 // History for the preferences window. Without a service (startup failed) there is nothing to read, so it is empty.
 function historyOf(service, filter) { return service ? service.history(filter) : []; }
 
-module.exports = { createAgentService, socketDirectory, protocol, problem, historyOf };
+module.exports = { createAgentService, socketDirectory, protocol, problem, historyOf, downloadLimits, downloadLimitsOf };

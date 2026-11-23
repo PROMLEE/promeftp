@@ -7,11 +7,9 @@ const { createHash } = require('node:crypto');
 const { stripVTControlCharacters } = require('node:util');
 const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
-const { problem } = require('./agent-service.cjs');
+const { problem, downloadLimits, downloadLimitsOf } = require('./agent-service.cjs');
 const { normalizedAuthQuestion } = require('./auth-rules.cjs');
 const { authScope, savedAuthDecision } = require('./saved-auth.cjs');
-
-const limit = 16 * 1024 * 1024;
 
 // Maps OpenSSH's own failure lines to a stable code. A server banner is printed by the same OpenSSH process, so only
 // lines in OpenSSH's own message forms count.
@@ -181,9 +179,15 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
     if (!['off', 'new', 'changed'].includes(hostKeyTrust)) throw problem('INVALID_REQUEST');
     // Running without asking needs command approval on. Without it the flag is stored as false.
     const commandAutoApprove = value.commandApproval === true && value.commandAutoApprove === true;
+    const limits = {};
+    for (const [field, rule] of Object.entries(downloadLimits)) {
+      const given = value[field] ?? rule.fallback;
+      if (!Number.isSafeInteger(given) || given < rule.min || given > rule.max) throw problem('INVALID_REQUEST');
+      limits[field] = given;
+    }
     return { sftp: value.sftp !== false, download: value.sftp !== false && value.download === true, savedAuth: value.savedAuth === true,
       commandApproval: value.commandApproval === true, commandAutoApprove, pam: selected('pam'), triggers: selected('triggers'),
-      hostKeyTrust, ...(task && { task }) };
+      hostKeyTrust, ...limits, ...(task && { task }) };
   }
 
   async function resolve(input, legacy = false) {
@@ -345,7 +349,12 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
     });
   }
 
-  async function download(s, remote, channel) {
+  // size is the remote file's size from stat. A larger file is refused before anything is staged; the byte count below
+  // still stops a file that grows while it is read.
+  async function download(s, remote, channel, size = 0) {
+    const { maxMiB, stagedFiles } = downloadLimitsOf(s.grant);
+    const maxBytes = maxMiB * 1024 * 1024;
+    if (size > maxBytes) throw problem('FILE_LIMIT');
     const base = path.join(directory, 'downloads');
     await fs.mkdir(base, { recursive: true, mode: 0o700 });
     const now = Date.now();
@@ -355,13 +364,13 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
       const info = await fs.lstat(target).catch(() => null);
       if (info?.isDirectory() && now - info.mtimeMs > 86400000) await fs.rm(target, { recursive: true, force: true });
     }
-    if ((await fs.readdir(base)).length >= 64) throw problem('FILE_LIMIT');
+    if ((await fs.readdir(base)).length >= stagedFiles) throw problem('FILE_LIMIT');
     const folder = await fs.mkdtemp(path.join(base, 'file-'));
     const localPath = path.join(folder, path.posix.basename(remote));
     let bytes = 0;
     const counter = new Transform({ transform(chunk, _encoding, callback) {
       bytes += chunk.length;
-      if (bytes > limit) callback(problem('FILE_LIMIT'));
+      if (bytes > maxBytes) callback(problem('FILE_LIMIT'));
       else callback(null, chunk);
     } });
     try {
