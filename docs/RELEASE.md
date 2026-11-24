@@ -261,3 +261,11 @@ curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$TAG"
 - 2026-11-16에 [PromeFTP 1.1.1](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.1)을 정식 공개했다. 소스와 릴리스 노트 커밋은 `757b849`, 업데이트 피드와 에이전트 스킬 매니페스트 게시 커밋은 `bb0b524`이다.
 - 기존 PromeFTP 서명 키를 사용했다. 공개 DMG와 ZIP을 다운로드해 SHA-256을 대조했고, 공개 안정판·베타 피드, 스킬 매니페스트, 버전 태그의 스킬 파일을 로컬 배포본과 비교했다.
 - 서명된 Apple Silicon 앱을 별도 프로필에서 실행해 버전 및 빌드 1.1.1과 Sparkle 로딩을 확인했다. 실제 자동 업데이트 설치는 별도 로컬 테스트 피드에서 검증했다.
+
+## 1.1.15 배포 기록
+
+- 2026-11-24에 [PromeFTP 1.1.15](https://github.com/PROMLEE/promeftp/releases/tag/v1.1.15)를 정식 공개했다(Latest). 새 창(#5)과 SFTP 이름 필터·도구 막대 사용자화(#6)가 들어갔다.
+- 버전·문서 준비 커밋은 `778b868`, 에이전트 스킬 매니페스트 커밋은 `3511620`이고 태그 `v1.1.15`는 `3511620`을 가리킨다. 안정판·베타 피드 게시 커밋은 `f0bf9ee`이다.
+- 기존 PromeFTP 서명 키로 서명했다. 앱 코드 서명, DMG 검증, DMG·ZIP 체크섬 검증을 통과했다. DMG SHA-256은 `39ff1099e09d5477ebffd4fd8aaec24b3caf04d84ecaf53d9f118be3f797b85a`, ZIP SHA-256은 `c9df1f03395053f355aaa9c74ec7180ba78e9a44b588c3483f4016b0e6e3b859`이다.
+- 공개 첨부 다섯 개를 모두 내려받아 로컬 서명본과 바이트 단위로 비교했다. 공개 안정판·베타 피드와 스킬 매니페스트도 로컬 서명본과 일치했고, 태그의 `skills/promeftp/SKILL.md`는 매니페스트의 SHA-256과 같았다.
+- 빌드 전에 `main`(d00c3c3)을 개발 실행해 ⌘⇧N 새 창, 창마다 따로 열린 SFTP 탭, ⌘F 필터, 한 창에서 바꾼 도구 막대가 다른 창에 바로 반영되는지 확인했다. 실제 SFTP 서버 대신 메인 프로세스의 연결 IPC를 가짜로 바꿔 확인했다. 실제 앱의 Sparkle 자동 설치는 확인하지 않았다.
