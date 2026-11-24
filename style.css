@@ -152,6 +152,10 @@ aside {
 .bookmark-folder-heading [aria-expanded=true] svg:first-child { transform: rotate(90deg); }
 .bookmark-folder-items { margin-left: var(--space-5); border-left: 1px solid var(--line); padding-left: var(--space-2); }
 .bookmark-drop { background: var(--selection); box-shadow: inset 0 0 0 1px var(--accent); }
+/* Insertion line while dragging a bookmark or a folder: above or below the row it will land next to. */
+.bookmark-row.drop-before, .bookmark-folder.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.bookmark-row.drop-after, .bookmark-folder.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.bookmark-folder-heading[draggable=true] > button { cursor: grab; }
 .sidebar-footer { margin-top: auto; display: flex; gap: var(--space-1); padding-top: var(--space-4); }
 /* Footer icons are narrower so PAM plus four icons fit the minimum sidebar width (164px). */
 .sidebar-footer .icon-button { width: 26px; min-width: 0; flex: none; }

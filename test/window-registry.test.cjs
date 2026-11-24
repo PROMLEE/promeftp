@@ -90,7 +90,7 @@ test('New Window has a shortcut, and relaunching or the Dock opens a window', ()
 });
 
 test('saved lists changed in one window reach the others', () => {
-  assert.match(main, /const sharedStateKeys = \['profiles', 'bookmarkFolders', 'workspaces', 'connectionHistory'\];/);
+  assert.match(main, /const sharedStateKeys = \['profiles', 'bookmarkFolders', 'bookmarkOrder', 'workspaces', 'connectionHistory'\];/);
   assert.match(main, /event: 'state-changed', value: changed/);
   const renderer = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
   assert.match(renderer, /if \(event === 'state-changed' && id === '\*'\) \{ applySharedStateChange\(value\); return; \}/);

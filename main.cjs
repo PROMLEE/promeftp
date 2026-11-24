@@ -24,7 +24,7 @@ const { normalizedAuthQuestion, globalPattern, matchesGlobalPattern } = require(
 const stateRules = require('./state-rules.cjs');
 const savedAuth = require('./saved-auth.cjs');
 const { createWindowRegistry, ownedBy, cascadeBounds } = require('./window-registry.cjs');
-const { bookmarkFolderName, bookmarkFolderNames, workspaceName } = stateRules;
+const { bookmarkFolderName, bookmarkFolderNames, bookmarkOrder, workspaceName } = stateRules;
 const expandHome = value => stateRules.expandHome(value, app.getPath('home'));
 const profile = input => stateRules.profile(input, app.getPath('home'));
 const snippetScope = context => stateRules.snippetScope(context, app.getPath('home'));
@@ -63,7 +63,7 @@ function syncUpdateBusy() {
 }
 
 // Lists every main window shows. When one of them changes, the other windows reload it.
-const sharedStateKeys = ['profiles', 'bookmarkFolders', 'workspaces', 'connectionHistory'];
+const sharedStateKeys = ['profiles', 'bookmarkFolders', 'bookmarkOrder', 'workspaces', 'connectionHistory'];
 async function updateState(change) {
   const origin = requestContext.getStore()?.window;
   pendingWrites++;
@@ -206,11 +206,17 @@ handle('save-bookmark-folder', (value, previous) => updateState(next => {
   next.bookmarkFolders = [...names];
   if (previous) {
     for (const entry of next.profiles) if (entry.group === previous) entry.group = name;
+    // A renamed folder keeps its place in the dragged order.
+    if (next.bookmarkOrder?.folders) next.bookmarkOrder.folders = next.bookmarkOrder.folders.map(folder => folder === previous ? name : folder);
   }
 }));
 handle('remove-bookmark-folder', name => updateState(next => {
   next.bookmarkFolders = [...bookmarkFolderNames(next)].filter(folder => folder !== name);
   for (const entry of next.profiles) if (entry.group === name) entry.group = '';
+}));
+handle('bookmark-order', () => bookmarkOrder(state.bookmarkOrder, state));
+handle('set-bookmark-order', order => updateState(next => {
+  next.bookmarkOrder = bookmarkOrder({ ...next.bookmarkOrder, ...order }, next);
 }));
 handle('move-bookmark', (id, folder) => updateState(next => {
   if (folder && !bookmarkFolderNames(next).has(folder)) throw Error('Folder no longer exists.');
