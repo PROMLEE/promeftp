@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.14</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.14</link>
-      <pubDate>Tue, 24 Nov 2026 00:00:19 +0000</pubDate>
-      <sparkle:version>1.1.14</sparkle:version>
-      <sparkle:shortVersionString>1.1.14</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.15</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.15</link>
+      <pubDate>Tue, 24 Nov 2026 00:44:12 +0000</pubDate>
+      <sparkle:version>1.1.15</sparkle:version>
+      <sparkle:shortVersionString>1.1.15</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Reconnect split panes and set agent download limits&lt;/h2&gt;
-&lt;p&gt;Reconnecting a split SFTP pane keeps the tab, and agent download limits are now settings.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Reconnect keeps the tab&lt;/strong&gt;&lt;br&gt;Reconnecting a split remote pane no longer hides the tab or its files.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Agent download limits&lt;/strong&gt;&lt;br&gt;Set the largest file and the number of staged files per bookmark in Settings → Agents.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;SSH inspection first&lt;/strong&gt;&lt;br&gt;The agent skill now has agents inspect files over SSH before downloading them.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;More windows, an SFTP filter, and a tidier toolbar&lt;/h2&gt;
+&lt;p&gt;Open more than one window, filter the SFTP folder on screen, and choose which panel buttons show.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;New Window&lt;/strong&gt;&lt;br&gt;File → New Window (⌘⇧N) opens another window with its own tabs.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Filter the folder&lt;/strong&gt;&lt;br&gt;Press ⌘F in an SFTP panel to show only the names that match, such as *.log.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Choose panel buttons&lt;/strong&gt;&lt;br&gt;Right-click a panel&amp;#x27;s title bar or use More → Customize Toolbar to pick and order its buttons.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.14"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.15"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.14/PromeFTP-1.1.14-macos-arm64.zip" length="140992490" type="application/octet-stream" sparkle:edSignature="bG/0BP1v8JKqV5EQIgLMfDj6v50ULrzDCu1tufg7IcfEk4GRks1tut0J2hJgBrykx03wuNt8hrKCS3Le/auNBA=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.15/PromeFTP-1.1.15-macos-arm64.zip" length="141002144" type="application/octet-stream" sparkle:edSignature="/dAbJj7NBl19thTqy2jaIrIfgHUb3X8qtEP4OoNMLjxKnYfh1Q4vyIEOC2iVrXSODW5Rj7OcRlzYwZbTeU2GCw=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: w/j6pmStKvc95ydLUXTYBplq43X8P3wLksuQPdVT4hvgvp1pLeIEMVWxUgpvDGrsCujVFj/VBo5mrAgU5lg/Bg==
-length: 2624
+edSignature: Ac6Eviugey8yv/7swJIeSQod9Kqnqpi3KoDqv4sHlbdgFfQIXWVLXYQod1Z0mRn8k0gEXcOpPa6Su6UPeNq+CQ==
+length: 2629
 -->
