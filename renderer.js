@@ -40,14 +40,69 @@ passwordInput.addEventListener('input', () => {
 
 const collapsedFolders = new Set();
 let bookmarkFolders = [];
+// The dragged order of folders and bookmarks, kept in the app state so it survives a restart and reaches every window.
+let bookmarkOrder = { folders: [], bookmarks: [] };
 let draggedBookmark;
+let draggedFolder;
 let draggedOrder;
+// Items named in `order` come first, in that order; the rest keep their given order after them.
+function sortByOrder(items, order, getId) {
+  const positions = new Map(order.map((id, index) => [id, index]));
+  const rank = item => positions.get(getId(item)) ?? order.length;
+  return items.map((item, index) => ({ item, index, position: rank(item) }))
+    .sort((a, b) => a.position - b.position || a.index - b.index).map(entry => entry.item);
+}
 function orderedItems(items, key, getId) {
   let order = [];
   try { order = JSON.parse(localStorage.getItem('list-order:' + key)) || []; } catch {}
-  const positions = new Map(order.map((id, index) => [id, index]));
-  return items.map((item, index) => ({ item, index, position: positions.get(getId(item)) ?? -1 }))
-    .sort((a, b) => a.position - b.position || a.index - b.index).map(entry => entry.item);
+  return sortByOrder(items, Array.isArray(order) ? order : [], getId);
+}
+// Where a dragged bookmark or folder lands next to `element`: before it over the upper half, after it over the lower half.
+function dropSide(event, element) {
+  const rect = element.getBoundingClientRect();
+  return event.clientY > rect.top + rect.height / 2 ? 'after' : 'before';
+}
+function clearDropMarkers() {
+  for (const element of document.querySelectorAll('.drop-before, .drop-after, .bookmark-drop')) element.classList.remove('drop-before', 'drop-after', 'bookmark-drop');
+}
+function showDropMarker(element, side) {
+  if (element.classList.contains('drop-' + side)) return;
+  clearDropMarkers();
+  element.classList.add('drop-' + side);
+}
+// `ids` with `id` taken out and put back before or after `targetId`, or at the end when there is no target.
+function reorderIds(ids, id, targetId, side) {
+  const list = ids.filter(item => item !== id);
+  const target = targetId === undefined ? -1 : list.indexOf(targetId);
+  list.splice(target < 0 ? list.length : target + (side === 'after' ? 1 : 0), 0, id);
+  return list;
+}
+const orderedFolderNames = () => sortByOrder(bookmarkFolders, bookmarkOrder.folders, name => name);
+const orderedBookmarkIds = () => sortByOrder(profiles, bookmarkOrder.bookmarks, entry => entry.id).map(entry => entry.id);
+async function saveBookmarkOrder(change) {
+  bookmarkOrder = { ...bookmarkOrder, ...change };
+  renderHosts();
+  await api['set-bookmark-order'](change);
+}
+// Puts a dragged bookmark into `folder` ('' for the top level), before or after `targetId` or last when there is none.
+async function placeBookmark(entry, folder, targetId, side) {
+  try {
+    const bookmarks = reorderIds(orderedBookmarkIds(), entry.id, targetId, side);
+    if ((entry.group || '') === folder) return await saveBookmarkOrder({ bookmarks });
+    bookmarkOrder = { ...bookmarkOrder, bookmarks };
+    await api['set-bookmark-order']({ bookmarks });
+    await moveBookmark(entry, folder);
+  } catch (error) {
+    showError(error);
+    await refresh().catch(() => {});
+  }
+}
+async function placeFolder(name, targetName, side) {
+  try { await saveBookmarkOrder({ folders: reorderIds(orderedFolderNames(), name, targetName, side) }); }
+  catch (error) {
+    showError(error);
+    await refresh().catch(() => {});
+  }
 }
 function bindOrderedRow(row, key, id, getItems, rerender, group = '') {
   row.draggable = true;
@@ -117,7 +172,7 @@ function bookmarkRow(entry) {
     ['Open SFTP Tab', () => start(entry, 'sftp')],
     null,
     ['Move to Bookmarks', () => moveBookmark(entry, ''), Boolean(entry.group)],
-    ...bookmarkFolders.map(folder => ['Move to ' + folder, () => moveBookmark(entry, folder), folder !== entry.group]),
+    ...orderedFolderNames().map(folder => ['Move to ' + folder, () => moveBookmark(entry, folder), folder !== entry.group]),
     null,
     ['Delete Bookmark', async () => {
       await api['remove-profile'](entry.id);
@@ -131,13 +186,31 @@ function bookmarkRow(entry) {
   open.addEventListener('dblclick', event => { event.preventDefault(); start(entry, 'ssh'); });
   row.append(open);
   row.addEventListener('contextmenu', event => { event.preventDefault(); menu(); });
+  row.draggable = true;
   row.addEventListener('dragstart', event => {
     draggedBookmark = entry;
     event.dataTransfer.setData('text/plain', 'PromeFTP bookmark');
     event.dataTransfer.effectAllowed = 'copyMove';
   });
-  row.addEventListener('dragend', clearLayoutDrag);
-  bindOrderedRow(row, 'bookmarks', entry.id, () => profiles, renderHosts, entry.group);
+  row.addEventListener('dragend', () => { clearLayoutDrag(); clearDropMarkers(); });
+  // Dropping a bookmark on another one puts it just above or below it, moving it into that folder when it came from elsewhere.
+  row.addEventListener('dragover', event => {
+    if (!draggedBookmark || draggedBookmark.id === entry.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    showDropMarker(row, dropSide(event, row));
+  });
+  row.addEventListener('drop', event => {
+    if (!draggedBookmark || draggedBookmark.id === entry.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const moving = draggedBookmark;
+    const side = dropSide(event, row);
+    clearLayoutDrag();
+    clearDropMarkers();
+    placeBookmark(moving, entry.group || '', entry.id, side);
+  });
   return row;
 }
 
@@ -181,25 +254,54 @@ function bookmarkFolder(name, entries, searching) {
   ]).catch(showError);
   header.append(toggle);
   header.addEventListener('contextmenu', event => { event.preventDefault(); menu(); });
-  bindOrderedRow(header, 'bookmark-folders', name, () => bookmarkFolders.map(id => ({ id })), renderHosts, 'folders');
-  children.append(...orderedItems(entries, 'bookmarks', entry => entry.id).map(bookmarkRow));
+  // The heading drags the whole folder. Over another folder's heading it lands above or below that folder; over an open
+  // folder's bookmarks it lands below the folder.
+  header.draggable = true;
+  header.addEventListener('dragstart', event => {
+    draggedFolder = name;
+    event.dataTransfer.setData('text/promeftp-folder', name);
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  header.addEventListener('dragend', () => { draggedFolder = undefined; clearDropMarkers(); });
+  const folderSide = event => header.contains(event.target) ? dropSide(event, header) : 'after';
+  children.append(...sortByOrder(entries, bookmarkOrder.bookmarks, entry => entry.id).map(bookmarkRow));
   folder.append(header, children);
   folder.addEventListener('dragover', event => {
+    if (draggedFolder) {
+      if (draggedFolder === name) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      showDropMarker(folder, folderSide(event));
+      return;
+    }
     if (!draggedBookmark || draggedBookmark.group === name) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    folder.classList.add('bookmark-drop');
+    if (!folder.classList.contains('bookmark-drop')) {
+      clearDropMarkers();
+      folder.classList.add('bookmark-drop');
+    }
   });
   folder.addEventListener('dragleave', event => {
-    if (!(event.relatedTarget instanceof Node) || !folder.contains(event.relatedTarget)) folder.classList.remove('bookmark-drop');
+    if (!(event.relatedTarget instanceof Node) || !folder.contains(event.relatedTarget)) folder.classList.remove('bookmark-drop', 'drop-before', 'drop-after');
   });
   folder.addEventListener('drop', event => {
+    if (draggedFolder) {
+      if (draggedFolder === name) return;
+      event.preventDefault();
+      const moving = draggedFolder;
+      const side = folderSide(event);
+      draggedFolder = undefined;
+      clearDropMarkers();
+      placeFolder(moving, name, side);
+      return;
+    }
     if (!draggedBookmark || draggedBookmark.group === name) return;
     event.preventDefault();
     const entry = draggedBookmark;
-    draggedBookmark = undefined;
-    folder.classList.remove('bookmark-drop');
-    moveBookmark(entry, name).catch(showError);
+    clearLayoutDrag();
+    clearDropMarkers();
+    placeBookmark(entry, name);
   });
   return folder;
 }
@@ -217,12 +319,28 @@ function renderHosts() {
       groups.get(entry.group).push(entry);
     }
   }
-  list.replaceChildren(...orderedItems([...groups]
+  // Order the folders before building them: the order is keyed by folder name.
+  list.replaceChildren(...sortByOrder([...groups], bookmarkOrder.folders, group => group[0])
     .filter(([name, entries]) => !query || entries.length || name.toLowerCase().includes(query))
-    .map(([name, entries]) => bookmarkFolder(name, entries, Boolean(query))), 'bookmark-folders', group => group[0]), ...orderedItems(root, 'bookmarks', entry => entry.id).map(bookmarkRow));
+    .map(([name, entries]) => bookmarkFolder(name, entries, Boolean(query))), ...sortByOrder(root, bookmarkOrder.bookmarks, entry => entry.id).map(bookmarkRow));
   byId('host-empty').hidden = list.childElementCount > 0;
   byId('host-empty').textContent = query ? 'No matching bookmarks' : 'No bookmarks';
 }
+
+// A bookmark dropped on the empty part of the list, below every folder and bookmark, goes to the top level, last.
+byId('hosts').addEventListener('dragover', event => {
+  if (event.target !== event.currentTarget || !draggedBookmark?.group) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+});
+byId('hosts').addEventListener('drop', event => {
+  if (event.target !== event.currentTarget || !draggedBookmark?.group) return;
+  event.preventDefault();
+  const entry = draggedBookmark;
+  clearLayoutDrag();
+  clearDropMarkers();
+  placeBookmark(entry, '');
+});
 
 function activate(id, focus = true) {
   active = id;
@@ -298,10 +416,26 @@ function edit(entry, intent = 'ssh', draft) {
   activate();
   renderHosts();
 }
+// Earlier versions kept the bookmark order in each window's localStorage only. It is carried into the app state once.
+// The old folder order is dropped: it was saved but never shown, so the folders stay in the order the user sees.
+async function adoptLegacyBookmarkOrder() {
+  let bookmarks;
+  try {
+    bookmarks = JSON.parse(localStorage.getItem('list-order:bookmarks'));
+    localStorage.removeItem('list-order:bookmarks');
+    localStorage.removeItem('list-order:bookmark-folders');
+  } catch { return; }
+  if (!Array.isArray(bookmarks) || !bookmarks.length || bookmarkOrder.bookmarks.length) return;
+  await api['set-bookmark-order']({ bookmarks });
+  bookmarkOrder = await api['bookmark-order']() || bookmarkOrder;
+}
 async function refresh() {
-  [profiles, bookmarkFolders] = await Promise.all([api.profiles(), api['bookmark-folders']()]);
+  let order;
+  [profiles, bookmarkFolders, order] = await Promise.all([api.profiles(), api['bookmark-folders'](), api['bookmark-order']()]);
+  bookmarkOrder = { folders: order?.folders || [], bookmarks: order?.bookmarks || [] };
   bookmarkFolders.sort((a, b) => a.localeCompare(b));
-  byId('bookmark-folder-names').replaceChildren(...bookmarkFolders.map(name => new Option(name, name)));
+  await adoptLegacyBookmarkOrder().catch(() => {});
+  byId('bookmark-folder-names').replaceChildren(...orderedFolderNames().map(name => new Option(name, name)));
   renderHosts();
 }
 function showError(error) {
@@ -1706,7 +1840,7 @@ function start(input, mode, options = {}) {
 // Another window saved bookmarks, workspaces or connection history: reload the lists this window shows.
 function applySharedStateChange(keys) {
   if (!Array.isArray(keys)) return;
-  if (keys.includes('profiles') || keys.includes('bookmarkFolders')) refresh().catch(showError);
+  if (['profiles', 'bookmarkFolders', 'bookmarkOrder'].some(key => keys.includes(key))) refresh().catch(showError);
   if (keys.includes('connectionHistory') && !historyPanel.hidden) refreshHistory();
   if (keys.includes('workspaces')) {
     refreshSidebarWorkspaces().catch(() => {});
