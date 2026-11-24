@@ -59,7 +59,7 @@ SSH와 SFTP는 모두 macOS의 `/usr/bin/ssh`를 사용합니다. 호스트 키 
 
 ## SSH 호스트 키 확인
 
-OpenSSH가 새 접속 대상의 호스트 키 확인을 요청하면 **Verify SSH host key** 팝업이 열립니다. 신뢰할 수 있는 기록과 지문을 대조한 뒤 **Trust and Connect**를 누릅니다. **Don’t ask again for this verified key**를 선택하면 같은 서버 주소와 포트에서 같은 지문이 다시 제시될 때만 PromeFTP가 자동으로 승인합니다. 키가 달라지면 이전 승인을 재사용하지 않습니다.
+OpenSSH가 새 접속 대상의 호스트 키 확인을 요청하면 **Verify SSH host key** 팝업이 열립니다. 신뢰할 수 있는 기록과 지문을 대조한 뒤 **Trust and Connect**를 누릅니다. **이 서버는 키가 바뀌어도 다시 묻지 않기**를 선택하면 PromeFTP가 그 서버 주소와 포트를 기억하고, 이후에는 키가 처음 신뢰한 키와 달라도 묻지 않고 승인합니다. 바뀐 키를 승인한 경우 탭 상태에 표시됩니다. 새 키를 매번 직접 확인하려면 체크하지 마세요. 키가 바뀌는 것은 중간자 공격의 징후일 수 있습니다. `~/.ssh/known_hosts`에 그 서버의 이전 키가 남아 있으면 PromeFTP에 묻기 전에 OpenSSH가 연결을 중단합니다.
 
 ## PAM과 자동 응답
 
