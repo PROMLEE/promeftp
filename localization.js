@@ -38,6 +38,7 @@ SSH commands|SSH 명령|SSH コマンド|SSH 命令
 Authentication and triggers|인증과 트리거|認証とトリガー|身份验证和触发器
 This key is fixed for|이 키는 다음 기능에 고정되어 있습니다:|このキーは次の機能に固定されています：|此按键固定用于：
 PAM rules and triggers are per bookmark and were left out here.|PAM 규칙과 트리거는 북마크마다 다르므로 여기서는 제외했습니다.|PAM ルールとトリガーはブックマークごとに異なるため、ここでは除外しました。|PAM 规则和触发器因书签而异，此处已省略。
+Press keys…|키를 누르세요…|キーを押してください…|请按下按键…
 Press keys… (Esc cancels, Delete clears)|키를 누르세요… (Esc 취소, Delete 해제)|キーを押してください…（Esc でキャンセル、Delete で解除）|请按下按键…（Esc 取消，Delete 清除）
 Shortcut saved|단축키를 저장했습니다|ショートカットを保存しました|快捷键已保存
 Change|변경|変更|更改

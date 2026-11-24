@@ -455,16 +455,20 @@ async function renderShortcutPreferences() {
       const term = document.createElement('dt');
       term.textContent = t(item.label);
       const definition = document.createElement('dd');
-      const keys = document.createElement('kbd');
-      keys.textContent = item.accelerator ? formatAccelerator(item.accelerator) : t('No shortcut');
-      definition.append(keys);
       if (item.editable) {
-        definition.append(button(t('Change'), () => captureShortcut(item)));
+        // Like promeCapt, the shortcut itself is the button: click it, then press the new keys.
+        const recorder = button(item.accelerator ? formatAccelerator(item.accelerator) : t('No shortcut'), () => captureShortcut(item, recorder));
+        recorder.className = 'shortcut-recorder';
+        recorder.title = t('Change');
+        definition.append(recorder);
         if (item.custom) definition.append(button(t('Reset'), async () => {
           await api['shortcut-reset'](item.id).catch(error => { message.textContent = error.message; });
           await renderShortcutPreferences();
         }));
       } else {
+        const keys = document.createElement('kbd');
+        keys.textContent = item.accelerator ? formatAccelerator(item.accelerator) : t('No shortcut');
+        definition.append(keys);
         term.title = t('Fixed');
       }
       table.append(term, definition);
@@ -482,12 +486,17 @@ async function renderShortcutPreferences() {
 // Pressing a key sets the shortcut. Escape cancels, Delete clears it. While capturing, the app's own shortcuts do not run.
 // Only one capture runs at a time: starting another one cancels the previous, so a key cannot be saved twice.
 let cancelShortcutCapture = null;
-async function captureShortcut(item) {
+async function captureShortcut(item, recorder) {
   cancelShortcutCapture?.();
   const message = byId('shortcut-message');
   message.textContent = t('Press keys… (Esc cancels, Delete clears)');
+  const idleText = recorder.textContent;
+  recorder.classList.add('recording');
+  recorder.textContent = t('Press keys…');
   const stop = () => {
     document.removeEventListener('keydown', onKey, true);
+    recorder.classList.remove('recording');
+    recorder.textContent = idleText;
     if (cancelShortcutCapture === stop) cancelShortcutCapture = null;
     api['shortcut-capture'](false).catch(() => {});
   };
