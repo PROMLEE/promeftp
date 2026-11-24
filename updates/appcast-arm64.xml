@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.16</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.16</link>
-      <pubDate>Tue, 24 Nov 2026 10:37:27 +0000</pubDate>
-      <sparkle:version>1.1.16</sparkle:version>
-      <sparkle:shortVersionString>1.1.16</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.17</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.17</link>
+      <pubDate>Tue, 24 Nov 2026 13:43:07 +0000</pubDate>
+      <sparkle:version>1.1.17</sparkle:version>
+      <sparkle:shortVersionString>1.1.17</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Reorder bookmarks and folders, and update saved workspaces&lt;/h2&gt;
-&lt;p&gt;Drag bookmark folders and bookmarks into the order you want, and overwrite a saved workspace with the tabs you have open.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Reorder bookmarks&lt;/strong&gt;&lt;br&gt;Drag a folder heading or a bookmark above or below another. The order is kept after a restart and in every window.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Update a workspace&lt;/strong&gt;&lt;br&gt;Use Update with Open Tabs… on a saved workspace to replace it with the tabs open in this window.&lt;/li&gt;&lt;/ul&gt;
-&lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.16"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Stop repeated host key prompts for a server&lt;/h2&gt;
+&lt;p&gt;A server you chose not to be asked about no longer prompts again when its host key changes. The tab shows when a changed key was accepted.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Host key prompts&lt;/strong&gt;&lt;br&gt;Check Don’t ask again for this server, even if its key changes, and PromeFTP accepts that server&amp;#x27;s changed key without asking again.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Changed keys&lt;/strong&gt;&lt;br&gt;Without that checkbox, PromeFTP still asks you to verify a changed key.&lt;/li&gt;&lt;/ul&gt;
+&lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon. Check the host key option only for a server you trust.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.17"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.16/PromeFTP-1.1.16-macos-arm64.zip" length="141103353" type="application/octet-stream" sparkle:edSignature="wDbMdkNhWLigarO0N4owXNIuquLUZ0wbtOx+mqcQ8cU9P8ytnjtB8gXyHNXspJ9cUkQ/Vp8Pkj/8FsqbMHxlCA=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.17/PromeFTP-1.1.17-macos-arm64.zip" length="141007280" type="application/octet-stream" sparkle:edSignature="84EswHQT3/WQejGxX4BGWSEdA7Y7to1RjgtVonDQXcMO3hFWc1stfzm4YPOW1Mr64hlgh7iAJnqpCgYIp6FzCQ=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: u1JeR2JylLUP6s9vjH42W0UMV9x2fGF2vQ1AU5K5FXTnPL4Mj/59lb6gUd4KfvMQROrkS1OJapDntmbZg5GKDg==
-length: 2550
+edSignature: jygPOviuvykMDs3SsglLjt6IuJR+9OtHIJopNzVTbvteqLZIZtBxRIFud3Xs+pJPFpT7NS4KmQidqM/QeZypBg==
+length: 2602
 -->
