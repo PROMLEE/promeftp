@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.13</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.13</link>
-      <pubDate>Mon, 23 Nov 2026 08:57:22 +0000</pubDate>
-      <sparkle:version>1.1.13</sparkle:version>
-      <sparkle:shortVersionString>1.1.13</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.14</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.14</link>
+      <pubDate>Tue, 24 Nov 2026 00:00:19 +0000</pubDate>
+      <sparkle:version>1.1.14</sparkle:version>
+      <sparkle:shortVersionString>1.1.14</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Watch agent SSH sessions live&lt;/h2&gt;
-&lt;p&gt;Agent SSH sessions open a live tab you can watch and type in.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Live agent tabs&lt;/strong&gt;&lt;br&gt;See each command an agent runs and its output as it happens, and type in the same session yourself.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Clearer agent errors&lt;/strong&gt;&lt;br&gt;A denied agent request now says why, such as missing or outdated permission.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Double-click bookmarks&lt;/strong&gt;&lt;br&gt;Double-click a bookmark to open an SSH tab.&lt;/li&gt;&lt;/ul&gt;
+&lt;h2&gt;Reconnect split panes and set agent download limits&lt;/h2&gt;
+&lt;p&gt;Reconnecting a split SFTP pane keeps the tab, and agent download limits are now settings.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Reconnect keeps the tab&lt;/strong&gt;&lt;br&gt;Reconnecting a split remote pane no longer hides the tab or its files.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Agent download limits&lt;/strong&gt;&lt;br&gt;Set the largest file and the number of staged files per bookmark in Settings → Agents.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;SSH inspection first&lt;/strong&gt;&lt;br&gt;The agent skill now has agents inspect files over SSH before downloading them.&lt;/li&gt;&lt;/ul&gt;
 &lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.13"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.14"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.13/PromeFTP-1.1.13-macos-arm64.zip" length="141087672" type="application/octet-stream" sparkle:edSignature="UxCta1xIyKx0TjgXKSAwAz2rVWAHwXPuJ06c9ELeDzht9Ar6zqf6n8Kb9OistK3HLCOKC6whaMWbRDw2bwn7DA=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.14/PromeFTP-1.1.14-macos-arm64.zip" length="140992490" type="application/octet-stream" sparkle:edSignature="bG/0BP1v8JKqV5EQIgLMfDj6v50ULrzDCu1tufg7IcfEk4GRks1tut0J2hJgBrykx03wuNt8hrKCS3Le/auNBA=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Zc20cLNRCnu1J9ydZCK2JuM5sPhgIfOch7k2CFAr1L3Ri0KEafQCO1KNRMpVqzkhkQpcJD/AgYgRMP2rTN0EAw==
-length: 2549
+edSignature: w/j6pmStKvc95ydLUXTYBplq43X8P3wLksuQPdVT4hvgvp1pLeIEMVWxUgpvDGrsCujVFj/VBo5mrAgU5lg/Bg==
+length: 2624
 -->
