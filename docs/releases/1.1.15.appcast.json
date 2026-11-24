@@ -1,0 +1,19 @@
+{
+  "heading": "More windows, an SFTP filter, and a tidier toolbar",
+  "summary": "Open more than one window, filter the SFTP folder on screen, and choose which panel buttons show.",
+  "changes": [
+    [
+      "New Window",
+      "File → New Window (⌘⇧N) opens another window with its own tabs."
+    ],
+    [
+      "Filter the folder",
+      "Press ⌘F in an SFTP panel to show only the names that match, such as *.log."
+    ],
+    [
+      "Choose panel buttons",
+      "Right-click a panel's title bar or use More → Customize Toolbar to pick and order its buttons."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
