@@ -354,6 +354,7 @@ File|파일|ファイル|文件
 Edit|편집|編集|编辑
 Window|창|ウインドウ|窗口
 New Host|새 호스트|新規ホスト|新建主机
+New Window|새 창|新規ウインドウ|新建窗口
 Local Shell|로컬 셸|ローカルシェル|本地 Shell
 Close Tab|탭 닫기|タブを閉じる|关闭标签页
 Snippets|스니펫|スニペット|代码片段

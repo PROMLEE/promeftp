@@ -47,6 +47,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | Keys | Action |
 | --- | --- |
 | ⌘N / ⌘T | New host / local login shell |
+| ⌘⇧N | New window (each window keeps its own tabs) |
 | ⌘D / ⌘⇧D | Split terminal right / down |
 | ⌘P / ⌘F | Open snippets / find terminal output |
 | ⌘K | Clear the buffer and keep the cursor line |

@@ -1696,7 +1696,18 @@ function start(input, mode, options = {}) {
   });
   return id;
 }
+// Another window saved bookmarks, workspaces or connection history: reload the lists this window shows.
+function applySharedStateChange(keys) {
+  if (!Array.isArray(keys)) return;
+  if (keys.includes('profiles') || keys.includes('bookmarkFolders')) refresh().catch(showError);
+  if (keys.includes('connectionHistory') && !historyPanel.hidden) refreshHistory();
+  if (keys.includes('workspaces')) {
+    refreshSidebarWorkspaces().catch(() => {});
+    if (workspaceDialog.open) renderWorkspaces().catch(() => {});
+  }
+}
 api.onSession(({ id, event, value }) => {
+  if (event === 'state-changed' && id === '*') { applySharedStateChange(value); return; }
   if (event === 'history-changed' && !historyPanel.hidden) refreshHistory();
   const session = sessions.get(id);
   if (event === 'transfer-jobs') { renderTransferQueue(value); return; }
