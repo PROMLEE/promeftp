@@ -1,0 +1,15 @@
+{
+  "heading": "Stop repeated host key prompts for a server",
+  "summary": "A server you chose not to be asked about no longer prompts again when its host key changes. The tab shows when a changed key was accepted.",
+  "changes": [
+    [
+      "Host key prompts",
+      "Check Don’t ask again for this server, even if its key changes, and PromeFTP accepts that server's changed key without asking again."
+    ],
+    [
+      "Changed keys",
+      "Without that checkbox, PromeFTP still asks you to verify a changed key."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon. Check the host key option only for a server you trust."
+}
