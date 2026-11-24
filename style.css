@@ -244,7 +244,12 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-5); b
 .split-node.column > .split-divider::before { inset: 2px 0 auto; width: auto; height: 1px; }
 .split-divider:hover::before, .split-divider:focus-visible::before { background: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .pane.focused > .session-tools [draggable=true] { color: var(--accent); }
+/* Connection notices (transfer done, authentication, errors) sit at the bottom of the pane, below the
+   session header and content, so a notice appearing or clearing never pushes the pane down. */
+.pane > .status, .pane > .auth-requests { order: 100; }
+.pane > .auth-requests { order: 101; }
 .status { flex: none; padding: var(--space-3) var(--space-6); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pane > .status:not([hidden]) { border-top: 1px solid var(--line); }
 .auth-requests { flex: none; max-height: 36%; overflow: auto; padding: var(--space-1) var(--space-6) var(--space-5); }
 .auth-requests:empty { display: none; }
 .auth-requests form { display: grid; gap: var(--space-3); margin-top: var(--space-4); min-width: 0; }
@@ -683,9 +688,11 @@ body.preferences-body {
   font: inherit; font-size: var(--fs-xs);
 }
 .app-tooltip {
-  position: fixed; z-index: var(--z-max); max-width: 280px; padding: var(--space-3) var(--space-4);
+  position: fixed; z-index: var(--z-max); max-width: min(420px, calc(100vw - 16px)); padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--sheet); color: var(--ink);
   box-shadow: 0 4px 14px #0003; font-size: var(--fs-xs); line-height: 1.35; pointer-events: none;
+  /* Long unbroken text such as paths wraps inside the box instead of spilling past its background. */
+  overflow-wrap: anywhere; white-space: pre-wrap;
 }
 .app-tooltip[hidden] { display: none; }
 
@@ -751,12 +758,13 @@ label:has(> .info-tip) > input:not([type=checkbox]):not([type=radio]), label:has
 .compare-dialog footer { justify-content:flex-end; padding-top:var(--space-6); }
 .compare-dialog footer .primary { color:#111; background:var(--accent); border-color:transparent; font-weight:600; }
 .file-browser { position:relative; }
-.favorite-popover { position:absolute; z-index:var(--z-overlay); top:36px; right:10px; width:min(420px,80vw); max-height:55vh; overflow:auto; padding:var(--space-4); border:1px solid var(--line); border-radius:var(--radius-md); background:var(--sheet); box-shadow:0 8px 28px #0006; }
+.favorite-popover { position:absolute; z-index:var(--z-overlay); top:36px; right:10px; width:min(560px,calc(100vw - 16px)); max-height:55vh; overflow:auto; padding:var(--space-4); border:1px solid var(--line); border-radius:var(--radius-md); background:var(--sheet); box-shadow:0 8px 28px #0006; }
 .favorite-popover > strong { display:block; padding:var(--space-3) var(--space-4) var(--space-4); font-size: var(--fs-sm); }
-.favorite-popover-row { width:100%; display:grid; grid-template-columns:18px minmax(70px,auto) minmax(0,1fr); align-items:center; gap:var(--space-4); min-height:32px; padding:var(--space-3) var(--space-4); text-align:left; border:0; border-top:1px solid var(--line); background:transparent; }
+.favorite-popover-row { width:100%; display:grid; grid-template-columns:18px minmax(0,1fr); align-items:center; gap:var(--space-4); min-height:32px; padding:var(--space-3) var(--space-4); text-align:left; border:0; border-top:1px solid var(--line); background:transparent; }
 .favorite-popover-row svg { width:15px; height:15px; color:var(--accent); }
-.favorite-popover-row span,.favorite-popover-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.favorite-popover-row small,.favorite-empty { color:var(--muted); font-size: var(--fs-xs); }
+/* Full path, wrapped at any character so long paths are never cut off. */
+.favorite-popover-row .favorite-path { min-width:0; overflow-wrap:anywhere; white-space:normal; font-size: var(--fs-sm); line-height:1.35; }
+.favorite-empty { color:var(--muted); font-size: var(--fs-xs); }
 @media (max-width: 760px) {
   .compare-heading { display:none; }
   .compare-row { grid-template-columns:20px minmax(0,1fr) 100px; }
