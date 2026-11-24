@@ -3,6 +3,7 @@ const { createDecipheriv, createHash, randomUUID } = require('node:crypto');
 const fs = require('node:fs/promises');
 const { createReadStream, createWriteStream, existsSync } = require('node:fs');
 const { execFile } = require('node:child_process');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { promisify } = require('node:util');
 const os = require('node:os');
 const { pipeline } = require('node:stream/promises');
@@ -22,12 +23,16 @@ const directoryCompare = require('./directory-compare.cjs');
 const { normalizedAuthQuestion, globalPattern, matchesGlobalPattern } = require('./auth-rules.cjs');
 const stateRules = require('./state-rules.cjs');
 const savedAuth = require('./saved-auth.cjs');
+const { createWindowRegistry, ownedBy, cascadeBounds } = require('./window-registry.cjs');
 const { bookmarkFolderName, bookmarkFolderNames, workspaceName } = stateRules;
 const expandHome = value => stateRules.expandHome(value, app.getPath('home'));
 const profile = input => stateRules.profile(input, app.getPath('home'));
 const snippetScope = context => stateRules.snippetScope(context, app.getPath('home'));
 
-let window;
+// Main windows. Each session belongs to the window that opened it; see window-registry.cjs.
+const mainWindows = createWindowRegistry();
+// The window whose IPC request is running, so dialogs open over it and new sessions belong to it.
+const requestContext = new AsyncLocalStorage();
 let preferencesWindow;
 let preferencesLaunch;
 let state;
@@ -57,7 +62,10 @@ function syncUpdateBusy() {
   updater?.setBusy(sessions.size > 0 || agentConnections > 0 || pendingWrites > 0 || queuedTransferBusy);
 }
 
+// Lists every main window shows. When one of them changes, the other windows reload it.
+const sharedStateKeys = ['profiles', 'bookmarkFolders', 'workspaces', 'connectionHistory'];
 async function updateState(change) {
+  const origin = requestContext.getStore()?.window;
   pendingWrites++;
   syncUpdateBusy();
   const operation = stateWrites.then(async () => {
@@ -66,8 +74,13 @@ async function updateState(change) {
     const temp = statePath() + '.tmp';
     await fs.writeFile(temp, JSON.stringify(next, null, 2), { mode: 0o600 });
     await fs.rename(temp, statePath());
+    const previous = state;
     state = next;
     agent?.reconcile();
+    const changed = sharedStateKeys.filter(key => JSON.stringify(previous?.[key]) !== JSON.stringify(next[key]));
+    if (changed.length) {
+      for (const target of mainWindows.list()) if (target !== origin) send(target, 'session', { id: '*', event: 'state-changed', value: changed });
+    }
   });
   stateWrites = operation.catch(() => {});
   try { return await operation; }
@@ -99,14 +112,35 @@ const preferencesMethods = new Set([
 ]);
 function handle(name, fn) {
   ipcMain.handle(name, async (event, ...args) => {
-    const trusted = (!name.startsWith('agent-') && event.sender === window?.webContents) ||
+    const trusted = (!name.startsWith('agent-') && mainWindows.owns(event.sender)) ||
       (event.sender === preferencesWindow?.webContents && preferencesMethods.has(name));
     if (!trusted || event.senderFrame !== event.sender.mainFrame) throw Error('Untrusted request.');
-    return fn(...args);
+    return requestContext.run({ window: BrowserWindow.fromWebContents(event.sender) }, () => fn(...args));
   });
 }
-function tell(id, event, value) {
-  if (window && !window.isDestroyed()) window.webContents.send('session', { id, event, value });
+function send(target, channel, payload) {
+  if (target && !target.isDestroyed()) target.webContents.send(channel, payload);
+}
+function broadcast(channel, payload) {
+  for (const target of mainWindows.list()) send(target, channel, payload);
+}
+// The main window that should show something with no window of its own (an agent tab, a menu command).
+function primaryWindow() {
+  return mainWindows.primary(BrowserWindow.getFocusedWindow());
+}
+// The main window that made the current request, or the primary one.
+function requestWindow() {
+  const caller = requestContext.getStore()?.window;
+  return mainWindows.has(caller) ? caller : primaryWindow();
+}
+// The parent for a dialog: the window that asked (Settings included), else the primary main window.
+function dialogParent() {
+  const caller = requestContext.getStore()?.window;
+  return caller && !caller.isDestroyed() ? caller : primaryWindow();
+}
+const ownerOf = id => sessions.get(id)?.owner || agentViews.get(id)?.owner;
+function tell(id, event, value, owner = ownerOf(id)) {
+  send(owner, 'session', { id, event, value });
 }
 
 const agentViewId = session => 'agent:' + session;
@@ -114,7 +148,7 @@ const agentViewId = session => 'agent:' + session;
 // output goes straight to the tab and never reaches the agent service.
 function onAgentView({ session, type, ...payload }) {
   const id = agentViewId(session);
-  if (type === 'open') agentViews.set(id, { session, shell: null, shellEnded: false });
+  if (type === 'open') agentViews.set(id, { session, shell: null, shellEnded: false, owner: primaryWindow() });
   const view = agentViews.get(id);
   if (!view) return;
   if (type === 'closed') {
@@ -122,17 +156,17 @@ function onAgentView({ session, type, ...payload }) {
     view.shell?.close();
     view.shell = null;
   }
-  tell(id, 'agent-' + type, payload);
+  tell(id, 'agent-' + type, payload, view.owner);
 }
 function openAgentShell(id, view, cols, rows) {
   if (view.shell || view.shellEnded || !agent) return;
   try {
     view.shell = agent.openShell(view.session, { cols, rows },
       data => tell(id, 'data', data),
-      () => { view.shell = null; view.shellEnded = true; tell(id, 'agent-shell-closed'); });
+      () => { view.shell = null; view.shellEnded = true; tell(id, 'agent-shell-closed', undefined, view.owner); });
   } catch {
     view.shellEnded = true;
-    tell(id, 'agent-shell-closed');
+    tell(id, 'agent-shell-closed', undefined, view.owner);
   }
 }
 
@@ -141,7 +175,6 @@ function favoriteScope(input) {
   return pathFavorites.scopeFor(profile(input));
 }
 function emitFavorites(scope) {
-  if (!window || window.isDestroyed()) return;
   const value = pathFavorites.list(state, scope);
   for (const [id, record] of sessions) {
     if (record.mode !== 'sftp') continue;
@@ -201,7 +234,7 @@ handle('remove-profile', id => updateState(next => {
   next.profiles = next.profiles.filter(item => item.id !== id);
 }));
 handle('choose-key', async () => {
-  const result = await dialog.showOpenDialog(window, { title: 'Choose SSH private key', defaultPath: path.join(app.getPath('home'), '.ssh'), properties: ['openFile', 'showHiddenFiles'] });
+  const result = await dialog.showOpenDialog(dialogParent(), { title: 'Choose SSH private key', defaultPath: path.join(app.getPath('home'), '.ssh'), properties: ['openFile', 'showHiddenFiles'] });
   return result.filePaths[0];
 });
 
@@ -212,7 +245,7 @@ handle('config-aliases', (configPath, names) => Array.isArray(names)
 handle('effective-config', input => openssh.effective(profile(input)));
 handle('inspect-identity-file', value => openssh.inspectIdentityFile(value));
 handle('choose-config', async () => {
-  const result = await dialog.showOpenDialog(window, {
+  const result = await dialog.showOpenDialog(dialogParent(), {
     title: 'Choose OpenSSH config', defaultPath: path.join(app.getPath('home'), '.ssh'),
     properties: ['openFile', 'showHiddenFiles'],
   });
@@ -345,7 +378,7 @@ handle('save-workspace', async (value, tabs, layout = {}) => {
 handle('confirm-remove-workspace', async id => {
   const saved = state.workspaces.find(item => item.id === id);
   if (!saved) return false;
-  const { response } = await dialog.showMessageBox(window, {
+  const { response } = await dialog.showMessageBox(dialogParent(), {
     type: 'warning', message: 'Remove saved workspace?', detail: saved.name,
     buttons: ['Cancel', 'Remove'], defaultId: 0, cancelId: 0,
   });
@@ -474,7 +507,7 @@ function openPreferences(page, legacyTerminal) {
   preferencesLaunch = { page, terminal: terminalSettings(legacyTerminal) };
   const panel = new BrowserWindow({
     width: 650, height: 510, useContentSize: true, resizable: false, minimizable: false,
-    maximizable: false, fullscreenable: false, parent: window, show: false,
+    maximizable: false, fullscreenable: false, parent: primaryWindow(), show: false,
     title: localized('Preferences'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true },
   });
@@ -488,7 +521,7 @@ function openPreferences(page, legacyTerminal) {
     if (input.meta && !input.shift && !input.control && !input.alt && keyOfInput(input) === 'w') { event.preventDefault(); panel.close(); return; }
     // Other app shortcuts pressed in Settings act on the main window, the same as the menu.
     const item = shortcutCatalog.find(entry => entry.scope === 'app' && !['preferences', 'close-tab'].includes(entry.id) && matchAccelerator(input, effectiveShortcut(entry.id)));
-    if (item) { event.preventDefault(); window?.webContents.send('command', item.id); window?.focus(); }
+    if (item) { event.preventDefault(); runCommand(primaryWindow(), item.id); }
   });
   panel.on('closed', () => {
     preferencesWindow = undefined;
@@ -517,14 +550,16 @@ handle('save-preferences', async ({ appearance, language, terminal } = {}) => {
   preferencesWindow?.setTitle(localized('Preferences'));
   const settings = { terminal: next, locale: activeLocale(), version: app.getVersion(),
     build: process.defaultApp ? 'development' : app.getVersion() };
-  window?.webContents.send('preferences-changed', settings);
+  broadcast('preferences-changed', settings);
   return settings;
 });
 handle('open-config-from-preferences', () => {
   preferencesWindow?.hide();
-  window.show();
-  window.focus();
-  window.webContents.send('command', 'open-config');
+  const target = primaryWindow();
+  if (!target) return;
+  target.show();
+  target.focus();
+  target.webContents.send('command', 'open-config');
 });
 
 const defaultFonts = ['Menlo', 'Monaco', 'SF Mono', 'Courier New'];
@@ -538,7 +573,7 @@ handle('application-info', () => ({
 }));
 function checkForUpdates() {
   if (sessions.size || agentConnections || pendingWrites) {
-    return dialog.showMessageBox(BrowserWindow.getFocusedWindow() || window, { type: 'info', message: localized('Close active sessions before updating.') }).then(() => {});
+    return dialog.showMessageBox(BrowserWindow.getFocusedWindow() || primaryWindow(), { type: 'info', message: localized('Close active sessions before updating.') }).then(() => {});
   }
   updater?.check();
 }
@@ -557,7 +592,7 @@ handle('remove-snippet', id => updateState(next => {
 handle('export-log', async (label, output) => {
   if (typeof output !== 'string' || output.length > 10_000_000) throw Error('Scrollback export is too large.');
   const name = label.replace(/[^a-z0-9가-힣_.-]+/gi, '-').slice(0, 80);
-  const result = await dialog.showSaveDialog(window, { defaultPath: (name || 'promeftp') + '.log' });
+  const result = await dialog.showSaveDialog(dialogParent(), { defaultPath: (name || 'promeftp') + '.log' });
   if (!result.canceled) await fs.writeFile(result.filePath, output, { mode: 0o600 });
 });
 const { authScope, replyKey, findGlobalRule } = savedAuth;
@@ -671,7 +706,7 @@ handle('move-auth-reply-to-global', async id => {
   const entry = state.authReplies?.[id];
   if (!(entry?.answer || entry?.ciphertext)) throw Error('Saved answer no longer exists.');
   const answer = await readAnswer(entry);
-  const result = await dialog.showMessageBox(BrowserWindow.getFocusedWindow() || window, {
+  const result = await dialog.showMessageBox(BrowserWindow.getFocusedWindow() || primaryWindow(), {
     type: 'warning', message: localized('Use this answer across all SSH and SFTP connections?'),
     detail: normalizedAuthQuestion(entry.prompt), buttons: [localized('Cancel'), localized('Move to Global')], defaultId: 0, cancelId: 0,
   });
@@ -722,7 +757,7 @@ handle('connect', async (id, input, mode, dimensions, rules = [], enteredPasswor
   if (typeof enteredPassword !== 'string' || Buffer.byteLength(enteredPassword) > 1023 || /[\r\n\0]/.test(enteredPassword)) {
     throw Error('Enter a single-line password up to 1023 bytes.');
   }
-  const record = { input: config, mode, generation: randomUUID(), triggerScope: mode !== 'sftp' ? snippetScope({ mode, input }) : undefined,
+  const record = { owner: requestWindow(), input: config, mode, generation: randomUUID(), triggerScope: mode !== 'sftp' ? snippetScope({ mode, input }) : undefined,
     prompts: new Map(), remembered: new Map(), autoAnswered: new Set(), hostKeyDialogs: new Map() };
   sessions.set(id, record);
   syncUpdateBusy();
@@ -801,7 +836,7 @@ handle('connect', async (id, input, mode, dimensions, rules = [], enteredPasswor
         sessions.delete(id);
         syncUpdateBusy();
       }
-      tell(id, event, value);
+      tell(id, event, value, record.owner);
     };
     record.connection = mode === 'local' ? openssh.startLocal(dimensions, notify)
       : await openssh.start(config, mode, dimensions, notify, rules, record.strictAuthScope || record.globalAuth ? 'ask' : '',
@@ -871,7 +906,8 @@ async function showHostKeyPrompt(id, record, config, value) {
   const controller = new AbortController();
   record.hostKeyDialogs.set(value.id, controller);
   try {
-    const result = await dialog.showMessageBox(window, {
+    const parent = record.owner && !record.owner.isDestroyed() ? record.owner : primaryWindow();
+    const result = await dialog.showMessageBox(parent, {
       type: 'warning', message: 'Verify SSH host key',
       detail: value.prompt.slice(0, 4000),
       buttons: ['Cancel', 'Trust and Connect'], defaultId: 0, cancelId: 0,
@@ -1020,7 +1056,7 @@ handle('context-menu', entries => new Promise(resolve => {
     ...(typeof item.checked === 'boolean' && { type: 'checkbox', checked: item.checked }),
     click: () => resolve(item.id),
   });
-  Menu.buildFromTemplate(items).popup({ window, callback: () => setImmediate(() => resolve(null)) });
+  Menu.buildFromTemplate(items).popup({ window: dialogParent(), callback: () => setImmediate(() => resolve(null)) });
 }));
 
 function sftpCall(channel, method, ...args) {
@@ -1111,14 +1147,14 @@ async function upload(channel, local, remote, depth = 0, signal, progress = () =
 }
 // Finds the answer for one file in the order of the design: the job's own policy, the batch answer, the saved setting.
 // Only a request from a queued job (saved: true) reads the saved setting; a direct edit upload always asks.
-async function conflictChoice(message, detail, policy, signal, { group, saved = false, total, index, source, destination, direction, name } = {}) {
+async function conflictChoice(message, detail, policy, signal, { group, saved = false, total, index, source, destination, direction, name, owner: preferred } = {}) {
   if (signal?.aborted) throw Error('Transfer cancelled.');
   const choice = conflicts.pickChoice({ jobPolicy: policy, groupChoice: decisionStore.get(group),
     savedPolicy: saved ? state.transferConflictPolicy : undefined });
   if (choice) return conflicts.resolveChoice(choice, source, destination);
-  if (!window || window.isDestroyed()) return 'skip';
+  const owner = mainWindows.has(preferred) ? preferred : requestWindow();
+  if (!owner) return 'skip';
   const id = randomUUID();
-  const owner = window;
   const request = () => new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(Error('Transfer cancelled.')); return; }
     const finish = answer => {
@@ -1160,7 +1196,7 @@ handle('transfer-resolve-conflict', async (id, answer) => {
     const covered = value.remember === true || (value.applyToGroup === true && group && otherGroup === group);
     if (otherId === id || !covered) continue;
     transferConflictRequests.get(otherId)?.(value.choice);
-    if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-conflict-dismissed', value: otherId });
+    broadcast('session', { id: '*', event: 'transfer-conflict-dismissed', value: otherId });
   }
   return true;
 });
@@ -1233,7 +1269,7 @@ async function download(channel, remote, local, replace = false, depth = 0, sign
 }
 // Answers given for a request ("apply to the remaining") last only while the request still has jobs in the queue.
 function queuedDecision(job) {
-  return { group: job.decisionGroup, saved: true, total: job.decisionTotal, index: job.decisionIndex };
+  return { group: job.decisionGroup, saved: true, total: job.decisionTotal, index: job.decisionIndex, owner: sessions.get(job.sessionId)?.owner };
 }
 // A decision group is handed over to the tracker with each job; answers are dropped only when the tracker finishes it.
 function trackDecisionJob(group, total, id) {
@@ -1248,7 +1284,7 @@ transferQueue = createTransferService({
   historyFile: path.join(app.getPath('userData'), 'sftp-transfer-history.jsonl'),
   emit: jobs => {
     releaseFinishedDecisions(jobs);
-    if (window && !window.isDestroyed()) window.webContents.send('session', { id: '*', event: 'transfer-jobs', value: jobs });
+    broadcast('session', { id: '*', event: 'transfer-jobs', value: jobs });
   },
   onBusy: busy => { queuedTransferBusy = busy; syncUpdateBusy(); },
   execute: async (job, signal, progress) => {
@@ -1391,6 +1427,7 @@ function comparisonAdapter(endpoint) {
   };
 }
 handle('compare-start', async (sourceInput, destinationInput, requestId) => {
+  const caller = requestWindow();
   const controller = new AbortController();
   if (requestId) comparisonControllers.set(requestId, controller);
   try {
@@ -1405,9 +1442,9 @@ handle('compare-start', async (sourceInput, destinationInput, requestId) => {
       signal: controller.signal,
       onProgress: count => {
         const now = Date.now();
-        if (!requestId || now - lastProgress < 120 || !window || window.isDestroyed()) return;
+        if (!requestId || now - lastProgress < 120) return;
         lastProgress = now;
-        window.webContents.send('session', { id: '*', event: 'compare-progress', value: { requestId, count } });
+        send(caller, 'session', { id: '*', event: 'compare-progress', value: { requestId, count } });
       },
     });
     if (controller.signal.aborted) throw Error('Comparison cancelled.');
@@ -1429,6 +1466,7 @@ handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', reques
   if (!plan || !Array.isArray(selectedPaths) || selectedPaths.length > 20_000) throw Error('Comparison plan expired. Compare again.');
   if (!conflicts.validPolicy(conflictPolicy)) throw Error('Invalid conflict policy.');
   for (const endpoint of [plan.source, plan.destination]) if (endpoint.kind === 'remote' && sessions.get(endpoint.sessionId)?.generation !== endpoint.generation) throw Error('Connection changed since comparison. Compare again.');
+  const caller = requestWindow();
   const selection = directoryCompare.selectedFilePlan(plan.entries, selectedPaths);
   const entries = selection.files;
   const controller = new AbortController();
@@ -1439,9 +1477,9 @@ handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', reques
     check = await directoryCompare.compare({ sourceRoot: plan.sourceRoot, destinationRoot: plan.destinationRoot, source: comparisonAdapter(plan.source), destination: comparisonAdapter(plan.destination), signal: controller.signal,
       onProgress: count => {
         const now = Date.now();
-        if (!requestId || now - lastProgress < 120 || !window || window.isDestroyed()) return;
+        if (!requestId || now - lastProgress < 120) return;
         lastProgress = now;
-        window.webContents.send('session', { id: '*', event: 'compare-progress', value: { requestId, count } });
+        send(caller, 'session', { id: '*', event: 'compare-progress', value: { requestId, count } });
       },
     });
     if (controller.signal.aborted) throw Error('Comparison cancelled.');
@@ -1498,7 +1536,7 @@ handle('compare-apply', async (id, selectedPaths, conflictPolicy = 'ask', reques
 });
 
 handle('local-directory', async directory => {
-  const result = await dialog.showOpenDialog(window, {
+  const result = await dialog.showOpenDialog(dialogParent(), {
     title: 'Choose local folder', defaultPath: directory || app.getPath('home'), properties: ['openDirectory'],
   });
   return result.filePaths[0];
@@ -1540,14 +1578,14 @@ handle('local-action', async (action, directory, name, nextName) => {
     })) throw Error('An item with that name already exists. Choose another name.');
     await fs.rename(target, destination);
   } else if (action === 'trash') {
-    const result = await dialog.showMessageBox(window, {
+    const result = await dialog.showMessageBox(dialogParent(), {
       type: 'warning', message: 'Move item to Trash?', detail: target,
       buttons: ['Cancel', 'Move to Trash'], defaultId: 0, cancelId: 0,
     });
     if (result.response === 1) await shell.trashItem(target);
   } else if (action === 'info') {
     const kind = attributes.isDirectory() ? 'Folder' : attributes.isFile() ? 'File' : 'Other';
-    await dialog.showMessageBox(window, {
+    await dialog.showMessageBox(dialogParent(), {
       type: 'info', message: name,
       detail: `${kind}\n${attributes.isFile() ? `Size: ${attributes.size} bytes\n` : ''}Permissions: ${(attributes.mode & 0o777).toString(8).padStart(3, '0')}\nModified: ${attributes.mtime.toLocaleString()}\nPath: ${target}`,
       buttons: ['OK'],
@@ -1649,14 +1687,14 @@ handle('sftp', async (id, action, target, name) => {
   }
   if (action === 'upload' || action === 'upload-local') {
     const locals = action === 'upload-local' ? [name] :
-      (await dialog.showOpenDialog(window, { properties: ['openFile', 'multiSelections'] })).filePaths;
+      (await dialog.showOpenDialog(dialogParent(), { properties: ['openFile', 'multiSelections'] })).filePaths;
     for (const local of locals) await enqueueTransfer({ operation: 'upload', sessionId: id, sourceName: 'Local', targetName: sessions.get(id)?.input.label || sessions.get(id)?.input.host, localPath: local, remotePath: path.posix.join(target, path.basename(local)), label: path.basename(local) });
   } else if (action === 'download-local') {
     const basename = path.posix.basename(target);
     if (!validName(basename)) throw Error('Invalid remote name.');
     await download(channel, target, path.join(name, basename));
   } else if (action === 'download') {
-    const result = await dialog.showSaveDialog(window, { defaultPath: path.posix.basename(target) });
+    const result = await dialog.showSaveDialog(dialogParent(), { defaultPath: path.posix.basename(target) });
     if (!result.canceled) await enqueueTransfer({ operation: 'download', sessionId: id, sourceName: sessions.get(id)?.input.label || sessions.get(id)?.input.host, targetName: 'Local', remotePath: target, localPath: result.filePath, label: path.posix.basename(target), replace: true, conflictPolicy: 'replace' });
   } else if (action === 'edit') {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'promeftp-edit-'));
@@ -1666,7 +1704,7 @@ handle('sftp', async (id, action, target, name) => {
       await download(channel, target, local, true);
       preserve = true;
       await promisify(execFile)('/usr/bin/open', ['-t', local]);
-      const decision = await dialog.showMessageBox(window, {
+      const decision = await dialog.showMessageBox(dialogParent(), {
         type: 'question', message: 'Save your changes in the editor before uploading.',
         detail: path.posix.basename(target),
         buttons: ['Keep Local Copy', 'Upload'], defaultId: 0, cancelId: 0,
@@ -1683,7 +1721,7 @@ handle('sftp', async (id, action, target, name) => {
       preserve = false;
     } catch (error) {
       if (!preserve) throw error;
-      await dialog.showMessageBox(window, {
+      await dialog.showMessageBox(dialogParent(), {
         type: 'warning', message: 'The remote file was not updated.',
         detail: `${error.message}\n\nYour edited copy is saved at:\n${local}`,
         buttons: ['Reveal Copy'],
@@ -1695,7 +1733,7 @@ handle('sftp', async (id, action, target, name) => {
   } else if (action === 'info') {
     const attributes = await sftpCall(channel, 'lstat', target);
     const kind = attributes.isDirectory() ? 'Folder' : attributes.isSymbolicLink() ? 'Link' : 'File';
-    await dialog.showMessageBox(window, {
+    await dialog.showMessageBox(dialogParent(), {
       type: 'info', message: path.posix.basename(target),
       detail: `${kind}\n${attributes.size !== undefined ? `Size: ${attributes.size} bytes\n` : ''}Permissions: ${(attributes.mode & 0o777).toString(8).padStart(3, '0')}\n${attributes.uid !== undefined ? `Owner: ${attributes.uid}:${attributes.gid}\n` : ''}Modified: ${attributes.mtime ? new Date(attributes.mtime * 1000).toLocaleString() : '—'}\nPath: ${target}`,
       buttons: ['OK'],
@@ -1706,7 +1744,7 @@ handle('sftp', async (id, action, target, name) => {
     else await sftpCall(channel, 'rename', target, path.posix.join(path.posix.dirname(target), name));
   } else if (action === 'delete') {
     const attributes = await sftpCall(channel, 'lstat', target);
-    const result = await dialog.showMessageBox(window, {
+    const result = await dialog.showMessageBox(dialogParent(), {
       type: 'warning', message: 'Delete remote item?', detail: target,
       buttons: ['Cancel', 'Delete'], defaultId: 0, cancelId: 0,
     });
@@ -1717,6 +1755,7 @@ handle('sftp', async (id, action, target, name) => {
 // Every shortcut the app acts on. The menu only displays these; before-input-event performs them, in every window.
 const shortcutCatalog = [
   { id: 'new-host', label: 'New Host', accel: 'CmdOrCtrl+N', scope: 'app', menu: 'File' },
+  { id: 'new-window', label: 'New Window', accel: 'CmdOrCtrl+Shift+N', scope: 'app', menu: 'File' },
   { id: 'local', label: 'Local Shell', accel: 'CmdOrCtrl+T', scope: 'app', menu: 'File' },
   { id: 'close-tab', label: 'Close Tab', accel: 'CmdOrCtrl+W', scope: 'app', menu: 'File' },
   { id: 'preferences', label: 'Preferences…', accel: 'CmdOrCtrl+,', scope: 'app', menu: 'App' },
@@ -1844,7 +1883,7 @@ function buildApplicationMenu() {
   const command = (label, accelerator, id) => {
     const shown = shortcutById.has(id) ? effectiveShortcut(id) : accelerator;
     return { label: localized(label), ...(shown && { accelerator: shown }), ...(shortcutById.has(id) && { registerAccelerator: false }),
-      click: () => window?.webContents.send('command', id) };
+      click: () => runCommand(primaryWindow(), id) };
   };
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: app.name, submenu: [
@@ -1878,7 +1917,7 @@ function approveAgentCommand(session, command, profile, client) {
   const resolvedUser = /^user (.+)$/m.exec(endpoint)?.[1] || profile.username || os.userInfo().username;
   const resolvedPort = /^port (.+)$/m.exec(endpoint)?.[1] || String(profile.port || 22);
   const jumpHost = /^proxyjump (.+)$/m.exec(endpoint)?.[1];
-  return dialog.showMessageBox(preferencesWindow || window, {
+  return dialog.showMessageBox(preferencesWindow || primaryWindow(), {
     type: 'warning', message: localized('Allow this SSH command once?'),
     detail: [String(client).replace(/[\p{C}]/gu, ''), `${localized('Bookmark')}: ${profile.label || profile.host}`,
       `${localized('SSH target')}: ${resolvedUser}@${resolvedHost}:${resolvedPort}`,
@@ -1905,7 +1944,7 @@ function confirmAgentHostKey({ profile: bookmark, host, fingerprint, previous, s
       const target = /^hostname (.+)$/m.exec(endpoint || '')?.[1] || bookmark.host;
       const user = /^user (.+)$/m.exec(endpoint || '')?.[1];
       const port = /^port (.+)$/m.exec(endpoint || '')?.[1] || String(bookmark.port || 22);
-      const { response } = await dialog.showMessageBox(preferencesWindow || window, {
+      const { response } = await dialog.showMessageBox(preferencesWindow || primaryWindow(), {
         type: 'warning', message: localized(previous ? 'The server host key changed' : 'Verify SSH host key'),
         detail: [`${localized('Bookmark')}: ${bookmark.label || bookmark.host}`,
           `${localized('SSH target')}: ${user ? user + '@' : ''}${target}:${port}`,
@@ -2014,7 +2053,7 @@ handle('agent-info', async () => {
 });
 handle('agent-enable', enabled => getAgent().enable(enabled));
 handle('agent-register', async name => {
-  const { response } = await dialog.showMessageBox(preferencesWindow || window, {
+  const { response } = await dialog.showMessageBox(preferencesWindow || primaryWindow(), {
     message: localized('Register an agent client?'), buttons: [localized('Cancel'), localized('Register')], defaultId: 0, cancelId: 0,
   });
   if (response !== 1) return null;
@@ -2059,7 +2098,7 @@ handle('agent-history', filter => historyOf(agent, filter));
 handle('agent-retention', days => getAgent().retention(days));
 handle('agent-export', async (filter, includePaths) => {
   const service = getAgent();
-  const { canceled, filePath } = await dialog.showSaveDialog(preferencesWindow || window, {
+  const { canceled, filePath } = await dialog.showSaveDialog(preferencesWindow || primaryWindow(), {
     defaultPath: 'PromeFTP-agent-activity.json', filters: [{ name: 'JSON', extensions: ['json'] }],
   });
   if (canceled) return;
@@ -2105,7 +2144,7 @@ handle('agent-skill', async options => {
   if (!options || !Object.hasOwn(agentTargets, options.target) || !['install', 'remove'].includes(options.action)) throw Error('Invalid skill request.');
   let base = app.getPath('home');
   if (options.project) {
-    const result = await dialog.showOpenDialog(preferencesWindow || window, {
+    const result = await dialog.showOpenDialog(preferencesWindow || primaryWindow(), {
       title: 'Choose skill project', properties: ['openDirectory', 'showHiddenFiles'],
     });
     if (result.canceled) return null;
@@ -2114,11 +2153,70 @@ handle('agent-skill', async options => {
   return installAgentSkill(options, base);
 });
 
+// Commands the main process runs itself; every other command goes to the renderer of `target`.
+function runCommand(target, id) {
+  if (id === 'new-window') { createMainWindow().catch(error => dialog.showErrorBox(app.name, error.message)); return; }
+  if (!target) return;
+  target.webContents.send('command', id);
+  target.focus();
+}
+// Ends the sessions and agent tabs of a closed main window, as closing each tab would.
+function closeWindowSessions(owner) {
+  for (const id of ownedBy(sessions, owner)) {
+    const record = sessions.get(id);
+    sessions.delete(id);
+    for (const pending of record.hostKeyDialogs.values()) pending.abort();
+    record.connection?.close();
+  }
+  for (const id of ownedBy(agentViews, owner)) {
+    const view = agentViews.get(id);
+    agentViews.delete(id);
+    view.shell?.close();
+    agent?.closeFromUser(view.session);
+  }
+  syncUpdateBusy();
+}
+async function createMainWindow() {
+  const from = primaryWindow();
+  const created = new BrowserWindow({
+    width: 1200, height: 760, minWidth: 800, minHeight: 530, ...cascadeBounds(from?.getBounds()),
+    titleBarStyle: 'hidden', trafficLightPosition: { x: 16, y: 17 },
+    transparent: true, backgroundColor: '#00000000',
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true },
+  });
+  mainWindows.add(created);
+  created.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  created.webContents.on('before-input-event', (event, input) => {
+    recordKey(input);
+    if (shortcutCapture || input.type !== 'keyDown') return;
+    const item = shortcutCatalog.find(entry => matchAccelerator(input, effectiveShortcut(entry.id)));
+    if (!item) return;
+    event.preventDefault();
+    runCommand(created, item.id);
+  });
+  created.webContents.on('will-navigate', event => event.preventDefault());
+  created.on('focus', () => mainWindows.focused(created));
+  created.on('close', () => { if (mainWindows.size <= 1) preferencesWindow?.close(); });
+  created.on('closed', () => {
+    mainWindows.remove(created);
+    closeWindowSessions(created);
+  });
+  await created.loadFile('index.html');
+  return created;
+}
+
+// Set once the first window has opened; a relaunch during startup does not open a second one.
+let windowsReady = false;
 app.setName('PromeFTP');
 if (!app.requestSingleInstanceLock()) app.quit();
+// Opening PromeFTP again while it runs opens another window.
 app.on('second-instance', () => {
-  if (window?.isMinimized()) window.restore();
-  window?.focus();
+  if (windowsReady) runCommand(undefined, 'new-window');
+  else primaryWindow()?.focus();
+});
+// Clicking the Dock icon with no window open opens one.
+app.on('activate', () => {
+  if (windowsReady && !mainWindows.size) runCommand(undefined, 'new-window');
 });
 app.whenReady().then(async () => {
   try {
@@ -2132,31 +2230,15 @@ app.whenReady().then(async () => {
   }
   await transferQueue.start();
   if (['system', 'light', 'dark'].includes(state.appearance)) nativeTheme.themeSource = state.appearance;
-  window = new BrowserWindow({
-    width: 1200, height: 760, minWidth: 800, minHeight: 530,
-    titleBarStyle: 'hidden', trafficLightPosition: { x: 16, y: 17 },
-    transparent: true, backgroundColor: '#00000000',
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true },
-  });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('before-input-event', (event, input) => {
-    recordKey(input);
-    if (shortcutCapture || input.type !== 'keyDown') return;
-    const item = shortcutCatalog.find(entry => matchAccelerator(input, effectiveShortcut(entry.id)));
-    if (!item) return;
-    event.preventDefault();
-    window.webContents.send('command', item.id);
-  });
-  window.webContents.on('will-navigate', event => event.preventDefault());
   const bridge = path.join(process.resourcesPath, '..', 'Frameworks', 'PromeFTPUpdate.node');
   if (existsSync(bridge)) {
     updater = require(bridge);
     updater.start();
   }
   buildApplicationMenu();
-  window.on('close', () => preferencesWindow?.close());
   await initializeAgent().catch(error => { agentStartupError = error.agentCode || 'Could not start agent integration.'; });
-  await window.loadFile('index.html');
+  await createMainWindow();
+  windowsReady = true;
   const refreshSkills = () => {
     for (const skill of Object.values(state.agent?.skills || {})) {
       if (skill.automatic) installAgentSkill({ ...skill, action: 'install' }, skill.base).catch(() => {});
