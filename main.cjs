@@ -23,6 +23,7 @@ const directoryCompare = require('./directory-compare.cjs');
 const { normalizedAuthQuestion, globalPattern, matchesGlobalPattern } = require('./auth-rules.cjs');
 const stateRules = require('./state-rules.cjs');
 const savedAuth = require('./saved-auth.cjs');
+const hostKeyTrust = require('./host-key-trust.cjs');
 const { createWindowRegistry, ownedBy, cascadeBounds } = require('./window-registry.cjs');
 const { bookmarkFolderName, bookmarkFolderNames, bookmarkOrder, workspaceName } = stateRules;
 const expandHome = value => stateRules.expandHome(value, app.getPath('home'));
@@ -920,9 +921,8 @@ async function showHostKeyPrompt(id, record, config, value) {
     const endpoint = await record.authEndpoint;
     if (endpoint) legacyScope = authScope(config, endpoint);
   }
-  const remember = () => updateState(next => {
-    (next.trustedHostKeys ??= {})[scope] = fingerprint;
-  }).catch(() => tell(id, 'auth-storage-error', 'Could not remember the verified host key.'));
+  const remember = (alwaysAccept = false) => updateState(next => hostKeyTrust.rememberHostKey(next, scope, fingerprint, alwaysAccept))
+    .catch(() => tell(id, 'auth-storage-error', 'Could not remember the verified host key.'));
   const pending = () => sessions.get(id) === record && record.prompts.has(value.id);
   function reply(answer) {
     if (!pending() || !record.connection?.answer(value.id, answer)) return false;
@@ -930,10 +930,13 @@ async function showHostKeyPrompt(id, record, config, value) {
     return true;
   }
   if (!pending()) return;
-  const saved = state.trustedHostKeys?.[scope];
-  if (scope && (saved === fingerprint || (!saved && legacyScope && state.trustedHostKeys?.[legacyScope] === fingerprint))) {
-    if (!saved) await remember();
-    if (reply(accept)) tell(id, 'auth-info', 'Verified saved host key');
+  const decision = hostKeyTrust.savedHostKeyDecision({ trustedHostKeys: state.trustedHostKeys, hostKeyAutoAccept: state.hostKeyAutoAccept,
+    scope, legacyScope, fingerprint });
+  if (decision) {
+    if (decision.save) await remember();
+    // A changed key accepted because the user chose not to be asked again is still reported in the tab.
+    if (reply(accept)) tell(id, 'auth-info', decision.kind === 'changed'
+      ? 'Accepted a changed host key: Don’t ask again is on for this server' : 'Verified saved host key');
     return;
   }
   const controller = new AbortController();
@@ -941,17 +944,17 @@ async function showHostKeyPrompt(id, record, config, value) {
   try {
     const parent = record.owner && !record.owner.isDestroyed() ? record.owner : primaryWindow();
     const result = await dialog.showMessageBox(parent, {
-      type: 'warning', message: 'Verify SSH host key',
+      type: 'warning', message: localized('Verify SSH host key'),
       detail: value.prompt.slice(0, 4000),
-      buttons: ['Cancel', 'Trust and Connect'], defaultId: 0, cancelId: 0,
-      ...(scope && { checkboxLabel: 'Don’t ask again for this verified key', checkboxChecked: false }),
+      buttons: [localized('Cancel'), localized('Trust and Connect')], defaultId: 0, cancelId: 0,
+      ...(scope && { checkboxLabel: localized('Don’t ask again for this server, even if its key changes'), checkboxChecked: false }),
       signal: controller.signal,
     });
     if (result.response !== 1) {
       reply('no');
       return;
     }
-    if (pending() && result.checkboxChecked && scope) await remember();
+    if (pending() && result.checkboxChecked && scope) await remember(true);
     reply(accept);
   } finally {
     record.hostKeyDialogs.delete(value.id);

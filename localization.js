@@ -654,7 +654,9 @@ PromeFTP will trust a server key it has not seen before without asking. If the f
 PromeFTP will also trust a key that differs from the one you trusted, without asking. A changed key is the main sign of a man-in-the-middle attack. Saved passwords and answers can be sent to the attacker automatically. You are responsible for this choice.|PromeFTP가 신뢰했던 키와 다른 키도 묻지 않고 신뢰합니다. 키가 바뀐 것은 중간자 공격의 대표적인 징후입니다. 저장된 비밀번호와 응답이 공격자에게 자동으로 전송될 수 있습니다. 이 선택의 책임은 사용자에게 있습니다.|PromeFTP は信頼済みのキーと異なるキーも確認せずに信頼します。キーの変更は中間者攻撃の主な兆候です。保存されたパスワードと応答が攻撃者に自動送信される可能性があります。この選択の責任はユーザーにあります。|PromeFTP 也将不经询问信任与您已信任密钥不同的密钥。密钥变更是中间人攻击的主要迹象。已保存的密码和应答可能会被自动发送给攻击者。此选择的责任由您承担。
 Trust changed host keys automatically?|바뀐 호스트 키를 자동으로 신뢰할까요?|変更されたホストキーを自動的に信頼しますか?|要自动信任已更改的主机密钥吗?
 Host key trusted automatically|호스트 키 자동 신뢰됨|ホストキーを自動的に信頼しました|已自动信任主机密钥
-Don’t ask again for this verified key|이 키를 다시 묻지 않기|確認済みのこの鍵については再確認しない|不再询问此已验证的密钥
+Don’t ask again for this server, even if its key changes|이 서버는 키가 바뀌어도 다시 묻지 않기|このサーバーは鍵が変わっても再確認しない|此服务器即使密钥更改也不再询问
+Verified saved host key|저장된 호스트 키를 확인했습니다|保存済みのホスト鍵を確認しました|已验证保存的主机密钥
+Accepted a changed host key: Don’t ask again is on for this server|바뀐 호스트 키를 승인했습니다: 이 서버는 다시 묻지 않기로 설정되어 있습니다|変更されたホスト鍵を承認しました: このサーバーは再確認しない設定です|已接受更改的主机密钥: 此服务器已设为不再询问
 All Groups|모든 그룹|すべてのグループ|所有分组
 Ungrouped|그룹 없음|グループなし|未分组
 Show tab group|탭 그룹 표시|タブグループを表示|显示标签组

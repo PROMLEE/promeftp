@@ -31,7 +31,7 @@ When OpenSSH repeats the same password prompt during one connection, PromeFTP re
 
 ## I see a host-key warning
 
-Confirm the current fingerprint with the server administrator. PromeFTP remembers approval by address, port, and fingerprint. A changed fingerprint requires fresh verification. See [Host keys and PAM](USAGE.md#host-keys-and-pam).
+Confirm the current fingerprint with the server administrator. PromeFTP remembers approval by address, port, and fingerprint, and a changed fingerprint requires fresh verification. If you chose **Don’t ask again for this server, even if its key changes**, a changed key is accepted without a dialog and the tab says so. See [Host keys and PAM](USAGE.md#host-keys-and-pam).
 
 ## SFTP connects but a file will not transfer
 
