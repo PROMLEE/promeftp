@@ -40,14 +40,69 @@ passwordInput.addEventListener('input', () => {
 
 const collapsedFolders = new Set();
 let bookmarkFolders = [];
+// The dragged order of folders and bookmarks, kept in the app state so it survives a restart and reaches every window.
+let bookmarkOrder = { folders: [], bookmarks: [] };
 let draggedBookmark;
+let draggedFolder;
 let draggedOrder;
+// Items named in `order` come first, in that order; the rest keep their given order after them.
+function sortByOrder(items, order, getId) {
+  const positions = new Map(order.map((id, index) => [id, index]));
+  const rank = item => positions.get(getId(item)) ?? order.length;
+  return items.map((item, index) => ({ item, index, position: rank(item) }))
+    .sort((a, b) => a.position - b.position || a.index - b.index).map(entry => entry.item);
+}
 function orderedItems(items, key, getId) {
   let order = [];
   try { order = JSON.parse(localStorage.getItem('list-order:' + key)) || []; } catch {}
-  const positions = new Map(order.map((id, index) => [id, index]));
-  return items.map((item, index) => ({ item, index, position: positions.get(getId(item)) ?? -1 }))
-    .sort((a, b) => a.position - b.position || a.index - b.index).map(entry => entry.item);
+  return sortByOrder(items, Array.isArray(order) ? order : [], getId);
+}
+// Where a dragged bookmark or folder lands next to `element`: before it over the upper half, after it over the lower half.
+function dropSide(event, element) {
+  const rect = element.getBoundingClientRect();
+  return event.clientY > rect.top + rect.height / 2 ? 'after' : 'before';
+}
+function clearDropMarkers() {
+  for (const element of document.querySelectorAll('.drop-before, .drop-after, .bookmark-drop')) element.classList.remove('drop-before', 'drop-after', 'bookmark-drop');
+}
+function showDropMarker(element, side) {
+  if (element.classList.contains('drop-' + side)) return;
+  clearDropMarkers();
+  element.classList.add('drop-' + side);
+}
+// `ids` with `id` taken out and put back before or after `targetId`, or at the end when there is no target.
+function reorderIds(ids, id, targetId, side) {
+  const list = ids.filter(item => item !== id);
+  const target = targetId === undefined ? -1 : list.indexOf(targetId);
+  list.splice(target < 0 ? list.length : target + (side === 'after' ? 1 : 0), 0, id);
+  return list;
+}
+const orderedFolderNames = () => sortByOrder(bookmarkFolders, bookmarkOrder.folders, name => name);
+const orderedBookmarkIds = () => sortByOrder(profiles, bookmarkOrder.bookmarks, entry => entry.id).map(entry => entry.id);
+async function saveBookmarkOrder(change) {
+  bookmarkOrder = { ...bookmarkOrder, ...change };
+  renderHosts();
+  await api['set-bookmark-order'](change);
+}
+// Puts a dragged bookmark into `folder` ('' for the top level), before or after `targetId` or last when there is none.
+async function placeBookmark(entry, folder, targetId, side) {
+  try {
+    const bookmarks = reorderIds(orderedBookmarkIds(), entry.id, targetId, side);
+    if ((entry.group || '') === folder) return await saveBookmarkOrder({ bookmarks });
+    bookmarkOrder = { ...bookmarkOrder, bookmarks };
+    await api['set-bookmark-order']({ bookmarks });
+    await moveBookmark(entry, folder);
+  } catch (error) {
+    showError(error);
+    await refresh().catch(() => {});
+  }
+}
+async function placeFolder(name, targetName, side) {
+  try { await saveBookmarkOrder({ folders: reorderIds(orderedFolderNames(), name, targetName, side) }); }
+  catch (error) {
+    showError(error);
+    await refresh().catch(() => {});
+  }
 }
 function bindOrderedRow(row, key, id, getItems, rerender, group = '') {
   row.draggable = true;
@@ -117,7 +172,7 @@ function bookmarkRow(entry) {
     ['Open SFTP Tab', () => start(entry, 'sftp')],
     null,
     ['Move to Bookmarks', () => moveBookmark(entry, ''), Boolean(entry.group)],
-    ...bookmarkFolders.map(folder => ['Move to ' + folder, () => moveBookmark(entry, folder), folder !== entry.group]),
+    ...orderedFolderNames().map(folder => ['Move to ' + folder, () => moveBookmark(entry, folder), folder !== entry.group]),
     null,
     ['Delete Bookmark', async () => {
       await api['remove-profile'](entry.id);
@@ -131,13 +186,31 @@ function bookmarkRow(entry) {
   open.addEventListener('dblclick', event => { event.preventDefault(); start(entry, 'ssh'); });
   row.append(open);
   row.addEventListener('contextmenu', event => { event.preventDefault(); menu(); });
+  row.draggable = true;
   row.addEventListener('dragstart', event => {
     draggedBookmark = entry;
     event.dataTransfer.setData('text/plain', 'PromeFTP bookmark');
     event.dataTransfer.effectAllowed = 'copyMove';
   });
-  row.addEventListener('dragend', clearLayoutDrag);
-  bindOrderedRow(row, 'bookmarks', entry.id, () => profiles, renderHosts, entry.group);
+  row.addEventListener('dragend', () => { clearLayoutDrag(); clearDropMarkers(); });
+  // Dropping a bookmark on another one puts it just above or below it, moving it into that folder when it came from elsewhere.
+  row.addEventListener('dragover', event => {
+    if (!draggedBookmark || draggedBookmark.id === entry.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    showDropMarker(row, dropSide(event, row));
+  });
+  row.addEventListener('drop', event => {
+    if (!draggedBookmark || draggedBookmark.id === entry.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const moving = draggedBookmark;
+    const side = dropSide(event, row);
+    clearLayoutDrag();
+    clearDropMarkers();
+    placeBookmark(moving, entry.group || '', entry.id, side);
+  });
   return row;
 }
 
@@ -181,25 +254,54 @@ function bookmarkFolder(name, entries, searching) {
   ]).catch(showError);
   header.append(toggle);
   header.addEventListener('contextmenu', event => { event.preventDefault(); menu(); });
-  bindOrderedRow(header, 'bookmark-folders', name, () => bookmarkFolders.map(id => ({ id })), renderHosts, 'folders');
-  children.append(...orderedItems(entries, 'bookmarks', entry => entry.id).map(bookmarkRow));
+  // The heading drags the whole folder. Over another folder's heading it lands above or below that folder; over an open
+  // folder's bookmarks it lands below the folder.
+  header.draggable = true;
+  header.addEventListener('dragstart', event => {
+    draggedFolder = name;
+    event.dataTransfer.setData('text/promeftp-folder', name);
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  header.addEventListener('dragend', () => { draggedFolder = undefined; clearDropMarkers(); });
+  const folderSide = event => header.contains(event.target) ? dropSide(event, header) : 'after';
+  children.append(...sortByOrder(entries, bookmarkOrder.bookmarks, entry => entry.id).map(bookmarkRow));
   folder.append(header, children);
   folder.addEventListener('dragover', event => {
+    if (draggedFolder) {
+      if (draggedFolder === name) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      showDropMarker(folder, folderSide(event));
+      return;
+    }
     if (!draggedBookmark || draggedBookmark.group === name) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    folder.classList.add('bookmark-drop');
+    if (!folder.classList.contains('bookmark-drop')) {
+      clearDropMarkers();
+      folder.classList.add('bookmark-drop');
+    }
   });
   folder.addEventListener('dragleave', event => {
-    if (!(event.relatedTarget instanceof Node) || !folder.contains(event.relatedTarget)) folder.classList.remove('bookmark-drop');
+    if (!(event.relatedTarget instanceof Node) || !folder.contains(event.relatedTarget)) folder.classList.remove('bookmark-drop', 'drop-before', 'drop-after');
   });
   folder.addEventListener('drop', event => {
+    if (draggedFolder) {
+      if (draggedFolder === name) return;
+      event.preventDefault();
+      const moving = draggedFolder;
+      const side = folderSide(event);
+      draggedFolder = undefined;
+      clearDropMarkers();
+      placeFolder(moving, name, side);
+      return;
+    }
     if (!draggedBookmark || draggedBookmark.group === name) return;
     event.preventDefault();
     const entry = draggedBookmark;
-    draggedBookmark = undefined;
-    folder.classList.remove('bookmark-drop');
-    moveBookmark(entry, name).catch(showError);
+    clearLayoutDrag();
+    clearDropMarkers();
+    placeBookmark(entry, name);
   });
   return folder;
 }
@@ -217,12 +319,28 @@ function renderHosts() {
       groups.get(entry.group).push(entry);
     }
   }
-  list.replaceChildren(...orderedItems([...groups]
+  // Order the folders before building them: the order is keyed by folder name.
+  list.replaceChildren(...sortByOrder([...groups], bookmarkOrder.folders, group => group[0])
     .filter(([name, entries]) => !query || entries.length || name.toLowerCase().includes(query))
-    .map(([name, entries]) => bookmarkFolder(name, entries, Boolean(query))), 'bookmark-folders', group => group[0]), ...orderedItems(root, 'bookmarks', entry => entry.id).map(bookmarkRow));
+    .map(([name, entries]) => bookmarkFolder(name, entries, Boolean(query))), ...sortByOrder(root, bookmarkOrder.bookmarks, entry => entry.id).map(bookmarkRow));
   byId('host-empty').hidden = list.childElementCount > 0;
   byId('host-empty').textContent = query ? 'No matching bookmarks' : 'No bookmarks';
 }
+
+// A bookmark dropped on the empty part of the list, below every folder and bookmark, goes to the top level, last.
+byId('hosts').addEventListener('dragover', event => {
+  if (event.target !== event.currentTarget || !draggedBookmark?.group) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+});
+byId('hosts').addEventListener('drop', event => {
+  if (event.target !== event.currentTarget || !draggedBookmark?.group) return;
+  event.preventDefault();
+  const entry = draggedBookmark;
+  clearLayoutDrag();
+  clearDropMarkers();
+  placeBookmark(entry, '');
+});
 
 function activate(id, focus = true) {
   active = id;
@@ -298,10 +416,26 @@ function edit(entry, intent = 'ssh', draft) {
   activate();
   renderHosts();
 }
+// Earlier versions kept the bookmark order in each window's localStorage only. It is carried into the app state once.
+// The old folder order is dropped: it was saved but never shown, so the folders stay in the order the user sees.
+async function adoptLegacyBookmarkOrder() {
+  let bookmarks;
+  try {
+    bookmarks = JSON.parse(localStorage.getItem('list-order:bookmarks'));
+    localStorage.removeItem('list-order:bookmarks');
+    localStorage.removeItem('list-order:bookmark-folders');
+  } catch { return; }
+  if (!Array.isArray(bookmarks) || !bookmarks.length || bookmarkOrder.bookmarks.length) return;
+  await api['set-bookmark-order']({ bookmarks });
+  bookmarkOrder = await api['bookmark-order']() || bookmarkOrder;
+}
 async function refresh() {
-  [profiles, bookmarkFolders] = await Promise.all([api.profiles(), api['bookmark-folders']()]);
+  let order;
+  [profiles, bookmarkFolders, order] = await Promise.all([api.profiles(), api['bookmark-folders'](), api['bookmark-order']()]);
+  bookmarkOrder = { folders: order?.folders || [], bookmarks: order?.bookmarks || [] };
   bookmarkFolders.sort((a, b) => a.localeCompare(b));
-  byId('bookmark-folder-names').replaceChildren(...bookmarkFolders.map(name => new Option(name, name)));
+  await adoptLegacyBookmarkOrder().catch(() => {});
+  byId('bookmark-folder-names').replaceChildren(...orderedFolderNames().map(name => new Option(name, name)));
   renderHosts();
 }
 function showError(error) {
@@ -1706,7 +1840,7 @@ function start(input, mode, options = {}) {
 // Another window saved bookmarks, workspaces or connection history: reload the lists this window shows.
 function applySharedStateChange(keys) {
   if (!Array.isArray(keys)) return;
-  if (keys.includes('profiles') || keys.includes('bookmarkFolders')) refresh().catch(showError);
+  if (['profiles', 'bookmarkFolders', 'bookmarkOrder'].some(key => keys.includes(key))) refresh().catch(showError);
   if (keys.includes('connectionHistory') && !historyPanel.hidden) refreshHistory();
   if (keys.includes('workspaces')) {
     refreshSidebarWorkspaces().catch(() => {});
@@ -2665,25 +2799,25 @@ function setupFiles(session) {
     const render = () => {
       popover.querySelectorAll('.favorite-popover-row').forEach(row => row.remove());
       favoriteFolders(side).forEach((item, index) => {
-        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true; row.title = item.path;
-        const name = document.createElement('span'); name.textContent = item.displayName;
-        const location = document.createElement('small'); location.textContent = item.path;
-        row.append(icon('folder'), name, location);
+        // Rows show only the full path; it wraps instead of being cut off, so no tooltip is needed.
+        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true;
+        const location = document.createElement('span'); location.className = 'favorite-path'; location.textContent = item.path;
+        row.append(icon('folder'), location);
         row.addEventListener('click', () => { navigate(side, item.path); popover.remove(); });
         row.addEventListener('contextmenu', async event => {
           event.preventDefault(); event.stopPropagation();
           try {
           const action = await api['context-menu']([
-            { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
+            { id: 'edit', label: t('Edit Path') },
             { id: 'up', label: t('Move Up'), enabled: index > 0 }, { id: 'down', label: t('Move Down'), enabled: index < favoriteFolders(side).length - 1 }, null,
             { id: 'remove', label: t('Remove from Favorites') },
           ]);
           if (!action) return;
           let values = favoriteFolders(side);
-          if (action === 'rename' || action === 'edit') {
-            const value = await askName(action === 'rename' ? item.displayName : item.path, action === 'rename' ? 'Rename Favorite' : 'Edit Favorite Path');
+          if (action === 'edit') {
+            const value = await askName(item.path, 'Edit Favorite Path');
             if (value === undefined) return;
-            await mutateFavorite(side, action === 'rename' ? { action, id: item.id, displayName: value } : { action: 'edit-path', id: item.id, path: value }); render(); return;
+            await mutateFavorite(side, { action: 'edit-path', id: item.id, path: value }); render(); return;
           } else if (action === 'remove') { await mutateFavorite(side, { action, id: item.id }); render(); return; }
           else if (action === 'up' || action === 'down') {
             const target = index + (action === 'up' ? -1 : 1); [values[index], values[target]] = [values[target], values[index]];
@@ -2707,7 +2841,7 @@ function setupFiles(session) {
     // The Favorites button can be hidden in the More menu; the popover then opens under the More button.
     const anchor = (side.favorites.offsetParent ? side.favorites : side.moreButton ?? side.favorites).getBoundingClientRect();
     popover.style.position = 'fixed'; popover.style.top = `${Math.min(anchor.bottom + 4, window.innerHeight - 300)}px`;
-    popover.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - 430))}px`; popover.style.right = 'auto';
+    popover.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - popover.offsetWidth - 8))}px`; popover.style.right = 'auto';
     const dismiss = event => { if (!popover.contains(event.target) && !side.favorites.contains(event.target)) { popover.remove(); document.removeEventListener('pointerdown', dismiss, true); } };
     setTimeout(() => document.addEventListener('pointerdown', dismiss, true), 0);
   }
@@ -2715,20 +2849,20 @@ function setupFiles(session) {
     try { await refreshFavorites(side); } catch (error) { status(session, error.message, true); return; }
     const items = favoriteFolders(side);
     if (!items.length) return showFavorites(side);
-    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: `${item.displayName} — ${item.path}` })));
+    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: item.path })));
     if (chosen === null) return;
     const item = items[chosen];
     const action = await api['context-menu']([
-      { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
+      { id: 'edit', label: t('Edit Path') },
       { id: 'up', label: t('Move Up'), enabled: chosen > 0 }, { id: 'down', label: t('Move Down'), enabled: chosen < items.length - 1 },
       null, { id: 'remove', label: t('Remove from Favorites') },
     ]);
     if (action === null) return;
     if (!action) return;
-    if (action === 'rename' || action === 'edit') {
-      const value = await askName(action === 'rename' ? item.displayName : item.path, action === 'rename' ? 'Rename Favorite' : 'Edit Favorite Path');
+    if (action === 'edit') {
+      const value = await askName(item.path, 'Edit Favorite Path');
       if (value === undefined) return;
-      await mutateFavorite(side, action === 'rename' ? { action, id: item.id, displayName: value } : { action: 'edit-path', id: item.id, path: value });
+      await mutateFavorite(side, { action: 'edit-path', id: item.id, path: value });
     } else if (action === 'remove') await mutateFavorite(side, { action, id: item.id });
     else if (action === 'up' || action === 'down') {
       const values = [...items], target = action === 'up' ? chosen - 1 : chosen + 1;
@@ -4161,11 +4295,15 @@ async function renderWorkspaces(list = byId('workspace-list')) {
     title.append(detail);
     row.append(title);
     const menu = () => chooseMenu([
-      ['Open Workspace', () => {
+      [t('Open Workspace'), () => {
         if (!sidebar) workspaceDialog.close();
         restoreWorkspace(saved);
       }],
-      ['Rename Workspace…', async () => {
+      [t('Update with Open Tabs…'), async () => {
+        const open = new Set(tabRecords.filter(tab => !tab.agent).map(tab => tab.element));
+        if (await updateWorkspace(saved, open) && !sidebar) workspaceMessage.textContent = t('Workspace updated');
+      }, tabRecords.some(tab => !tab.agent)],
+      [t('Rename Workspace…'), async () => {
         const name = await askName(saved.name, 'Rename workspace');
         if (name === undefined) return;
         await api['rename-workspace'](saved.id, name);
@@ -4173,7 +4311,7 @@ async function renderWorkspaces(list = byId('workspace-list')) {
         await refreshSidebarWorkspaces();
       }],
       null,
-      ['Delete Workspace', async () => {
+      [t('Delete Workspace'), async () => {
         if (!await api['confirm-remove-workspace'](saved.id)) return;
         await renderWorkspaces();
         await refreshSidebarWorkspaces();
@@ -4204,10 +4342,10 @@ const guideTopics = [
   ['Connect', 'Use + or ⌘N to enter a host. Choose SSH for a terminal or SFTP for file transfer. Select an OpenSSH alias to inherit its hostname, user, port, and identity.'],
   ['OpenSSH config', 'Use Edit directives to manage global options and Host sections in the app. Match sections are preserved. If a server offers a legacy key exchange, use Configure SSH and add the suggested KEX to that host only.'],
   ['SFTP files', 'Local files are on the left and remote files are on the right. Drag files between panels to transfer. Use the grip in a remote panel toolbar to move that panel within the same tab. Shift selects a range; ⌘ toggles individual items. Right-click files for actions. Remote-to-remote copies work between remote panels in the same tab.'],
-  ['File navigation', 'Use the star to save the current folder and the bookmark button to open saved paths. Local favorites are shared across local panels; remote favorites are saved per connection on this Mac. Use the clock for recent paths. Mouse Back and Forward navigate visited paths. Right-click any file or folder and choose Copy Path to copy its full path.'],
+  ['File navigation', 'Use the star to save the current folder and the bookmark button to open saved paths. Local favorites are shared across local panels; remote favorites are saved per server account (host, port and user) on this Mac and shared by every bookmark, window and workspace that connects to it. Use the clock for recent paths. Mouse Back and Forward navigate visited paths. Right-click any file or folder and choose Copy Path to copy its full path.'],
   ['Transfer queue and folder compare', 'Open Compare folders from a remote pane to compare the current folders. Select files and queue them for transfer. The Transfers drawer shows progress with pause, cancel, and retry controls. Reconnect this SFTP session before retrying interrupted work.'],
   ['Tabs and splits', 'Drag tabs to reorder, group them, or drop a terminal on an edge to split. Right-click a tab to rename it, set its tab color, duplicate it, group it, or close it. Right-click a group name to rename the group or set its separate group color. ⌘D splits right; ⌘⇧D splits down.'],
-  ['Workspaces', 'Save selected open tabs or entire tab groups, including split layout and SFTP paths. Opening a workspace adds its tabs and keeps current sessions open. Restored connections authenticate again. Right-click a saved workspace to rename or delete it.'],
+  ['Workspaces', 'Save selected open tabs or entire tab groups, including split layout and SFTP paths. Opening a workspace adds its tabs and keeps current sessions open. To update a saved workspace, right-click it and choose Update with Open Tabs, or save the selected tabs under its existing name. Restored connections authenticate again. Right-click a saved workspace to rename or delete it.'],
   ['PAM authentication', 'Keyboard-interactive questions appear in the session. Save reusable answers after a successful login, or create global exact-match and regular-expression rules in Preferences → Authentication. Saved values are plain text in the local profile file. Turn off automatic sending if you want to review answers first.'],
   ['Terminal triggers', 'Select recent terminal output and right-click to create a trigger. Choose notify, ask for input in the matching pane, or send a saved response when new output matches. Saved responses can contain multiple lines; each line is sent with Return. Enable or disable rules in the manager beside Snippets.'],
   ['Snippets and search', '⌘P opens snippets; choose one to paste it into the focused terminal. ⌘F searches terminal output. Return moves to the next match and Shift+Return moves to the previous match.'],
@@ -4252,6 +4390,43 @@ byId('rail-guide').addEventListener('click', () => {
 });
 byId('guide-search').addEventListener('input', filterGuide);
 byId('close-guide').addEventListener('click', () => guideDialog.close());
+// Serializes the chosen tab elements (in tab-strip order) with their split trees, folders and focused panes.
+function captureWorkspace(chosen) {
+  const entries = [];
+  const indices = new Map();
+  let activeIndex = null;
+  function encode(node) {
+    if (node.axis) return {
+      axis: node.axis, ratio: node.ratio,
+      first: encode(node.firstElementChild), second: encode(node.lastElementChild),
+    };
+    const session = sessions.get(node.dataset.session);
+    const { mode, input, localDirectory, remoteDirectory } = session;
+    const index = entries.length;
+    indices.set(session.id, index);
+    entries.push({ mode, input, local: session.fileLayout?.local?.directory ?? localDirectory, remote: remoteDirectory });
+    if (session.id === active) activeIndex = index;
+    return index;
+  }
+  const visibleTabs = new Map(tabRecords.map(tab => [tab.element, tab]));
+  const panes = [...tabGroups.querySelectorAll('.tab')].filter(element => chosen.has(element)).map(element => {
+    const { name, group, color, root, focus, fileLayout } = visibleTabs.get(element);
+    const tree = encode((fileLayout?.remotesRoot || root).firstElementChild);
+    const { groupColor } = visibleTabs.get(element);
+    return { name, group, groupColor, color, tree, focus: indices.get(focus), localRatio: fileLayout?.localRatio, localSplit: fileLayout?.localSplitState?.() };
+  });
+  return { entries, layout: { active: activeIndex, panes } };
+}
+// Overwrites a saved workspace with the chosen open tabs. The main process asks for confirmation first.
+async function updateWorkspace(saved, chosen) {
+  if (!chosen.size) throw Error(t('No tabs open'));
+  const { entries, layout } = captureWorkspace(chosen);
+  const updated = await api['update-workspace'](saved.id, entries, layout);
+  if (!updated) return false;
+  await renderWorkspaces();
+  await refreshSidebarWorkspaces();
+  return true;
+}
 workspaceForm.addEventListener('submit', async event => {
   event.preventDefault();
   const data = new FormData(workspaceForm);
@@ -4268,30 +4443,18 @@ workspaceForm.addEventListener('submit', async event => {
   const controls = [...workspaceForm.querySelectorAll('button')];
   for (const control of controls) control.disabled = true;
   try {
-    const entries = [];
-    const indices = new Map();
-    let activeIndex = null;
-    function encode(node) {
-      if (node.axis) return {
-        axis: node.axis, ratio: node.ratio,
-        first: encode(node.firstElementChild), second: encode(node.lastElementChild),
-      };
-      const session = sessions.get(node.dataset.session);
-      const { mode, input, localDirectory, remoteDirectory } = session;
-      const index = entries.length;
-      indices.set(session.id, index);
-      entries.push({ mode, input, local: session.fileLayout?.local?.directory ?? localDirectory, remote: remoteDirectory });
-      if (session.id === active) activeIndex = index;
-      return index;
+    // Saving under an existing name updates that workspace with the selected tabs instead of failing.
+    const key = String(name || '').trim().toLowerCase();
+    const existing = key && (await api.workspaces()).find(item => item.name.toLowerCase() === key);
+    if (existing) {
+      if (await updateWorkspace(existing, chosen)) {
+        workspaceForm.elements.name.value = '';
+        workspaceMessage.textContent = t('Workspace updated');
+      }
+      return;
     }
-    const visibleTabs = new Map(tabRecords.map(tab => [tab.element, tab]));
-    const panes = [...tabGroups.querySelectorAll('.tab')].filter(element => chosen.has(element)).map(element => {
-      const { name, group, color, root, focus, fileLayout } = visibleTabs.get(element);
-      const tree = encode((fileLayout?.remotesRoot || root).firstElementChild);
-      const { groupColor } = visibleTabs.get(element);
-      return { name, group, groupColor, color, tree, focus: indices.get(focus), localRatio: fileLayout?.localRatio, localSplit: fileLayout?.localSplitState?.() };
-    });
-    await api['save-workspace'](name, entries, { active: activeIndex, panes });
+    const { entries, layout } = captureWorkspace(chosen);
+    await api['save-workspace'](name, entries, layout);
     workspaceForm.elements.name.value = '';
     await renderWorkspaces();
     await refreshSidebarWorkspaces();

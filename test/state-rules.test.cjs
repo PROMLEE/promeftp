@@ -86,6 +86,15 @@ test('bookmarkFolderNames combines saved folders with the groups of profiles', (
   assert.deepEqual([...rules.bookmarkFolderNames({ profiles: [] })], []);
 });
 
+test('bookmarkOrder keeps known folders and bookmarks once, in the given order', () => {
+  const snapshot = { bookmarkFolders: ['Alpha', 'Beta'], profiles: [{ id: 'a', group: 'Gamma' }, { id: 'b' }] };
+  assert.deepEqual(rules.bookmarkOrder({ folders: ['Gamma', 'Gone', 'Alpha', 'Gamma', 3], bookmarks: ['b', 'x', 'a', 'b'] }, snapshot),
+    { folders: ['Gamma', 'Alpha'], bookmarks: ['b', 'a'] });
+  for (const value of [undefined, null, 'x', { folders: 'Alpha', bookmarks: {} }]) {
+    assert.deepEqual(rules.bookmarkOrder(value, snapshot), { folders: [], bookmarks: [] }, String(value));
+  }
+});
+
 test('workspaceName trims and uses the workspace message for invalid names', () => {
   assert.equal(rules.workspaceName(' Dev '), 'Dev');
   assert.equal(rules.workspaceName('w'.repeat(80)), 'w'.repeat(80));

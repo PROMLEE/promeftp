@@ -25,7 +25,7 @@ const stateRules = require('./state-rules.cjs');
 const savedAuth = require('./saved-auth.cjs');
 const hostKeyTrust = require('./host-key-trust.cjs');
 const { createWindowRegistry, ownedBy, cascadeBounds } = require('./window-registry.cjs');
-const { bookmarkFolderName, bookmarkFolderNames, workspaceName } = stateRules;
+const { bookmarkFolderName, bookmarkFolderNames, bookmarkOrder, workspaceName } = stateRules;
 const expandHome = value => stateRules.expandHome(value, app.getPath('home'));
 const profile = input => stateRules.profile(input, app.getPath('home'));
 const snippetScope = context => stateRules.snippetScope(context, app.getPath('home'));
@@ -64,7 +64,7 @@ function syncUpdateBusy() {
 }
 
 // Lists every main window shows. When one of them changes, the other windows reload it.
-const sharedStateKeys = ['profiles', 'bookmarkFolders', 'workspaces', 'connectionHistory'];
+const sharedStateKeys = ['profiles', 'bookmarkFolders', 'bookmarkOrder', 'workspaces', 'connectionHistory'];
 async function updateState(change) {
   const origin = requestContext.getStore()?.window;
   pendingWrites++;
@@ -207,11 +207,17 @@ handle('save-bookmark-folder', (value, previous) => updateState(next => {
   next.bookmarkFolders = [...names];
   if (previous) {
     for (const entry of next.profiles) if (entry.group === previous) entry.group = name;
+    // A renamed folder keeps its place in the dragged order.
+    if (next.bookmarkOrder?.folders) next.bookmarkOrder.folders = next.bookmarkOrder.folders.map(folder => folder === previous ? name : folder);
   }
 }));
 handle('remove-bookmark-folder', name => updateState(next => {
   next.bookmarkFolders = [...bookmarkFolderNames(next)].filter(folder => folder !== name);
   for (const entry of next.profiles) if (entry.group === name) entry.group = '';
+}));
+handle('bookmark-order', () => bookmarkOrder(state.bookmarkOrder, state));
+handle('set-bookmark-order', order => updateState(next => {
+  next.bookmarkOrder = bookmarkOrder({ ...next.bookmarkOrder, ...order }, next);
 }));
 handle('move-bookmark', (id, folder) => updateState(next => {
   if (folder && !bookmarkFolderNames(next).has(folder)) throw Error('Folder no longer exists.');
@@ -329,8 +335,8 @@ handle('rename-workspace', (id, value) => {
     current.name = name;
   });
 });
-handle('save-workspace', async (value, tabs, layout = {}) => {
-  const name = workspaceName(value);
+// Validates the tabs and split layout sent by a window and returns the saved fields (everything except id and name).
+function workspaceLayout(tabs, layout = {}) {
   if (!Array.isArray(tabs) || tabs.length < 1 || tabs.length > 20) throw Error('Open 1–20 sessions to save a layout.');
   const entries = tabs.map(({ mode, input, group, local, remote }) => {
     if (!['ssh', 'sftp', 'local'].includes(mode)) throw Error('Unsupported session type.');
@@ -362,12 +368,16 @@ handle('save-workspace', async (value, tabs, layout = {}) => {
       localSplit: stateRules.workspaceLocalSplit(item.localSplit) };
   });
   if (panes && seen.size !== entries.length) throw Error('Invalid workspace layout.');
-  const saved = {
-    id: randomUUID(), name, tabs: entries,
+  return {
+    tabs: entries,
     ...(panes && { panes }),
     active: index(layout.active), pinned: index(layout.pinned),
     ratio: Number.isFinite(layout.ratio) ? Math.max(0.28, Math.min(0.72, layout.ratio)) : 0.5,
   };
+}
+handle('save-workspace', async (value, tabs, layout = {}) => {
+  const name = workspaceName(value);
+  const saved = { id: randomUUID(), name, ...workspaceLayout(tabs, layout) };
   await updateState(next => {
     if (next.workspaces.some(item => item.name.toLowerCase() === name.toLowerCase())) {
       throw Error('A workspace already uses that name.');
@@ -375,6 +385,29 @@ handle('save-workspace', async (value, tabs, layout = {}) => {
     next.workspaces.push(saved);
   });
   return saved;
+});
+// Replaces a saved workspace's tabs and layout with what is open now. Keeps its id, name and place in the list.
+handle('update-workspace', async (id, tabs, layout = {}) => {
+  const saved = state.workspaces.find(item => item.id === id);
+  if (!saved) throw Error('Workspace no longer exists.');
+  const fields = workspaceLayout(tabs, layout);
+  const count = fields.panes?.length ?? fields.tabs.length;
+  const { response } = await dialog.showMessageBox(dialogParent(), {
+    type: 'question', message: localized('Update saved workspace with the current tabs?'),
+    detail: `${saved.name}\n${localized('Tabs to include')}: ${count}`,
+    buttons: [localized('Cancel'), localized('Update')], defaultId: 1, cancelId: 0,
+  });
+  if (response !== 1) return null;
+  let updated = null;
+  await updateState(next => {
+    const index = next.workspaces.findIndex(item => item.id === id);
+    if (index < 0) throw Error('Workspace no longer exists.');
+    const { panes, ...rest } = next.workspaces[index];
+    updated = { ...rest, ...fields };
+    if (!fields.panes) delete updated.panes;
+    next.workspaces[index] = updated;
+  });
+  return updated;
 });
 handle('confirm-remove-workspace', async id => {
   const saved = state.workspaces.find(item => item.id === id);

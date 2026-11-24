@@ -29,6 +29,19 @@ function bookmarkFolderName(value) {
   if (!name || name.length > 80) throw Error('Enter a folder name (1–80 characters).');
   return name;
 }
+// The order the user dragged bookmark folders and bookmarks into: { folders: [name], bookmarks: [id] }. Only strings
+// that still name a folder or a bookmark are kept, each once, so a stale or malformed value cannot grow the state file.
+// Folders and bookmarks missing from the lists are shown after the ordered ones (folders by name, bookmarks as saved).
+function bookmarkOrder(value, snapshot) {
+  const pick = (list, known) => {
+    const seen = new Set();
+    return (Array.isArray(list) ? list : []).filter(item => typeof item === 'string' && known.has(item) && !seen.has(item) && seen.add(item));
+  };
+  return {
+    folders: pick(value?.folders, bookmarkFolderNames(snapshot)),
+    bookmarks: pick(value?.bookmarks, new Set(snapshot.profiles.map(entry => entry.id))),
+  };
+}
 function workspaceName(value) {
   const name = typeof value === 'string' ? value.trim() : '';
   if (!name || name.length > 80) throw Error('Enter a workspace name (1–80 characters).');
@@ -75,4 +88,4 @@ function workspaceLocalSplit(value) {
   return { tree: cleaned, focus };
 }
 
-module.exports = { expandHome, profile, bookmarkFolderNames, bookmarkFolderName, workspaceName, snippetScope, workspaceLocalSplit, MAX_LOCAL_PANES };
+module.exports = { expandHome, profile, bookmarkFolderNames, bookmarkFolderName, bookmarkOrder, workspaceName, snippetScope, workspaceLocalSplit, MAX_LOCAL_PANES };
