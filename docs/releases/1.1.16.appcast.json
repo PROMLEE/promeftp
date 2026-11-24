@@ -1,0 +1,15 @@
+{
+  "heading": "Reorder bookmarks and folders, and update saved workspaces",
+  "summary": "Drag bookmark folders and bookmarks into the order you want, and overwrite a saved workspace with the tabs you have open.",
+  "changes": [
+    [
+      "Reorder bookmarks",
+      "Drag a folder heading or a bookmark above or below another. The order is kept after a restart and in every window."
+    ],
+    [
+      "Update a workspace",
+      "Use Update with Open Tabs… on a saved workspace to replace it with the tabs open in this window."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
