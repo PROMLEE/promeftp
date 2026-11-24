@@ -49,7 +49,7 @@ Upgrading from the beta? Use **PromeFTP → Check for Updates…** after closing
 | ⌘N / ⌘T | New host / local login shell |
 | ⌘⇧N | New window (each window keeps its own tabs) |
 | ⌘D / ⌘⇧D | Split terminal right / down |
-| ⌘P / ⌘F | Open snippets / find terminal output |
+| ⌘P / ⌘F | Open snippets / find terminal output or filter the SFTP folder on screen |
 | ⌘K | Clear the buffer and keep the cursor line |
 | ⌘, | Open Preferences |
 

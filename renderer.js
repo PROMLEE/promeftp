@@ -2273,6 +2273,141 @@ function makeFileLayout(root, directory, ratio) {
   return layout;
 }
 
+// The file pane toolbars: which buttons show and in what order. One layout per pane kind (local, remote),
+// shared by every pane. It lives in localStorage, so other windows pick a change up from the storage event.
+const toolbarStorageKey = 'sftp-toolbar';
+const fileToolbarSides = new Set();
+const toolbarToggles = new Set(['filter', 'tree', 'hidden-files']);
+function toolbarKind(side) { return side.side === 'local' ? 'local' : 'remote'; }
+function savedToolbarLayouts() {
+  try {
+    const value = JSON.parse(localStorage.getItem(toolbarStorageKey));
+    return value && typeof value === 'object' ? value : {};
+  } catch { return {}; }
+}
+function toolbarLayout(kind) { return normalizeToolbarLayout(kind, savedToolbarLayouts()[kind]); }
+// layout undefined restores the defaults for that kind.
+function saveToolbarLayout(kind, layout) {
+  const all = savedToolbarLayouts();
+  if (layout) all[kind] = { order: layout.order, hidden: layout.hidden };
+  else delete all[kind];
+  try { localStorage.setItem(toolbarStorageKey, JSON.stringify(all)); } catch {}
+  applyAllToolbars();
+  if (toolbarDialog.open) renderToolbarDialog();
+}
+// Puts each button of a pane in the saved order and hides the ones the user hid. A hidden button stays in
+// the DOM (display: none) so its state and handlers keep working, and the More menu clicks it.
+function applyToolbar(side) {
+  fileToolbarSides.add(side);
+  const kind = toolbarKind(side);
+  const layout = toolbarLayout(kind);
+  const hidden = new Set(layout.hidden);
+  for (const id of layout.order) {
+    const control = side.toolbarControls.get(id);
+    const group = toolbarItem(kind, id)?.group;
+    const container = group === 'tools' ? side.tools : group === 'address' ? side.address : side.leading;
+    if (!control || !container) continue;
+    container.insertBefore(control, group === 'tools' && side.moreButton?.parentNode === container ? side.moreButton : null);
+    control.classList.toggle('toolbar-user-hidden', hidden.has(id));
+  }
+}
+function applyAllToolbars() {
+  for (const side of fileToolbarSides) {
+    if (side.element.isConnected) applyToolbar(side);
+    else fileToolbarSides.delete(side);
+  }
+}
+addEventListener('storage', event => { if (event.key === toolbarStorageKey || event.key === null) applyAllToolbars(); });
+function toolbarControlEnabled(control) {
+  return !control.disabled && !control.inert && !control.closest('[inert]');
+}
+// The More (…) button: the hidden buttons of this pane, then Customize.
+function showToolbarMore(side) {
+  applyToolbar(side);
+  const kind = toolbarKind(side);
+  const entries = toolbarLayout(kind).hidden.filter(id => side.toolbarControls.has(id)).map(id => {
+    const control = side.toolbarControls.get(id);
+    const toggle = toolbarToggles.has(id);
+    return [toggle ? t(toolbarItem(kind, id).label) : control.getAttribute('aria-label') || control.title,
+      () => control.click(), toolbarControlEnabled(control), toggle ? control.getAttribute('aria-pressed') === 'true' : undefined];
+  });
+  if (entries.length) entries.push(null);
+  entries.push([t('Customize Toolbar…'), () => openToolbarDialog(kind), true]);
+  return chooseMenu(entries);
+}
+// Right-clicking a toolbar: a checkmark per button to show or hide it.
+function showToolbarChoices(side) {
+  const kind = toolbarKind(side);
+  const layout = toolbarLayout(kind);
+  return chooseMenu([
+    ...layout.order.filter(id => side.toolbarControls.has(id)).map(id => {
+      const shown = !layout.hidden.includes(id);
+      return [t(toolbarItem(kind, id).label), () => saveToolbarLayout(kind, setToolbarItemHidden(toolbarLayout(kind), id, shown)), true, shown];
+    }),
+    null,
+    [t('Customize Toolbar…'), () => openToolbarDialog(kind), true],
+    [t('Restore Default Toolbar'), () => saveToolbarLayout(kind, undefined), true],
+  ]);
+}
+const toolbarDialog = byId('toolbar-dialog');
+let toolbarDialogKind = 'remote';
+function openToolbarDialog(kind) {
+  toolbarDialogKind = kind;
+  renderToolbarDialog();
+  if (!toolbarDialog.open) toolbarDialog.showModal();
+}
+function renderToolbarDialog() {
+  const kind = toolbarDialogKind;
+  byId('toolbar-dialog-title').textContent = t(kind === 'local' ? 'Local Pane Buttons' : 'Remote Pane Buttons');
+  const layout = toolbarLayout(kind);
+  const list = byId('toolbar-items');
+  const focused = document.activeElement?.closest?.('[data-toolbar-row]');
+  const focusRow = focused?.dataset.toolbarRow;
+  const focusPart = document.activeElement?.dataset?.toolbarPart;
+  const groupNames = kind === 'local' ? { tools: 'Title bar', address: 'Path bar' }
+    : { leading: 'Left of the name', tools: 'Right of the name', address: 'Path bar' };
+  list.replaceChildren();
+  for (const [group, name] of Object.entries(groupNames)) {
+    const ids = layout.order.filter(id => toolbarItem(kind, id).group === group);
+    const heading = document.createElement('h3');
+    heading.textContent = t(name);
+    list.append(heading);
+    ids.forEach((id, index) => {
+      const row = document.createElement('div');
+      row.className = 'toolbar-item-row';
+      row.dataset.toolbarRow = id;
+      const label = document.createElement('label');
+      label.className = 'settings-check';
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = !layout.hidden.includes(id);
+      check.dataset.toolbarPart = 'check';
+      check.addEventListener('change', () => saveToolbarLayout(kind, setToolbarItemHidden(toolbarLayout(kind), id, !check.checked)));
+      const text = document.createElement('span');
+      text.textContent = t(toolbarItem(kind, id).label);
+      label.append(check, text);
+      const move = direction => saveToolbarLayout(kind, { ...toolbarLayout(kind), order: moveToolbarItem(kind, toolbarLayout(kind).order, id, direction) });
+      const up = iconButton('up', 'Move Up', () => move(-1));
+      up.dataset.toolbarPart = 'up';
+      up.disabled = index === 0;
+      const down = iconButton('down', 'Move Down', () => move(1));
+      down.dataset.toolbarPart = 'down';
+      down.disabled = index === ids.length - 1;
+      row.append(label, up, down);
+      list.append(row);
+    });
+  }
+  // Moving a row re-renders the list: keep the keyboard on the same control of the same row.
+  if (focusRow) {
+    const row = list.querySelector(`[data-toolbar-row="${CSS.escape(focusRow)}"]`);
+    const target = row?.querySelector(`[data-toolbar-part="${focusPart}"]:not(:disabled)`) || row?.querySelector('[data-toolbar-part]:not(:disabled)');
+    target?.focus();
+  }
+}
+byId('reset-toolbar').addEventListener('click', () => saveToolbarLayout(toolbarDialogKind, undefined));
+byId('done-toolbar').addEventListener('click', () => toolbarDialog.close());
+byId('close-toolbar-dialog').addEventListener('click', () => toolbarDialog.close());
+
 function setupFiles(session) {
   const layout = session.fileLayout ??= makeFileLayout(session.pane, session.localDirectory);
   const first = !layout.local;
@@ -2341,6 +2476,23 @@ function setupFiles(session) {
     const history = iconButton('history', 'Recent folders', () => showHistory(entry));
     history.disabled = true;
     address.append(location, pathBar, favoriteToggle, favorites, history);
+    // The name filter for the folder on screen (⌘F). It hides rows only; the folder is not listed again.
+    const filterBar = document.createElement('form');
+    filterBar.className = 'file-filter';
+    filterBar.hidden = true;
+    const filterField = document.createElement('input');
+    filterField.type = 'search';
+    filterField.placeholder = t('Filter by name');
+    filterField.title = t('Words, or a pattern such as *.log');
+    filterField.setAttribute('aria-label', t('Filter by name'));
+    filterField.spellcheck = false;
+    const filterCount = document.createElement('span');
+    filterCount.className = 'file-filter-count';
+    filterCount.setAttribute('role', 'status');
+    const filterClose = iconButton('close', 'Close filter', () => closeFilter(entry));
+    filterBar.append(icon('search'), filterField, filterCount, filterClose);
+    const filterButton = iconButton('search', 'Filter by name', () => toggleFilter(entry));
+    filterButton.setAttribute('aria-pressed', 'false');
     const sortBar = document.createElement('div');
     sortBar.className = 'file-sort';
     const sortName = button(t('Name'), () => setSort(entry, 'name'));
@@ -2355,6 +2507,7 @@ function setupFiles(session) {
     sortBar.append(sortName, sortSize, sortModified, sortType);
     const tools = document.createElement('div');
     tools.className = 'file-tools';
+    tools.append(filterButton);
     const body = document.createElement('div');
     body.className = 'file-browser-body';
     const tree = document.createElement('div');
@@ -2368,14 +2521,29 @@ function setupFiles(session) {
     header.className = 'file-heading';
     header.append(heading, tools);
     body.append(tree, items);
-    element.append(header, address, sortBar, body);
+    element.append(header, address, filterBar, sortBar, body);
     // Local panes are placed by the caller, inside .local-file-panes (one, or two when split).
     if (side !== 'local') (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
     const entry = {
       side, element, address, location, pathBar, pathSpace, breadcrumbs, favoriteToggle, favorites, history, tools, items, body, tree,
       folders: new Map(), expanded: new Set(['/']), entries: [], selected: new Set(), sortKey: 'name', sortDescending: false,
       sortName, sortSize, sortModified, sortType, pathHistory: [], pathHistoryIndex: -1, pendingPathIndex: undefined, localRequest: 0,
+      filterBar, filterField, filterCount, filterButton, filterText: '',
+      toolbarControls: new Map([['filter', filterButton], ['favorite', favoriteToggle], ['favorites', favorites], ['recent', history]]),
     };
+    filterBar.addEventListener('submit', event => event.preventDefault());
+    filterField.addEventListener('input', () => applyFilter(entry));
+    filterField.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (filterField.value) { filterField.value = ''; applyFilter(entry); }
+        else closeFilter(entry);
+      } else if (event.key === 'ArrowDown' || event.key === 'Enter') {
+        const first = items.querySelector('.file-row:not(.file-parent) .file-name');
+        if (first) { event.preventDefault(); first.focus(); }
+      }
+    });
     element._fileSide = entry;
     items.addEventListener('click', event => {
       if (event.target.closest('.file-name') || !entry.selected.size) return;
@@ -2426,8 +2594,11 @@ function setupFiles(session) {
   dragPane.addEventListener('dragend', clearLayoutDrag);
   const transfers = iconButton('transfer', 'Transfers', toggleTransferDrawer);
   transfers.classList.add('transfer-toolbar-button');
-  leading.append(dragPane, activity, transfers, iconButton('compare', 'Compare folders', () => showFolderCompare(session, layout, remote)));
+  const compare = iconButton('compare', 'Compare folders', () => showFolderCompare(session, layout, remote));
+  leading.append(dragPane, activity, transfers, compare);
   remote.element.querySelector('.file-heading').prepend(leading);
+  remote.leading = leading;
+  remote.toolbarControls.set('transfers', transfers).set('compare', compare);
   let busy = false;
   let localRequest = 0;
   const favoritesCache = new Map();
@@ -2533,7 +2704,8 @@ function setupFiles(session) {
       if (!favoriteFolders(side).length) { const empty = document.createElement('small'); empty.className = 'favorite-empty'; empty.textContent = t('No favorite folders'); popover.append(empty); }
     };
     render(); side.element.append(popover);
-    const anchor = side.favorites.getBoundingClientRect();
+    // The Favorites button can be hidden in the More menu; the popover then opens under the More button.
+    const anchor = (side.favorites.offsetParent ? side.favorites : side.moreButton ?? side.favorites).getBoundingClientRect();
     popover.style.position = 'fixed'; popover.style.top = `${Math.min(anchor.bottom + 4, window.innerHeight - 300)}px`;
     popover.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - 430))}px`; popover.style.right = 'auto';
     const dismiss = event => { if (!popover.contains(event.target) && !side.favorites.contains(event.target)) { popover.remove(); document.removeEventListener('pointerdown', dismiss, true); } };
@@ -2587,6 +2759,12 @@ function setupFiles(session) {
   }
   function showPath(side, directory) {
     if (!favoritesCache.has(side)) refreshFavorites(side).catch(() => {});
+    // A filter belongs to one folder: opening another folder empties it. The bar stays open for the next one.
+    if (side.filterDirectory !== directory) {
+      side.filterDirectory = directory;
+      side.filterField.value = '';
+      side.filterText = '';
+    }
     if (side.pendingPathIndex !== undefined && side.pathHistory[side.pendingPathIndex] === directory) {
       side.pathHistoryIndex = side.pendingPathIndex;
       side.pendingPathIndex = undefined;
@@ -2658,7 +2836,7 @@ function setupFiles(session) {
       parent = child;
     }
     side.folders.set(directory, {
-      children: side.entries.filter(entry => entry.directory && !entry.link).map(entry => ({
+      children: (side.allEntries ?? side.entries).filter(entry => entry.directory && !entry.link).map(entry => ({
         name: entry.name, path: itemPath(side, entry.name),
       })),
     });
@@ -2839,13 +3017,50 @@ function setupFiles(session) {
   function setSort(side, key) {
     if (side.sortKey === key) side.sortDescending = !side.sortDescending;
     else { side.sortKey = key; side.sortDescending = key === 'modifiedAt'; }
-    render(side, side.entries);
+    render(side, side.allEntries ?? side.entries);
+  }
+
+  // The More button and the right-click menu of a pane's toolbar, then the saved layout.
+  function finishToolbar(side) {
+    side.moreButton = iconButton('more', 'More actions', () => showToolbarMore(side).catch(error => status(session, error.message, true)));
+    // Usable while connecting, so the toolbar can be changed at any time; the menu disables what cannot run yet.
+    side.moreButton.dataset.connectionAction = 'true';
+    side.tools.insertBefore(side.moreButton, side.closeControl ?? null);
+    side.element.querySelector('.file-heading').addEventListener('contextmenu', event => {
+      event.preventDefault();
+      showToolbarChoices(side).catch(error => status(session, error.message, true));
+    });
+    applyToolbar(side);
+  }
+  function openFilter(side) {
+    side.filterBar.hidden = false;
+    side.filterButton.setAttribute('aria-pressed', 'true');
+    side.filterField.focus();
+    side.filterField.select();
+  }
+  function closeFilter(side) {
+    side.filterBar.hidden = true;
+    side.filterButton.setAttribute('aria-pressed', 'false');
+    if (side.filterField.value || side.filterText) { side.filterField.value = ''; applyFilter(side); }
+    (side.items.querySelector('.file-row.selected .file-name') || side.items.querySelector('.file-row:not(.file-parent) .file-name') || side.pathSpace).focus();
+  }
+  function toggleFilter(side) {
+    if (side.filterBar.hidden) openFilter(side);
+    else closeFilter(side);
+  }
+  // Re-renders the folder with the current filter and keeps the selected items that still show.
+  function applyFilter(side) {
+    side.filterText = side.filterField.value;
+    if (!side.allEntries) return;
+    const keep = [...side.selected];
+    render(side, side.allEntries);
+    if (keep.length) selectNames(side, keep);
   }
 
   function render(side, entries) {
     side.selected.clear();
     side.selectionAnchor = undefined;
-    side.entries = entries.sort((a, b) => {
+    side.allEntries = entries.sort((a, b) => {
       const folderOrder = Number(Boolean(b.directory)) - Number(Boolean(a.directory));
       if (folderOrder) return folderOrder;
       const value = side.sortKey === 'modifiedAt' ? ((a.modifiedAt ?? 0) - (b.modifiedAt ?? 0))
@@ -2854,6 +3069,11 @@ function setupFiles(session) {
         : (fileNameOrder.compare(a.name, b.name) || a.name.localeCompare(b.name));
       return side.sortDescending ? -value : value;
     });
+    const filtering = Boolean(side.filterText?.trim());
+    const matches = fileFilterMatcher(side.filterText || '');
+    side.entries = filtering ? side.allEntries.filter(entry => matches(entry.name)) : side.allEntries;
+    side.filterCount.textContent = filtering ? `${side.entries.length} / ${side.allEntries.length}` : '';
+    side.element.classList.toggle('filtering', filtering);
     side.sortName.setAttribute('aria-sort', side.sortKey === 'name' ? (side.sortDescending ? 'descending' : 'ascending') : 'none');
     side.sortSize.setAttribute('aria-sort', side.sortKey === 'size' ? (side.sortDescending ? 'descending' : 'ascending') : 'none');
     side.sortModified.setAttribute('aria-sort', side.sortKey === 'modifiedAt' ? (side.sortDescending ? 'descending' : 'ascending') : 'none');
@@ -2881,6 +3101,11 @@ function setupFiles(session) {
       const empty = document.createElement('p');
       empty.className = 'file-empty';
       empty.textContent = t('Empty folder');
+      side.items.append(empty);
+    } else if (!side.entries.length) {
+      const empty = document.createElement('p');
+      empty.className = 'file-empty';
+      empty.textContent = t('No items match the filter');
       side.items.append(empty);
     }
     for (const entry of side.entries) {
@@ -3047,10 +3272,12 @@ function setupFiles(session) {
       if (!side.tree.hidden) syncTree(side);
     });
     tree.setAttribute('aria-pressed', 'false');
-    side.tools.append(tree, iconButton('refresh', 'Refresh', () => {
+    const refresh = iconButton('refresh', 'Refresh', () => {
       side.folders.clear();
       navigate(side, currentDirectory(side));
-    }));
+    });
+    side.tools.append(tree, refresh);
+    side.toolbarControls.set('tree', tree).set('refresh', refresh);
     const canDrop = () => {
       const source = layout.drag;
       if (!source || source.side === side || layout.transferring) return false;
@@ -3122,6 +3349,9 @@ function setupFiles(session) {
     side.split = iconButton('splitRight', 'Split local pane right', () => splitLocal(side, 'row'));
     side.splitDown = iconButton('splitDown', 'Split local pane down', () => splitLocal(side, 'column'));
     side.tools.append(hidden, newLocalFolder, send, side.split, side.splitDown);
+    side.toolbarControls.set('hidden-files', hidden).set('new-folder', newLocalFolder).set('upload', send)
+      .set('split-right', side.split).set('split-down', side.splitDown).set('choose-folder', chooseLocal);
+    finishToolbar(side);
     // Right-clicking the empty part of a local pane offers the split directions.
     side.items.addEventListener('contextmenu', event => {
       if (event.target.closest('.file-row')) return;
@@ -3206,21 +3436,30 @@ function setupFiles(session) {
     if (scope === 'local') for (const pane of layout.locals) { favoritesCache.set(pane, items || []); syncFavoriteControl(pane); }
     else { favoritesCache.set(remote, items || []); syncFavoriteControl(remote); }
   };
-  remote.tools.append(iconButton('plus', 'New remote folder', async () => {
+  const newRemoteFolder = iconButton('plus', 'New remote folder', async () => {
     const name = await askName('');
     if (name === undefined) return;
     await run(async () => {
       await api.sftp(session.id, 'mkdir', session.remoteDirectory, name);
       await loadRemote(session.remoteDirectory);
     });
-  }), receive);
+  });
+  remote.tools.append(newRemoteFolder, receive);
+  remote.toolbarControls.set('new-folder', newRemoteFolder).set('download', receive);
   if (session.tabRecord.fileLayout) {
     const splitRight = iconButton('splitRight', 'Split SFTP right', () => splitSession(session, 'row'));
     const splitDown = iconButton('splitDown', 'Split SFTP down', () => splitSession(session, 'column'));
     const close = iconButton('close', 'Close remote panel', () => closePane(session));
     for (const control of [splitRight, splitDown, close]) control.dataset.connectionAction = 'true';
     remote.tools.append(splitRight, splitDown, close);
+    remote.toolbarControls.set('split-right', splitRight).set('split-down', splitDown);
+    remote.closeControl = close;
   }
+  finishToolbar(remote);
+  session.showFileFilter = () => {
+    const focused = [remote, ...layout.locals].find(side => side.element.contains(document.activeElement));
+    openFilter(focused || (session.ready ? remote : activeLocal()));
+  };
   session.load = target => run(() => loadRemote(target));
   session.refreshRemote = () => session.remoteDirectory && refreshFolder(remote, session.remoteDirectory);
   session.refreshLocal = () => Promise.all(layout.locals.filter(side => side.directory).map(side => refreshFolder(side, side.directory)));
@@ -4383,6 +4622,7 @@ api.onCommand(command => {
   if (command === 'open-config') { byId('rail-config').click(); return; }
   if (command === 'preferences') { openPreferences(); return; }
   if (command === 'close-tab') { if (session) closeTab(session.tabRecord); return; }
+  if (session?.mode === 'sftp' && command === 'find') { session.showFileFilter?.(); return; }
   if (!session || session.mode === 'sftp') return;
   if (command === 'find') session.showSearch();
   if (command === 'clear') session.terminal.clear();

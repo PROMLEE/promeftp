@@ -742,6 +742,20 @@ Use a regular expression|정규식 사용|正規表現を使用|使用正则表�
 e.g. Password prompt|예: Password 프롬프트|例: Password プロンプト|例如：Password 提示
 Collapse {name}|{name} 접기|{name} を折りたたむ|折叠 {name}
 Expand {name}|{name} 펼치기|{name} を展開|展开 {name}
+Filter by name|이름으로 필터|名前で絞り込み|按名称筛选
+Words, or a pattern such as *.log|단어 또는 *.log 같은 패턴|単語、または *.log のようなパターン|单词，或 *.log 这样的模式
+Close filter|필터 닫기|絞り込みを閉じる|关闭筛选
+No items match the filter|필터와 일치하는 항목이 없습니다|絞り込みに一致する項目はありません|没有与筛选条件匹配的项目
+Customize Toolbar…|도구 막대 사용자화…|ツールバーをカスタマイズ…|自定义工具栏…
+Restore Default Toolbar|기본 도구 막대로 되돌리기|ツールバーを既定に戻す|恢复默认工具栏
+Restore Defaults|기본값으로 되돌리기|既定に戻す|恢复默认
+Local Pane Buttons|로컬 창 버튼|ローカルパネルのボタン|本地窗格按钮
+Remote Pane Buttons|원격 창 버튼|リモートパネルのボタン|远程窗格按钮
+Title bar|제목 줄|タイトルバー|标题栏
+Path bar|경로 줄|パスバー|路径栏
+Left of the name|이름 왼쪽|名前の左側|名称左侧
+Right of the name|이름 오른쪽|名前の右側|名称右侧
+Unchecked buttons move to the More menu (…). Changes apply to every pane of this kind.|체크를 끈 버튼은 더 보기 메뉴(…)로 옮겨집니다. 같은 종류의 모든 창에 적용됩니다.|チェックを外したボタンはその他のメニュー（…）に移ります。同じ種類のすべてのパネルに適用されます。|取消勾选的按钮会移到“更多”菜单（…）中。更改会应用到所有同类窗格。
 `.trim().split('\n').map(line => {
   const [key, ko, ja, zh] = line.split('|');
   return [key, { ko, ja, 'zh-Hans': zh }];
