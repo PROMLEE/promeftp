@@ -15,6 +15,7 @@
 <script defer src="ui-controls.js"></script>
 <script defer src="backup-names.js"></script>
 <script defer src="alias-search.js"></script>
+<script defer src="file-view.js"></script>
 <script defer src="renderer.js"></script>
 </head>
 <body>
@@ -233,6 +234,12 @@
   <div class="dialog-heading"><h2>Quick Guide</h2><button id="close-guide" data-icon="close" title="Close" aria-label="Close"></button></div>
   <input id="guide-search" type="search" placeholder="Search guide" aria-label="Search guide">
   <div id="guide-sections" class="guide-sections"></div>
+</dialog>
+<dialog id="toolbar-dialog" aria-labelledby="toolbar-dialog-title">
+  <div class="dialog-heading"><h2 id="toolbar-dialog-title">Remote Pane Buttons</h2><button type="button" id="close-toolbar-dialog" data-icon="close" title="Close" aria-label="Close"></button></div>
+  <p class="settings-note">Unchecked buttons move to the More menu (…). Changes apply to every pane of this kind.</p>
+  <div id="toolbar-items"></div>
+  <div class="actions"><button type="button" id="reset-toolbar">Restore Defaults</button><button type="button" id="done-toolbar" class="primary">Done</button></div>
 </dialog>
 <dialog id="name-dialog" data-blocking>
   <form method="dialog">

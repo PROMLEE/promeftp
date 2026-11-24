@@ -435,6 +435,23 @@ dialog .actions { margin-top: var(--space-5); justify-content: flex-end; }
 .file-address .icon-button[aria-pressed=true] { color: var(--accent); }
 .file-address .icon-button[aria-pressed=true] svg { fill: currentColor; }
 .file-address svg { width: 13px; height: 13px; }
+.file-panel .toolbar-user-hidden { display: none !important; }
+.file-filter { flex: none; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-5); border-bottom: 1px solid var(--line); color: var(--muted); }
+.file-filter[hidden] { display: none; }
+.file-filter > svg { flex: none; width: 13px; height: 13px; }
+.file-filter input { flex: 1; min-width: 0; background: transparent; border-radius: var(--radius-sm); font-size: var(--fs-xs); padding: var(--space-2); color: var(--ink); }
+.file-filter input::-webkit-search-cancel-button { display: none; }
+.file-filter-count { flex: none; font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.file-filter .icon-button { flex: none; width: 22px; height: 22px; }
+.file-filter .icon-button svg { width: 12px; height: 12px; }
+.file-panel.filtering .file-filter > svg { color: var(--accent); }
+#toolbar-items { max-height: min(56vh, 460px); overflow: auto; margin: var(--space-3) 0; }
+#toolbar-items h3 { margin: var(--space-5) 0 var(--space-2); color: var(--muted); font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+#toolbar-items h3:first-child { margin-top: 0; }
+.toolbar-item-row { display: flex; align-items: center; gap: var(--space-1); }
+.toolbar-item-row .settings-check { flex: 1; min-width: 0; }
+.toolbar-item-row .icon-button { flex: none; width: 24px; height: 24px; }
+.toolbar-item-row .icon-button svg { width: 13px; height: 13px; }
 .file-breadcrumbs { min-width: 0; display: flex; align-items: center; overflow: auto; scrollbar-width: none; font-size: var(--fs-xs); color: var(--muted); }
 .file-breadcrumbs button { flex: none; max-width: 105px; padding: 1px var(--space-2); color: inherit; }
 .file-breadcrumb-separator { flex: none; padding: 0 var(--space-1); color: var(--muted); opacity: .7; font-size: var(--fs-base); line-height: 1; pointer-events: none; }
