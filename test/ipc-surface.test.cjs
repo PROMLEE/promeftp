@@ -50,7 +50,7 @@ test('preferences allow-list only names handled methods', () => {
 });
 
 // 102 = 107 before the cleanup minus the five unused channels (show-about, set-appearance, save-sftp-favorites,
-// forget-ssh-password, copy-remote), then 104 with the two transfer conflict-policy channels. Update this only when a
+// forget-ssh-password, copy-remote), then 104 with the two transfer conflict-policy channels, then 106 with bookmark-order and set-bookmark-order. Update this only when a
 // channel is added or removed on purpose.
 test('the surface sizes match the current app (106 handlers)', () => {
   assert.equal(handledSet.size, 106);
