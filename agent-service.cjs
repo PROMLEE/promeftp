@@ -222,7 +222,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.endpoint = typeof value?.endpoint === 'string' ? value.endpoint : '';
         s.prompt = undefined;
         note(s, 'session.ready', 'success');
-        view(s, 'status', { status: 'ready' });
+        view(s, 'status', { status: 'ready', endpoint: clean(s.endpoint) });
         if (s.mode === 'sftp') resolveRoot(s);
       }
       if (event === 'prompt') {
@@ -243,8 +243,16 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.status = 'connecting';
         wake(s);
       }
-      if (event === 'auth.rule') audit(base(s, event, 'submitted', null, clean(value)));
-      if (event === 'hostkey.pinned' || event === 'hostkey.autotrusted') audit(base(s, event, 'success', null, JSON.stringify(value)));
+      if (event === 'auth.rule') {
+        audit(base(s, event, 'submitted', null, clean(value)));
+        // Says that a saved answer or rule was used. The answer itself and the rule id never reach the tab.
+        view(s, 'auth', { how: value === 'saved-password' ? 'saved-password' : 'rule' });
+      }
+      if (event === 'hostkey.pinned' || event === 'hostkey.autotrusted') {
+        audit(base(s, event, 'success', null, JSON.stringify(value)));
+        view(s, 'hostkey', { host: clean(value?.host), fingerprint: clean(value?.fingerprint),
+          trust: event === 'hostkey.autotrusted' ? 'automatic' : 'confirmed', ...(value?.source && { source: clean(value.source) }) });
+      }
       if (event === 'error') {
         // The first failure is the final reason. Later noise from the same OpenSSH exit is not recorded.
         if (s.failure) return;

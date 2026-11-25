@@ -52,6 +52,12 @@ saved authentication|저장된 인증|保存済みの認証|已保存的身份�
 triggers|트리거|トリガー|触发器
 No access|접근 권한 없음|アクセス権なし|无访问权限
 Waiting for an authentication answer. Answer it in Preferences → Authentication requests.|인증 응답을 기다리는 중입니다. 설정 → 인증 요청에서 답하세요.|認証への回答を待機中です。設定 → 認証リクエストで回答してください。|正在等待身份验证回答。请在“设置 → 身份验证请求”中回复。
+Signed in with a saved|저장된|保存済みの|已保存的
+password|비밀번호|パスワード|密码
+PAM answer|PAM 응답|PAM の回答|PAM 回答
+Host key|호스트 키|ホストキー|主机密钥
+trusted automatically|자동으로 신뢰함|自動的に信頼|已自动信任
+trusted by you|직접 신뢰함|ユーザーが信頼|已由您信任
 Change|변경|変更|更改
 Reset|기본값|初期値に戻す|恢复默认
 Reset All to Defaults|모두 기본값으로|すべて初期値に戻す|全部恢复默认

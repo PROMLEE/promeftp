@@ -502,7 +502,7 @@ test('V1: an ssh session opens its tab as the agent asks, with the bookmark, cli
     client: 'test', access: accessOfTest }]);
   await until(() => ctx.fake.notify);
   ctx.fake.notify('ready', { endpoint: '' });
-  assert.deepEqual(ctx.events[1], { session, type: 'status', status: 'ready' });
+  assert.deepEqual(ctx.events[1], { session, type: 'status', status: 'ready', endpoint: '' });
 });
 
 test('V2: an sftp session also opens its tab, reports ready, and says it closed', async t => {
@@ -525,7 +525,7 @@ test('V13: a session waiting for an authentication answer shows its tab at once 
   ctx.service.answer(session, 'q1', '123456');
   assert.deepEqual(ctx.events[2], { session, type: 'status', status: 'connecting' });
   ctx.fake.notify('ready', { endpoint: '' });
-  assert.deepEqual(ctx.events[3], { session, type: 'status', status: 'ready' });
+  assert.deepEqual(ctx.events[3], { session, type: 'status', status: 'ready', endpoint: '' });
 });
 
 test('V14: an SFTP stat shows its path, and a path outside the bookmark root shows the denial code', async t => {
@@ -670,4 +670,19 @@ test('D5: profiles.list tells the agent its per-file download limit: the grant v
   assert.equal((await ctx.call({ method: 'profiles.list' })).data[0].downloadMaxMiB, 128);
   ctx.st.agent.clients[0].grants.p1.download = false;
   assert.equal((await ctx.call({ method: 'profiles.list' })).data[0].downloadMaxMiB, undefined);
+});
+
+test('V15: a saved sign-in and a host key the user confirmed show in the tab, without the answer or the rule id', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const res = await ctx.call({ method: 'session.open', params: { profile: 'p1', mode: 'ssh' } });
+  const session = res.data.session;
+  await until(() => ctx.fake.notify);
+  ctx.fake.notify('auth.rule', 'rule-secret-id');
+  ctx.fake.notify('hostkey.pinned', { host: 'example.invalid', fingerprint: 'SHA256:abc' });
+  ctx.fake.notify('ready', { endpoint: 'alice@example.invalid:22' });
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'auth', 'hostkey', 'status']);
+  assert.deepEqual(ctx.events[1], { session, type: 'auth', how: 'rule' });
+  assert.deepEqual(ctx.events[2], { session, type: 'hostkey', host: 'example.invalid', fingerprint: 'SHA256:abc', trust: 'confirmed' });
+  assert.deepEqual(ctx.events[3], { session, type: 'status', status: 'ready', endpoint: 'alice@example.invalid:22' });
+  assert.equal(JSON.stringify(ctx.events).includes('rule-secret-id'), false);
 });

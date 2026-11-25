@@ -1919,7 +1919,7 @@ function showAgentEvent(session, event, value) {
   if (event === 'agent-status') {
     if (value?.status === 'ready') {
       session.agent.ready = true;
-      terminal.write(agentNote(t('Connected')));
+      terminal.write(agentNote(t('Connected') + (agentText(value.endpoint) ? ': ' + agentText(value.endpoint) : '')));
       requestAgentShell(session);
     } else if (value?.status === 'waiting_for_user') {
       terminal.write(agentNote(t('Waiting for an authentication answer. Answer it in Preferences → Authentication requests.') +
@@ -1927,6 +1927,13 @@ function showAgentEvent(session, event, value) {
     } else if (value?.status === 'connecting') {
       terminal.write(agentNote(t('connecting…')));
     }
+  }
+  if (event === 'agent-auth') {
+    terminal.write(agentNote(t('Signed in with a saved') + ' ' + (value?.how === 'saved-password' ? t('password') : t('PAM answer'))));
+  }
+  if (event === 'agent-hostkey') {
+    terminal.write(agentNote(t('Host key') + ' ' + agentText(value?.fingerprint) + ' (' + agentText(value?.host) + ') ' +
+      (value?.trust === 'automatic' ? t('trusted automatically') : t('trusted by you'))));
   }
   if (event === 'agent-sftp') {
     const operation = agentText(value?.operation).replace(/^sftp\./, '');
