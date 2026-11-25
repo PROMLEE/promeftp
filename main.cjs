@@ -1,14 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Menu, nativeTheme, safeStorage } = require('electron');
 const { createDecipheriv, createHash, randomUUID } = require('node:crypto');
 const fs = require('node:fs/promises');
-const { createReadStream, createWriteStream, existsSync } = require('node:fs');
+const { existsSync } = require('node:fs');
 const { execFile } = require('node:child_process');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const { promisify } = require('node:util');
 const os = require('node:os');
-const { pipeline } = require('node:stream/promises');
-const { Transform } = require('node:stream');
 const path = require('node:path');
+const { downloadParallel, uploadParallel } = require('./sftp-parallel.cjs');
 const openssh = require('./openssh.cjs');
 const { compileTrigger, scanTriggers } = require('./terminal-triggers.cjs');
 const { translate, supportedLocale } = require('./localization.js');
@@ -1152,9 +1151,7 @@ async function upload(channel, local, remote, depth = 0, signal, progress = () =
   const target = path.posix.join(path.posix.dirname(remote), '.promeftp-' + randomUUID());
   const handle = await sftpCall(channel, 'open', target, 'wx');
   try {
-    let bytes = 0;
-    const meter = new Transform({ transform(chunk, encoding, callback) { bytes += chunk.length; progress({ bytes, total: attributes.size, path: local }); callback(null, chunk); } });
-    await pipeline(createReadStream(local), meter, channel.createWriteStream(target, { handle }), { signal });
+    await uploadParallel(channel, handle, local, { size: attributes.size, signal, progress });
     if (signal?.aborted) throw Error('Transfer cancelled.');
     if (expectedSource) verifySource(await fs.lstat(local), expectedSource, false, local);
     if (expectedDestination) {
@@ -1285,9 +1282,7 @@ async function download(channel, remote, local, replace = false, depth = 0, sign
   }
   const temp = path.join(path.dirname(local), '.promeftp-' + randomUUID());
   try {
-    let bytes = 0;
-    const meter = new Transform({ transform(chunk, encoding, callback) { bytes += chunk.length; progress({ bytes, total: attributes.size, path: remote }); callback(null, chunk); } });
-    await pipeline(channel.createReadStream(remote), meter, createWriteStream(temp, { flags: 'wx', mode: 0o600 }), { signal });
+    await downloadParallel(channel, remote, temp, { size: attributes.size, signal, progress });
     if (signal?.aborted) throw Error('Transfer cancelled.');
     if (expectedSource) verifySource(await sftpCall(channel, 'lstat', remote), expectedSource, true, remote);
     if (expectedDestination) {

@@ -832,11 +832,10 @@ label:has(> .info-tip) > input:not([type=checkbox]):not([type=radio]), label:has
 .transfer-children { padding-left:var(--space-5); }
 .transfer-status { display:inline-flex; width:16px; height:16px; color:var(--muted); }
 .transfer-status svg { width:16px; height:16px; }
-.transfer-status.state-running svg { color:var(--accent); animation:transfer-spin 1.2s linear infinite; }
+/* The spin itself is set from renderer.js (spinTransferIcons), which keeps it going across queue rebuilds. */
+.transfer-status.state-running svg { color:var(--accent); }
 .transfer-status.state-failed, .transfer-status.state-interrupted { color:var(--danger); }
 .transfer-status.state-completed, .transfer-status.state-skipped { color:var(--success); }
-@keyframes transfer-spin { to { transform:rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .transfer-status.state-running svg { animation:none; } }
 .transfer-main { min-width:0; display:grid; gap:2px; cursor:pointer; }
 .transfer-main:focus-visible { outline:none; box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent); border-radius:var(--radius-xs); }
 .transfer-main strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }

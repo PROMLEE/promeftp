@@ -3898,6 +3898,20 @@ function transferRoute(job) {
   if (job.operation.startsWith('mkdir-')) return t('Create folder');
   return `${job.sourceName || (job.operation === 'upload' ? t('Local') : t('Remote'))} → ${job.targetName || (job.operation === 'download' ? t('Local') : t('Remote'))}`;
 }
+// Running transfers show a spinning icon. It is turned here, not with a CSS animation: every progress update
+// rebuilds the queue, and moving an element back into the page restarts its CSS animation at 0°, so the icon
+// only ever wobbled. The angle comes from the clock, so a rebuilt icon continues where the last one was.
+const transferSpinQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let transferSpinFrame = 0;
+function spinTransferIcons() {
+  cancelAnimationFrame(transferSpinFrame);
+  transferSpinFrame = 0;
+  const spinners = document.querySelectorAll('.transfer-status.state-running svg');
+  if (!spinners.length) return;
+  const angle = transferSpinQuery.matches ? 0 : (performance.now() % 1200) / 1200 * 360;
+  for (const svg of spinners) svg.style.transform = `rotate(${angle}deg)`;
+  if (!transferSpinQuery.matches) transferSpinFrame = requestAnimationFrame(spinTransferIcons);
+}
 function transferStatusIcon(state) {
   const mark = document.createElement('span');
   mark.className = `transfer-status state-${state}`;
@@ -4086,6 +4100,7 @@ function renderTransferQueue(jobs) {
     container.append(transferBatchRow(key, items), children);
     list.append(container);
   }
+  spinTransferIcons();
   const activeCount = transferJobs.filter(transferIsActive).length;
   const failedCount = transferJobs.filter(job => job.state === 'failed').length;
   const interruptedCount = transferJobs.filter(job => job.state === 'interrupted').length;
