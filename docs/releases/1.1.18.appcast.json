@@ -1,7 +1,11 @@
 {
   "heading": "Automatic updates install again",
-  "summary": "Updates from PromeFTP 1.1.15 and 1.1.17 failed after download with an installer launch error. This release fixes the update installer, and keyboard shortcuts can be changed by clicking them.",
+  "summary": "Updates from PromeFTP 1.1.15 and 1.1.17 failed after download with an installer launch error. This release fixes the update installer, speeds up SFTP transfers, and lets you change keyboard shortcuts by clicking them.",
   "changes": [
+    [
+      "SFTP transfers",
+      "Transfers run faster, and the running transfer icon turns correctly while files move."
+    ],
     [
       "Update installation",
       "Updates download and install again. Builds 1.1.15 and 1.1.17 could not install because the updater helper was missing from the app."
