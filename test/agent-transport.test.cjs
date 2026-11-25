@@ -566,15 +566,15 @@ test('M1: mirror receives stdout and stderr in the order they arrive, without te
   assert.equal(value.exitCode, 0);
 });
 
-test('M2: 70 KB of output mirrors exactly 65536 bytes, kills the command and reports truncated', async () => {
+test('M2: 1.1 MB of output mirrors exactly 1 MiB, kills the command and reports truncated', async () => {
   const { result, mirrored, child } = runWith(child => {
-    child.stdout.write('a'.repeat(70_000));
+    child.stdout.write('a'.repeat(1024 * 1024 + 100_000));
     setImmediate(() => child.emit('close', null, 'SIGTERM'));
   });
   const value = await result;
-  assert.equal(mirrored.reduce((sum, entry) => sum + Buffer.byteLength(entry[1]), 0), 65536);
+  assert.equal(mirrored.reduce((sum, entry) => sum + Buffer.byteLength(entry[1]), 0), 1024 * 1024);
   assert.equal(value.truncated, true);
-  assert.equal(value.stdout.length, 65536);
+  assert.equal(value.stdout.length, 1024 * 1024);
   assert.equal(child.killed, true);
 });
 

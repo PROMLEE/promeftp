@@ -312,7 +312,8 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
       .flatMap(rule => { try { return [{ id: rule.id, name: rule.name, regex: compileTrigger(rule.pattern) }]; } catch { return []; } });
     const output = { stdout: '', stderr: '' };
     const tails = { stdout: '', stderr: '' };
-    let remaining = 65536;
+    // The most output one command may produce. Beyond it the command is stopped and the result is truncated.
+    let remaining = 1024 * 1024;
     let truncated = false;
     for (const key of Object.keys(output)) {
       child[key].setEncoding('utf8');
