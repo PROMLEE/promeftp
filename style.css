@@ -569,8 +569,10 @@ dialog .actions { margin-top: var(--space-5); justify-content: flex-end; }
 .preferences-links { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
 #shortcuts-list h3 { margin: var(--space-6) 0 var(--space-2); font-size: var(--fs-sm); }
 #shortcuts-list dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-5); margin: 0; }
-#shortcuts-list dd { margin: 0; }
+#shortcuts-list dd { margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 #shortcuts-list kbd { display: block; min-width: 32px; text-align: center; border-radius: var(--radius-xs); padding: 1px var(--space-3); background: var(--field); }
+#preferences-window #shortcuts-list .shortcut-recorder { min-width: 132px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+#preferences-window #shortcuts-list .shortcut-recorder.recording { color: var(--accent); }
 
 #split-host-list .new-split-connection { color: var(--accent); font-weight: 650; }
 #split-host-list button:focus-visible { outline: none; background: var(--selection); color: var(--ink); }
