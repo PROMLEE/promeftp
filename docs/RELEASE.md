@@ -78,6 +78,8 @@ test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$PLIST")" = com.p
 test "$(/usr/libexec/PlistBuddy -c 'Print SUFeedURL' "$PLIST")" = \
   https://raw.githubusercontent.com/PROMLEE/promeftp/main/updates/appcast-arm64.xml
 test -d "$BUNDLE/Contents/Frameworks/Sparkle.framework"
+test -x "$BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater"
+test -x "$BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
 test -f "$BUNDLE/Contents/Frameworks/PromeFTPUpdate.node"
 ```
 
