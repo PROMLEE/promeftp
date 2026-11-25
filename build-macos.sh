@@ -50,6 +50,15 @@ if [[ -n "${SPARKLE_DIST:-}" ]]; then
   frameworks="$bundle/Contents/Frameworks"
   sparkle="$SPARKLE_DIST/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
   ditto "$sparkle" "$frameworks/Sparkle.framework"
+  # Sparkle's installer needs its own Updater.app. Without it, installs fail after download
+  # with "An error occurred while launching the installer", so refuse to build such a bundle.
+  for required in Versions/B/Autoupdate Versions/B/Updater.app/Contents/MacOS/Updater \
+    Versions/B/XPCServices/Installer.xpc Versions/B/XPCServices/Downloader.xpc; do
+    if [[ ! -e "$frameworks/Sparkle.framework/$required" ]]; then
+      echo "Sparkle framework is missing $required; refusing to build." >&2
+      exit 1
+    fi
+  done
   cp "$SPARKLE_DIST/LICENSE" "$bundle/Contents/Resources/Sparkle-LICENSE"
   node_include="${NODE_INCLUDE:-$(node -p 'require("node:path").resolve(process.execPath, "../../include/node")')}"
   xcrun clang++ -arch arm64 -mmacosx-version-min=13.0 -fobjc-arc -bundle -undefined dynamic_lookup \

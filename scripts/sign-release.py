@@ -57,6 +57,11 @@ def main():
     arch = subprocess.check_output(['lipo', '-archs', app / 'Contents/MacOS/Electron'], text=True).strip()
     if arch != 'arm64':
         raise SystemExit('Expected Apple Silicon bundle')
+    sparkle_root = app / 'Contents/Frameworks/Sparkle.framework/Versions/B'
+    for required in ('Autoupdate', 'Updater.app/Contents/MacOS/Updater',
+                     'XPCServices/Installer.xpc', 'XPCServices/Downloader.xpc'):
+        if not (sparkle_root / required).exists():
+            raise SystemExit(f'Sparkle is missing {required}; the bundle cannot install updates')
 
     encoded = os.environ.pop('MACOS_SIGNING_P12', '')
     password = os.environ.pop('MACOS_SIGNING_PASSWORD', '')
