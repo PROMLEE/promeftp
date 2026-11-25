@@ -2799,22 +2799,30 @@ function setupFiles(session) {
     const render = () => {
       popover.querySelectorAll('.favorite-popover-row').forEach(row => row.remove());
       favoriteFolders(side).forEach((item, index) => {
-        // Rows show only the full path; it wraps instead of being cut off, so no tooltip is needed.
+        // Rows show the full path, wrapped instead of cut off. A name the user gave the favorite is shown above it.
         const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true;
+        const text = document.createElement('span'); text.className = 'favorite-text';
+        const name = favoriteLabel(item);
+        if (name) { const label = document.createElement('span'); label.className = 'favorite-name'; label.textContent = name; text.append(label); }
         const location = document.createElement('span'); location.className = 'favorite-path'; location.textContent = item.path;
-        row.append(icon('folder'), location);
+        text.append(location);
+        row.append(icon('folder'), text);
         row.addEventListener('click', () => { navigate(side, item.path); popover.remove(); });
         row.addEventListener('contextmenu', async event => {
           event.preventDefault(); event.stopPropagation();
           try {
           const action = await api['context-menu']([
-            { id: 'edit', label: t('Edit Path') },
+            { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
             { id: 'up', label: t('Move Up'), enabled: index > 0 }, { id: 'down', label: t('Move Down'), enabled: index < favoriteFolders(side).length - 1 }, null,
             { id: 'remove', label: t('Remove from Favorites') },
           ]);
           if (!action) return;
           let values = favoriteFolders(side);
-          if (action === 'edit') {
+          if (action === 'rename') {
+            const value = await askName(item.displayName, 'Rename Favorite');
+            if (value === undefined) return;
+            await mutateFavorite(side, { action: 'rename', id: item.id, displayName: value }); render(); return;
+          } else if (action === 'edit') {
             const value = await askName(item.path, 'Edit Favorite Path');
             if (value === undefined) return;
             await mutateFavorite(side, { action: 'edit-path', id: item.id, path: value }); render(); return;
@@ -2845,21 +2853,30 @@ function setupFiles(session) {
     const dismiss = event => { if (!popover.contains(event.target) && !side.favorites.contains(event.target)) { popover.remove(); document.removeEventListener('pointerdown', dismiss, true); } };
     setTimeout(() => document.addEventListener('pointerdown', dismiss, true), 0);
   }
+  // A favorite's name is shown only when it differs from the folder's own name, which is the default.
+  function favoriteLabel(item) {
+    const folder = item.path.split('/').filter(Boolean).at(-1) || '/';
+    return item.displayName && item.displayName !== folder ? item.displayName : '';
+  }
   async function manageFavorites(side) {
     try { await refreshFavorites(side); } catch (error) { status(session, error.message, true); return; }
     const items = favoriteFolders(side);
     if (!items.length) return showFavorites(side);
-    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: item.path })));
+    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: favoriteLabel(item) ? `${favoriteLabel(item)} — ${item.path}` : item.path })));
     if (chosen === null) return;
     const item = items[chosen];
     const action = await api['context-menu']([
-      { id: 'edit', label: t('Edit Path') },
+      { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
       { id: 'up', label: t('Move Up'), enabled: chosen > 0 }, { id: 'down', label: t('Move Down'), enabled: chosen < items.length - 1 },
       null, { id: 'remove', label: t('Remove from Favorites') },
     ]);
     if (action === null) return;
     if (!action) return;
-    if (action === 'edit') {
+    if (action === 'rename') {
+      const value = await askName(item.displayName, 'Rename Favorite');
+      if (value === undefined) return;
+      await mutateFavorite(side, { action: 'rename', id: item.id, displayName: value });
+    } else if (action === 'edit') {
       const value = await askName(item.path, 'Edit Favorite Path');
       if (value === undefined) return;
       await mutateFavorite(side, { action: 'edit-path', id: item.id, path: value });
