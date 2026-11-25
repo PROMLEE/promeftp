@@ -492,18 +492,53 @@ function viewStart(t, options = {}) {
 }
 const viewTypes = events => events.map(event => event.type);
 
-test('V1: an ssh session sends one open event when it is ready, with the bookmark label and the client name', async t => {
+const accessOfTest = { sftp: true, root: '/', download: true, commandApproval: true, commandAutoApprove: false, task: '', savedAuth: false, pam: 0, triggers: 0 };
+
+test('V1: an ssh session opens its tab as the agent asks, with the bookmark, client and access, then reports ready', async t => {
   const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
-  const session = await openSsh(ctx);
-  assert.deepEqual(ctx.events, [{ session, type: 'open', label: 'Test', client: 'test' }]);
+  const res = await ctx.call({ method: 'session.open', params: { profile: 'p1', mode: 'ssh' } });
+  const session = res.data.session;
+  assert.deepEqual(ctx.events, [{ session, type: 'open', label: 'Test', host: 'example.invalid', user: 'alice', mode: 'ssh',
+    client: 'test', access: accessOfTest }]);
+  await until(() => ctx.fake.notify);
+  ctx.fake.notify('ready', { endpoint: '' });
+  assert.deepEqual(ctx.events[1], { session, type: 'status', status: 'ready' });
 });
 
-test('V2: an sftp session sends no view events, not even when it closes', async t => {
+test('V2: an sftp session also opens its tab, reports ready, and says it closed', async t => {
   const ctx = await viewStart(t);
   const session = await ctx.open();
   ctx.fake.notify('ready', { endpoint: '' });
   await ctx.call({ method: 'session.close', params: { session } });
-  assert.deepEqual(ctx.events, []);
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'status', 'closed']);
+  assert.equal(ctx.events[0].mode, 'sftp');
+  assert.equal(ctx.events[2].reason, 'CLIENT_CLOSED');
+});
+
+test('V13: a session waiting for an authentication answer shows its tab at once and each status change', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true }) });
+  const res = await ctx.call({ method: 'session.open', params: { profile: 'p1', mode: 'ssh' } });
+  const session = res.data.session;
+  await until(() => ctx.fake.notify);
+  ctx.fake.notify('prompt', { id: 'q1', prompt: 'Verification code: ' });
+  assert.deepEqual(ctx.events[1], { session, type: 'status', status: 'waiting_for_user', prompt: 'Verification code: ' });
+  ctx.service.answer(session, 'q1', '123456');
+  assert.deepEqual(ctx.events[2], { session, type: 'status', status: 'connecting' });
+  ctx.fake.notify('ready', { endpoint: '' });
+  assert.deepEqual(ctx.events[3], { session, type: 'status', status: 'ready' });
+});
+
+test('V14: an SFTP stat shows its path, and a path outside the bookmark root shows the denial code', async t => {
+  const ctx = await viewStart(t, { permission: p => ({ ...grant(p), root: '/home' }) });
+  const session = await ctx.open();
+  ctx.fake.notify('ready', { endpoint: '' });
+  assert.equal((await ctx.call({ method: 'sftp.stat', params: { session, path: '/home/a' } })).error, undefined);
+  assert.equal((await ctx.call({ method: 'sftp.stat', params: { session, path: '/etc/passwd' } })).error, 'PATH_NOT_ALLOWED');
+  const sftp = ctx.events.filter(event => event.type === 'sftp');
+  assert.deepEqual(sftp.map(({ operation, path, ok, code }) => ({ operation, path, ok, code })), [
+    { operation: 'sftp.stat', path: '/home/a', ok: true, code: undefined },
+    { operation: 'sftp.stat', path: '/etc/passwd', ok: false, code: 'PATH_NOT_ALLOWED' },
+  ]);
 });
 
 test('V3: a refused approval sends approval then failed USER_DENIED, and no command or output', async t => {
@@ -512,9 +547,9 @@ test('V3: a refused approval sends approval then failed USER_DENIED, and no comm
   ctx.fake.approved = false;
   const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
   assert.equal(res.error, 'USER_DENIED');
-  assert.deepEqual(viewTypes(ctx.events), ['open', 'approval', 'failed']);
-  assert.deepEqual(ctx.events[1], { session, type: 'approval', command: 'uptime' });
-  assert.deepEqual(ctx.events[2], { session, type: 'failed', code: 'USER_DENIED' });
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'status', 'approval', 'failed']);
+  assert.deepEqual(ctx.events[2], { session, type: 'approval', command: 'uptime' });
+  assert.deepEqual(ctx.events[3], { session, type: 'failed', code: 'USER_DENIED' });
 });
 
 test('V4: an approved command sends approval, command (approved), output and result in order', async t => {
@@ -523,19 +558,19 @@ test('V4: an approved command sends approval, command (approved), output and res
   const session = await openSsh(ctx);
   const res = await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
   assert.deepEqual(res.data, { exitCode: 0, truncated: false });
-  assert.deepEqual(viewTypes(ctx.events), ['open', 'approval', 'command', 'output', 'result']);
-  assert.deepEqual(ctx.events[2], { session, type: 'command', command: 'uptime', how: 'approved' });
-  assert.deepEqual(ctx.events[3], { session, type: 'output', stream: 'stdout', text: 'hello\n' });
-  assert.equal(ctx.events[4].exitCode, 0);
-  assert.equal(ctx.events[4].truncated, false);
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'status', 'approval', 'command', 'output', 'result']);
+  assert.deepEqual(ctx.events[3], { session, type: 'command', command: 'uptime', how: 'approved' });
+  assert.deepEqual(ctx.events[4], { session, type: 'output', stream: 'stdout', text: 'hello\n' });
+  assert.equal(ctx.events[5].exitCode, 0);
+  assert.equal(ctx.events[5].truncated, false);
 });
 
 test('V5: an auto-approved command skips the approval event and says how it was approved', async t => {
   const ctx = await viewStart(t, { permission: p => ({ ...grant(p), commandApproval: true, commandAutoApprove: true }) });
   const session = await openSsh(ctx);
   await ctx.call({ method: 'ssh.command', params: { session, command: 'uptime' } });
-  assert.deepEqual(viewTypes(ctx.events), ['open', 'command', 'result']);
-  assert.equal(ctx.events[1].how, 'auto');
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'status', 'command', 'result']);
+  assert.equal(ctx.events[2].how, 'auto');
 });
 
 test('V6: a named task sends command with how task and the task name', async t => {
@@ -543,7 +578,7 @@ test('V6: a named task sends command with how task and the task name', async t =
   const session = await openSsh(ctx);
   const res = await ctx.call({ method: 'ssh.run', params: { session, task: 'disk' } });
   assert.equal(res.error, undefined);
-  assert.deepEqual(ctx.events[1], { session, type: 'command', command: 'df -h', how: 'task', task: 'disk' });
+  assert.deepEqual(ctx.events[2], { session, type: 'command', command: 'df -h', how: 'task', task: 'disk' });
 });
 
 test('V7: a throwing onView does not change the result of the request', async t => {
@@ -607,9 +642,9 @@ test('V12: a command that runs past 30 seconds sends failed TIMEOUT before close
   await until(() => ctx.fake.runs === 1);
   t.mock.timers.tick(30_000);
   assert.equal((await pending).error, 'TIMEOUT');
-  assert.deepEqual(viewTypes(ctx.events), ['open', 'command', 'failed', 'closed']);
-  assert.equal(ctx.events[2].code, 'TIMEOUT');
-  assert.equal(ctx.events[3].reason, 'TIMEOUT');
+  assert.deepEqual(viewTypes(ctx.events), ['open', 'status', 'command', 'failed', 'closed']);
+  assert.equal(ctx.events[3].code, 'TIMEOUT');
+  assert.equal(ctx.events[4].reason, 'TIMEOUT');
 });
 
 test('V13: touchFromUser keeps a viewed session from idling out, and adds no audit row', async t => {

@@ -241,11 +241,7 @@ function activate(id, focus = true) {
   for (const pane of sessions.values()) pane.pane.classList.toggle('focused', pane === session);
   if (session && !session.area.hidden) {
     session.fit.fit();
-    // The user's shell on an agent session opens on the first resize, so the first time the tab is shown.
-    if (session.agent && !session.shellRequested && !session.closed && session.terminal.cols > 0) {
-      session.shellRequested = true;
-      api.resize(id, session.terminal.cols, session.terminal.rows).catch(() => {});
-    }
+    requestAgentShell(session);
     if (focus) (session.auth.querySelector('input') || session.terminal).focus();
   }
   session?.fileLayout?.refreshLocalControls?.();
@@ -1674,7 +1670,7 @@ function start(input, mode, options = {}) {
   const session = {
     id, tabRecord, pane, status: line, ready: false, input, mode, fileLayout,
     localDirectory: options.local, remoteDirectory: options.remote, autoReplies: [],
-    agent: options.agent ? { client: options.agent } : undefined,
+    agent: options.agent ? { client: options.agent, mode: options.agentMode, ready: false } : undefined,
   };
   const auth = document.createElement('div');
   auth.className = 'auth-requests';
@@ -1848,17 +1844,44 @@ api.onSession(({ id, event, value }) => {
   }
 });
 
-// A terminal tab for an SSH session the agent opened. Its id is the main process view id. The tab does not take focus.
+// A terminal tab for an agent session (SSH or SFTP). Its id is the main process view id. The tab does not take focus.
 function startAgentView(id, value) {
   if (sessions.has(id)) return;
   const name = agentText(value?.label) || 'SSH';
-  start({ label: name + ' · AGENT', host: name }, 'ssh', { id, agent: agentText(value?.client) || t('Agent'), deferActivation: true });
+  const mode = value?.mode === 'sftp' ? 'sftp' : 'ssh';
+  start({ label: name + ' · AGENT' + (mode === 'sftp' ? ' · SFTP' : ''), host: name }, 'ssh',
+    { id, agent: agentText(value?.client) || t('Agent'), agentMode: mode, deferActivation: true });
+  const session = sessions.get(id);
+  // What the agent may do, written first so the tab says what the session is for before any status line.
+  session?.terminal.write(agentNote(t('Client') + ': ' + (agentText(value?.client) || t('Agent')) + ' · ' + t('Bookmark') + ': ' +
+    agentText(value?.label) + ' (' + (agentText(value?.user) ? agentText(value.user) + '@' : '') + agentText(value?.host) + ') · ' +
+    t('Mode') + ': ' + mode.toUpperCase()) + agentNote(t('Access') + ': ' + agentAccessText(value?.access)));
   // The tab is added without being selected, so it stays hidden and shows a dot until the user opens it.
-  const record = sessions.get(id)?.tabRecord;
+  const record = session?.tabRecord;
   if (record) {
     record.root.hidden = true;
     record.element.classList.add('agent-unseen');
   }
+}
+// A line in an agent tab, dimmed and prefixed so it reads apart from the user's shell output.
+const agentNote = text => '\r\n\x1b[2m[agent] ' + text + '\x1b[0m\r\n';
+function agentAccessText(access = {}) {
+  const parts = [];
+  if (access.sftp) parts.push(t('SFTP browsing') + (agentText(access.root) ? ' ' + agentText(access.root) : '') + (access.download ? ' · ' + t('downloads') : ''));
+  if (access.task) parts.push(t('SSH task') + ' ' + agentText(access.task));
+  if (access.commandApproval) parts.push(t('SSH commands') + ' · ' + (access.commandAutoApprove ? t('auto-approved') : t('approval')));
+  if (access.savedAuth) parts.push(t('saved authentication'));
+  if (access.pam) parts.push(access.pam + ' ' + t('PAM rules'));
+  if (access.triggers) parts.push(access.triggers + ' ' + t('triggers'));
+  return parts.join(' · ') || t('No access');
+}
+// The user's own shell on an SSH agent tab opens once the session is ready and the tab is on screen, one time only.
+// SFTP sessions have no shell.
+function requestAgentShell(session) {
+  if (!session.agent || session.agent.mode !== 'ssh' || !session.agent.ready || session.shellRequested || session.closed ||
+      session.area.hidden || !(session.terminal.cols > 0)) return;
+  session.shellRequested = true;
+  api.resize(session.id, session.terminal.cols, session.terminal.rows).catch(() => {});
 }
 // Text from the agent or the server is shown as plain text: no control characters.
 const agentText = value => String(value ?? '').replace(/[\p{C}]/gu, '');
@@ -1892,6 +1915,26 @@ function showAgentEvent(session, event, value) {
   if (event === 'agent-shell-closed') {
     session.shellEnded = true;
     status(session, t('Shell closed. The agent session stays open.'));
+  }
+  if (event === 'agent-status') {
+    if (value?.status === 'ready') {
+      session.agent.ready = true;
+      terminal.write(agentNote(t('Connected')));
+      requestAgentShell(session);
+    } else if (value?.status === 'waiting_for_user') {
+      terminal.write(agentNote(t('Waiting for an authentication answer. Answer it in Preferences → Authentication requests.') +
+        (agentText(value.prompt).trim() ? ' ' + agentText(value.prompt).trim() : '')));
+    } else if (value?.status === 'connecting') {
+      terminal.write(agentNote(t('connecting…')));
+    }
+  }
+  if (event === 'agent-sftp') {
+    const operation = agentText(value?.operation).replace(/^sftp\./, '');
+    const result = value?.ok
+      ? [Number.isInteger(value.count) ? value.count + ' ' + t('items') + (value.truncated ? '+' : '') : '',
+         Number.isInteger(value.bytes) ? value.bytes + ' B' : ''].filter(Boolean).join(' · ')
+      : t('failed') + ': ' + agentText(value?.code);
+    terminal.write(agentNote('SFTP ' + operation + ' ' + agentText(value?.path) + (result ? ' · ' + result : '')));
   }
   if (event === 'agent-closed') {
     session.closed = true;

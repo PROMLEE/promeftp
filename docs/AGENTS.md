@@ -46,6 +46,17 @@ Each failure response includes `error.next`, a list of steps the agent may take.
   Trigger matches are reported as events. A trigger cannot send a reply or
   run another command on an agent's session.
 
+## Agent tabs
+
+PromeFTP opens a tab for each agent session as soon as the agent asks for it,
+whether the session uses SSH or SFTP and whether it is still authenticating
+(PAM, OTP) or already connected. The first lines show the client, the bookmark,
+the mode, and what the grant allows. Status lines follow: connecting, waiting for
+an answer in **Preferences → Authentication requests**, and connected. SFTP
+list, stat, and download operations are logged with their path and result, and a
+denied path shows its reason code. The tab ends with the reason when the session
+closes. Only SSH sessions open your own shell in the tab.
+
 ## CLI
 
 Use the CLI path shown in Settings. In the standard installation it is

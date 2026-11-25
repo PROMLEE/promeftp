@@ -40,6 +40,18 @@ This key is fixed for|이 키는 다음 기능에 고정되어 있습니다:|こ
 PAM rules and triggers are per bookmark and were left out here.|PAM 규칙과 트리거는 북마크마다 다르므로 여기서는 제외했습니다.|PAM ルールとトリガーはブックマークごとに異なるため、ここでは除外しました。|PAM 规则和触发器因书签而异，此处已省略。
 Press keys… (Esc cancels, Delete clears)|키를 누르세요… (Esc 취소, Delete 해제)|キーを押してください…（Esc でキャンセル、Delete で解除）|请按下按键…（Esc 取消，Delete 清除）
 Shortcut saved|단축키를 저장했습니다|ショートカットを保存しました|快捷键已保存
+Mode|모드|モード|模式
+Access|권한|アクセス|权限
+connecting…|연결 중…|接続中…|正在连接…
+SFTP browsing|SFTP 탐색|SFTP 閲覧|SFTP 浏览
+downloads|다운로드|ダウンロード|下载
+SSH task|SSH 작업|SSH タスク|SSH 任务
+approval|승인 필요|承認が必要|需要确认
+auto-approved|자동 승인|自動承認|自动批准
+saved authentication|저장된 인증|保存済みの認証|已保存的身份验证
+triggers|트리거|トリガー|触发器
+No access|접근 권한 없음|アクセス権なし|无访问权限
+Waiting for an authentication answer. Answer it in Preferences → Authentication requests.|인증 응답을 기다리는 중입니다. 설정 → 인증 요청에서 답하세요.|認証への回答を待機中です。設定 → 認証リクエストで回答してください。|正在等待身份验证回答。请在“设置 → 身份验证请求”中回复。
 Change|변경|変更|更改
 Reset|기본값|初期値に戻す|恢复默认
 Reset All to Defaults|모두 기본값으로|すべて初期値に戻す|全部恢复默认
