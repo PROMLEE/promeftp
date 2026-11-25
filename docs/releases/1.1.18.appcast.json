@@ -1,0 +1,15 @@
+{
+  "heading": "Automatic updates install again",
+  "summary": "Updates from PromeFTP 1.1.15 and 1.1.17 failed after download with an installer launch error. This release fixes the update installer, and keyboard shortcuts can be changed by clicking them.",
+  "changes": [
+    [
+      "Update installation",
+      "Updates download and install again. Builds 1.1.15 and 1.1.17 could not install because the updater helper was missing from the app."
+    ],
+    [
+      "Keyboard shortcuts",
+      "In Preferences → Shortcuts, click a shortcut to change it, then press the new keys. Escape cancels and Delete clears it."
+    ]
+  ],
+  "notice": "If you run 1.1.15 or 1.1.17, install 1.1.18 once from the DMG on this release page. Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
