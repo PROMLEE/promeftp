@@ -1936,6 +1936,10 @@ function buildApplicationMenu() {
     ] },
     { role: 'windowMenu', label: localized('Window') },
   ]));
+  // Right-clicking the Dock icon offers New Window, the same command as File > New Window.
+  if (process.platform === 'darwin') app.dock.setMenu(Menu.buildFromTemplate([
+    { label: localized('New Window'), click: () => runCommand(undefined, 'new-window') },
+  ]));
 }
 
 function getAgent() {

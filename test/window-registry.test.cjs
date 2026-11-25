@@ -71,6 +71,10 @@ test('main.cjs has no single main window left', () => {
   assert.doesNotMatch(main, /dialog\.show\w+\(window\b/);
 });
 
+test('the Dock menu offers New Window on macOS', () => {
+  assert.match(main, /app\.dock\.setMenu\(Menu\.buildFromTemplate\(\[\s*\{ label: localized\('New Window'\), click: \(\) => runCommand\(undefined, 'new-window'\) \},?\s*\]\)\)/);
+});
+
 test('IPC trusts every main window and runs each request with its window', () => {
   assert.match(main, /mainWindows\.owns\(event\.sender\)/);
   assert.match(main, /requestContext\.run\(\{ window: BrowserWindow\.fromWebContents\(event\.sender\) \}/);
