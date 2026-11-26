@@ -212,8 +212,15 @@ test('a key in ~/.ssh that matches is accepted when the app has no value for the
   assert.equal(eventsNamed(s, 'hostkey.autotrusted').length, 0);
 });
 
-test('the app value wins over ~/.ssh, so a key only ~/.ssh trusts is a change', async () => {
+test('a key only ~/.ssh trusts is accepted even when the app keeps an older key, as OpenSSH accepts it', async () => {
   const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_OLD } }, userKnown: [ed(K_NEW)] });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(eventsNamed(s, 'error').length, 0);
+});
+
+test('a key ~/.ssh does not trust and the app holds an older key is still a change with the app key as previous', async () => {
+  const s = await open({ state: { trustedHostKeys: { 'host:example.invalid': K_OLD } }, userKnown: [ed(K_OLD)] });
   await s.hostKey(K_NEW);
   assert.deepEqual(s.calls.answers, [{ id: 'h1', value: 'no' }]);
   assert.equal(errorOf(s).code, 'HOST_KEY_CHANGED');
@@ -286,14 +293,19 @@ test('every failure code has next steps, and an unmapped code gets the default s
 
 // --- 1.1.9: classification, automatic trust, and the trust sources ---
 
-test('classifyHostKey: the app value decides first, then the agent value, then the user and system files', () => {
+test('classifyHostKey: a key any trust source holds is trusted; the first source with an entry gives the previous key', () => {
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_NEW] }), { kind: 'trusted', source: 'app' });
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_NEW], agent: [K_OLD] }), { kind: 'trusted', source: 'app' });
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', agent: [K_NEW] }), { kind: 'trusted', source: 'agent' });
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', agent: [K_OLD] }),
     { kind: 'changed', previous: K_OLD, source: 'agent' });
+  // The user's known_hosts already trusts the key, so a stale app or agent value does not refuse it.
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', agent: [K_OLD], user: [ed(K_NEW)] }),
-    { kind: 'changed', previous: K_OLD, source: 'agent' });
+    { kind: 'trusted', source: 'user_known_hosts' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_OLD], user: [ed(K_NEW)] }),
+    { kind: 'trusted', source: 'user_known_hosts' });
+  assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_OLD], user: [ed(K_OLD)] }),
+    { kind: 'changed', previous: K_OLD, source: 'app' });
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519', app: [K_OLD] }),
     { kind: 'changed', previous: K_OLD, source: 'app' });
   assert.deepEqual(classifyHostKey({ fingerprint: K_NEW, keyType: 'ED25519' }), { kind: 'new' });
@@ -401,6 +413,35 @@ test('the system-wide known_hosts is a trust source too: a key there is trusted,
   const [event] = eventsNamed(changed, 'hostkey.autotrusted');
   assert.equal(event.value.source, 'user_known_hosts');
   assert.equal(event.value.previous, K_OLD);
+});
+
+test('a key the user known_hosts already trusts is accepted without asking, even when the app keeps an older key', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'off' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD } },
+    userKnown: [ed(K_NEW)], confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.equal(s.calls.trusted.length, 0);
+});
+
+test('"Don\'t ask again" in the app covers an agent connection whose key changed, in any grant mode', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'off' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD },
+    hostKeyAutoAccept: { 'host:example.invalid': true } }, confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.deepEqual(s.calls.answers, [{ id: 'h1', value: K_NEW }]);
+  assert.equal(s.calls.confirms.length, 0);
+  assert.deepEqual(s.calls.trusted, [['example.invalid', K_NEW]]);
+  const [event] = eventsNamed(s, 'hostkey.autotrusted');
+  assert.deepEqual([event.value.kind, event.value.mode, event.value.previous, event.value.source],
+    ['changed', 'dont-ask', K_OLD, 'app']);
+});
+
+test('"Don\'t ask again" for one server does not accept a changed key of another server', async () => {
+  const s = await open({ grant: { hostKeyTrust: 'off' }, state: { trustedHostKeys: { 'host:example.invalid': K_OLD },
+    hostKeyAutoAccept: { 'host:other.invalid': true } }, confirmHostKey: () => false });
+  await s.hostKey(K_NEW);
+  assert.equal(errorOf(s).code, 'HOST_KEY_UNCONFIRMED');
+  assert.equal(s.calls.trusted.length, 0);
 });
 
 test('a failure to record an automatically trusted key still accepts for this connection and says it was not saved', async () => {

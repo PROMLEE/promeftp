@@ -125,6 +125,14 @@ function autoTrustDetail(event) {
     value.previous ? t('Previous fingerprint') + ': ' + value.previous + ' (' + (value.source || '') + ')' : '',
     'Mode: ' + value.mode].filter(Boolean).join('\n');
 }
+// A host key the agent could not trust: the server, the key it presented and the trusted key it differs from.
+function hostKeyFailureDetail(event) {
+  let value = {};
+  try { value = JSON.parse(event.detail || '{}'); } catch {}
+  return [value.host && 'Host: ' + value.host, value.fingerprint && t('New fingerprint') + ': ' + value.fingerprint,
+    value.trusted ? t('Previous fingerprint') + ': ' + value.trusted + ' (' + (value.source || '') + ')' : '',
+  ].filter(Boolean).join('\n');
+}
 // Presets only fill the form. Nothing is saved until the user saves it.
 const agentPresets = {
   read: { sftp: true, root: '/', download: false, commandApproval: false, commandAutoApprove: false, savedAuth: false, pam: false, triggers: false, hostKeyTrust: 'off' },
@@ -398,7 +406,9 @@ async function refreshAgentHistory() {
     summary.textContent = [new Date(event.time).toLocaleString(), client || event.client, profile || event.profile,
       autoTrusted ? t('Host key trusted automatically') : event.operation, event.result, event.reason].filter(Boolean).join(' · ');
     const text = document.createElement('p');
+    const hostKeyFailure = event.operation === 'session.error' && /^HOST_KEY_/.test(event.reason || '');
     text.textContent = autoTrusted ? autoTrustDetail(event)
+      : hostKeyFailure ? [hostKeyFailureDetail(event), event.session && 'Session: ' + event.session].filter(Boolean).join('\n')
       : [event.request && 'Request: ' + event.request, event.session && 'Session: ' + event.session, event.detail].filter(Boolean).join('\n');
     details.append(summary, text);
     if (autoTrusted) details.classList.add('error');

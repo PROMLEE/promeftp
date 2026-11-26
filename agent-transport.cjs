@@ -71,20 +71,21 @@ const NO_PROMPT_IN_APP = 'PromeFTP signed in without a prompt (likely ssh-agent)
 // Only the lines that decide where OpenSSH connects. Other settings change how a login is authenticated, not where.
 const targetLines = endpoint => endpoint.split('\n').filter(line => /^(hostname|user|port|proxyjump|proxycommand) /.test(line)).join('\n');
 const sameTarget = (a, b) => targetLines(a) === targetLines(b);
-// Decides what a host key is, from the trust sources in order: app value, agent value, then the user's known_hosts
-// files (read only). Only the first source that has entries is compared. A key of another type than the question's
-// is not treated as the same key, so it is classed as changed, never as new.
+// Decides what a host key is. A key is trusted when any trust source holds it: the app value, the agent value, or the
+// user's known_hosts files (read only). OpenSSH trusts every known_hosts entry the same way, so a key the user's own
+// file already trusts must not be refused here just because the app or the agent stored an older key.
+// Only when no source holds the key is it judged against the stored keys: changed when a source has a key for the host,
+// labelled with the first such key (app, then agent, then the files), and new when nothing has an entry at all.
+// A key of another type than the question's is not treated as the same key, so it is classed as changed, never as new.
 // A user or system file that could not be read is not "no entry": the key is judged as changed, with no previous key,
 // so it is never trusted automatically in 'new' mode.
 function classifyHostKey({ fingerprint, keyType = '', app = [], agent = [], user = [], unreadable = false }) {
-  // A key that matches any trusted value of the first source that holds one is trusted. The agent's own value counts
-  // even when the app has a different value, so a key already trusted for the agent is not asked about again.
+  const sameType = keyType ? user.filter(entry => entry.type === keyType) : user;
   if (app.includes(fingerprint)) return { kind: 'trusted', source: 'app' };
   if (agent.includes(fingerprint)) return { kind: 'trusted', source: 'agent' };
+  if (sameType.some(entry => entry.fingerprint === fingerprint)) return { kind: 'trusted', source: 'user_known_hosts' };
   if (app.length) return { kind: 'changed', previous: app[0], source: 'app' };
   if (agent.length) return { kind: 'changed', previous: agent[0], source: 'agent' };
-  const sameType = keyType ? user.filter(entry => entry.type === keyType) : user;
-  if (sameType.some(entry => entry.fingerprint === fingerprint)) return { kind: 'trusted', source: 'user_known_hosts' };
   if (!user.length && !unreadable) return { kind: 'new' };
   const previous = (sameType[0] ?? user[0])?.fingerprint;
   return { kind: 'changed', ...(previous && { previous }), source: 'user_known_hosts' };
@@ -150,11 +151,15 @@ function createTransport({ state, readAnswer, validAuthAnswer, matchesGlobalPatt
     const { previous, source, kind } = verdict;
     const detail = { host: info.host, fingerprint: info.fingerprint,
       ...(kind === 'changed' && { ...(previous && { trusted: previous }), source }) };
-    if (autoTrustAllowed(mode, kind)) {
+    // "Don't ask again for this server" in the app's host key dialog is the user's own choice for this server, so it
+    // applies to agent connections too, whatever the grant's mode. It is recorded and reported as its own mode.
+    const dontAsk = state().hostKeyAutoAccept?.[`host:${info.host}`] === true;
+    if (dontAsk || autoTrustAllowed(mode, kind)) {
       if (signal?.aborted) return { code: 'HOST_KEY_UNCONFIRMED', detail };
+      const autoMode = dontAsk ? 'dont-ask' : mode;
       // A failure to record the key does not stop this connection. The audit event says it was not saved.
       const saved = await Promise.resolve().then(() => trustHostKey(info.host, info.fingerprint)).then(() => true, () => false);
-      return { answer: info.accept, host: info.host, fingerprint: info.fingerprint, auto: true, kind, mode,
+      return { answer: info.accept, host: info.host, fingerprint: info.fingerprint, auto: true, kind, mode: autoMode,
         previous: previous ?? null, source: source ?? null, saved };
     }
     if (!confirmHostKey) return { code: kind === 'changed' ? 'HOST_KEY_CHANGED' : 'HOST_KEY_UNKNOWN', detail };
