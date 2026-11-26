@@ -4287,7 +4287,10 @@ byId('transfer-toggle').addEventListener('click', hideTransferDrawer);
 const workspaceDialog = byId('workspaces-dialog');
 const workspaceForm = byId('workspace-form');
 const workspaceMessage = byId('workspace-message');
+// Id of the saved workspace this window opened last. Its row gets an update button that saves the open tabs back to it.
+let openedWorkspaceId = null;
 function restoreWorkspace(saved) {
+  if (saved.id) openedWorkspaceId = saved.id;
   let layout = saved.panes;
   if (!layout) {
     layout = saved.tabs.map(({ group }, tree) => ({ group, tree }));
@@ -4391,15 +4394,21 @@ async function renderWorkspaces(list = byId('workspace-list')) {
     detail.textContent = count + (count === 1 ? ' tab' : ' tabs');
     title.append(detail);
     row.append(title);
+    if (saved.id === openedWorkspaceId) {
+      row.classList.add('opened-workspace');
+      const update = iconButton('refresh', 'Update with Open Tabs…', () => updateFromOpenTabs(saved, sidebar).catch(error => {
+        if (sidebar) showError(error);
+        else workspaceMessage.textContent = error.message;
+      }));
+      update.disabled = !tabRecords.some(tab => !tab.agent);
+      row.append(update);
+    }
     const menu = () => chooseMenu([
       [t('Open Workspace'), () => {
         if (!sidebar) workspaceDialog.close();
         restoreWorkspace(saved);
       }],
-      [t('Update with Open Tabs…'), async () => {
-        const open = new Set(tabRecords.filter(tab => !tab.agent).map(tab => tab.element));
-        if (await updateWorkspace(saved, open) && !sidebar) workspaceMessage.textContent = t('Workspace updated');
-      }, tabRecords.some(tab => !tab.agent)],
+      [t('Update with Open Tabs…'), () => updateFromOpenTabs(saved, sidebar), tabRecords.some(tab => !tab.agent)],
       [t('Rename Workspace…'), async () => {
         const name = await askName(saved.name, 'Rename workspace');
         if (name === undefined) return;
@@ -4442,7 +4451,7 @@ const guideTopics = [
   ['File navigation', 'Use the star to save the current folder and the bookmark button to open saved paths. Local favorites are shared across local panels; remote favorites are saved per server account (host, port and user) on this Mac and shared by every bookmark, window and workspace that connects to it. Use the clock for recent paths. Mouse Back and Forward navigate visited paths. Right-click any file or folder and choose Copy Path to copy its full path.'],
   ['Transfer queue and folder compare', 'Open Compare folders from a remote pane to compare the current folders. Select files and queue them for transfer. The Transfers drawer shows progress with pause, cancel, and retry controls. Reconnect this SFTP session before retrying interrupted work.'],
   ['Tabs and splits', 'Drag tabs to reorder, group them, or drop a terminal on an edge to split. Right-click a tab to rename it, set its tab color, duplicate it, group it, or close it. Right-click a group name to rename the group or set its separate group color. ⌘D splits right; ⌘⇧D splits down.'],
-  ['Workspaces', 'Save selected open tabs or entire tab groups, including split layout and SFTP paths. Opening a workspace adds its tabs and keeps current sessions open. To update a saved workspace, right-click it and choose Update with Open Tabs, or save the selected tabs under its existing name. Restored connections authenticate again. Right-click a saved workspace to rename or delete it.'],
+  ['Workspaces', 'Save selected open tabs or entire tab groups, including split layout and SFTP paths. Opening a workspace adds its tabs and keeps current sessions open. To update a saved workspace, right-click it and choose Update with Open Tabs, or save the selected tabs under its existing name. A workspace you opened in this window has an update button in the sidebar that saves the open tabs to it. Restored connections authenticate again. Right-click a saved workspace to rename or delete it.'],
   ['PAM authentication', 'Keyboard-interactive questions appear in the session. Save reusable answers after a successful login, or create global exact-match and regular-expression rules in Preferences → Authentication. Saved values are plain text in the local profile file. Turn off automatic sending if you want to review answers first.'],
   ['Terminal triggers', 'Select recent terminal output and right-click to create a trigger. Choose notify, ask for input in the matching pane, or send a saved response when new output matches. Saved responses can contain multiple lines; each line is sent with Return. Enable or disable rules in the manager beside Snippets.'],
   ['Snippets and search', '⌘P opens snippets; choose one to paste it into the focused terminal. ⌘F searches terminal output. Return moves to the next match and Shift+Return moves to the previous match.'],
@@ -4523,6 +4532,11 @@ async function updateWorkspace(saved, chosen) {
   await renderWorkspaces();
   await refreshSidebarWorkspaces();
   return true;
+}
+// Overwrites a saved workspace with the non-agent tabs open in this window.
+async function updateFromOpenTabs(saved, sidebar) {
+  const open = new Set(tabRecords.filter(tab => !tab.agent).map(tab => tab.element));
+  if (await updateWorkspace(saved, open) && !sidebar) workspaceMessage.textContent = t('Workspace updated');
 }
 workspaceForm.addEventListener('submit', async event => {
   event.preventDefault();

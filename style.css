@@ -538,6 +538,8 @@ dialog .actions { margin-top: var(--space-5); justify-content: flex-end; }
 .workspace-sidebar-row .host small { display: block; color: var(--muted); font-size: var(--fs-2xs); }
 .workspace-sidebar-row .icon-button { flex: none; width: 23px; height: 24px; opacity: 0; }
 .workspace-sidebar-row:hover .icon-button, .workspace-sidebar-row:focus-within .icon-button { opacity: 1; }
+.workspace-sidebar-row.opened-workspace { box-shadow: inset 2px 0 0 var(--accent); }
+.workspace-sidebar-row.opened-workspace .icon-button { opacity: 1; }
 #rail-pam { padding: 0 var(--space-2); font-size: var(--fs-xs); color: var(--muted); }
 #preferences-pam { margin-top: var(--space-4); }
 
