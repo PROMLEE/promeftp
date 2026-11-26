@@ -2695,7 +2695,7 @@ function setupFiles(session) {
       updateControls();
     });
     element.addEventListener('mousedown', event => {
-      if (event.button !== 3 && event.button !== 4) return;
+      if ((event.button !== 3 && event.button !== 4) || !mouseHistoryButtonsOn()) return;
       event.preventDefault();
       event.stopPropagation();
       movePathHistory(entry, event.button === 3 ? -1 : 1);
@@ -4831,8 +4831,22 @@ snippetForm.addEventListener('submit', async event => {
 refresh().catch(showError);
 activate();
 
+// The file pane with keyboard focus, else the first pane of the active tab's file layout.
+function focusedFileSide(session) {
+  const focused = document.activeElement?.closest?.('.file-browser');
+  return (focused ?? session?.listing?.querySelector('.file-browser'))?._fileSide;
+}
+// The mouse back and forward buttons move through a file pane's folders. Settings can turn this off.
+function mouseHistoryButtonsOn() {
+  try { return localStorage.getItem('file-mouse-history') !== 'off'; } catch { return true; }
+}
 api.onCommand(command => {
   const session = sessions.get(active);
+  if (command === 'file-back' || command === 'file-forward') {
+    // The buttons do nothing when their direction has no history, so the shortcut follows the same rule.
+    focusedFileSide(session)?.[command === 'file-back' ? 'back' : 'forward'].click();
+    return;
+  }
   if (command === 'new-host') { byId('new-host').click(); return; }
   if (command === 'local') { byId('rail-local').click(); return; }
   if (command === 'snippets' || command === 'snippets-alt') { openSnippetsFromShortcut(session); return; }

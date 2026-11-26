@@ -538,6 +538,11 @@ async function captureShortcut(item, recorder) {
     }
   }
 }
+const mouseHistory = byId('file-mouse-history');
+try { mouseHistory.checked = localStorage.getItem('file-mouse-history') !== 'off'; } catch { mouseHistory.checked = true; }
+mouseHistory.addEventListener('change', () => {
+  try { localStorage.setItem('file-mouse-history', mouseHistory.checked ? 'on' : 'off'); } catch {}
+});
 byId('shortcut-diagnostics').addEventListener('change', event => {
   api['shortcut-diagnostics'](event.currentTarget.checked).catch(showError);
 });

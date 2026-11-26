@@ -590,6 +590,8 @@ Refresh|새로고침|更新|刷新
 Download selection|선택 항목 다운로드|選択項目をダウンロード|下载选中项
 Upload to selected remote|선택한 원격으로 업로드|選択したリモートにアップロード|上传到选中的远程窗格
 Show hidden files|숨김 파일 표시|隠しファイルを表示|显示隐藏文件
+Files|파일|ファイル|文件
+Mouse back and forward buttons in file panes|파일 패널에서 마우스 뒤로/앞으로 버튼|ファイルペインでマウスの戻る／進むボタン|文件面板中的鼠标后退/前进按钮
 Back|뒤로|戻る|后退
 Forward|앞으로|進む|前进
 Show hidden folders|숨은 상위 폴더 보기|非表示のフォルダを表示|显示隐藏的文件夹
