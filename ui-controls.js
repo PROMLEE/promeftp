@@ -31,6 +31,8 @@ const icons = {
   columns: 'M4 4h16v16H4z M10 4v16m5-16v16M4 10h6m5 4h5',
   tree: 'M4 4h4v4H4z M6 8v11h5m-5-6h5m0-2h8v4h-8zm0 6h8v4h-8z',
   history: 'M4 9a8 8 0 1 1 0 7M4 4v5h5m3-2v5l3 2',
+  arrowLeft: 'M19 12H5m6-6-6 6 6 6',
+  arrowRight: 'M5 12h14m-6-6 6 6-6 6',
   star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z',
   image: 'M3 4h18v16H3z M3 16l5-5 4 4 3-3 6 6 M16 8h.01',
   archive: 'M5 3h14v18H5z M11 3v2h2v2h-2v2h2v2h-2m0 3h3v4h-3z',

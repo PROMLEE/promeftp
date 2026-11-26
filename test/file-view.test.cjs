@@ -39,7 +39,7 @@ test('moving a button swaps it with its neighbour in the same group only', () =>
   assert.ok(up.indexOf('refresh') < up.indexOf('tree'));
   // compare is the last leading button; filter, the next button in the list, belongs to another group.
   assert.deepEqual(moveToolbarItem('remote', order, 'compare', 1), order);
-  assert.deepEqual(moveToolbarItem('remote', order, 'favorite', -1), order);
+  assert.deepEqual(moveToolbarItem('remote', order, 'back', -1), order);
   assert.deepEqual(moveToolbarItem('remote', order, 'missing', 1), order);
 });
 

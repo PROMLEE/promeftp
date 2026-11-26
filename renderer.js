@@ -2609,7 +2609,12 @@ function setupFiles(session) {
     favorites.disabled = true;
     const history = iconButton('history', 'Recent folders', () => showHistory(entry));
     history.disabled = true;
-    address.append(location, pathBar, favoriteToggle, favorites, history);
+    // Back and forward move through the folders this pane visited. The mouse side buttons do the same.
+    const back = iconButton('arrowLeft', 'Back', () => movePathHistory(entry, -1));
+    const forward = iconButton('arrowRight', 'Forward', () => movePathHistory(entry, 1));
+    back.disabled = true;
+    forward.disabled = true;
+    address.append(location, pathBar, back, forward, favoriteToggle, favorites, history);
     // The name filter for the folder on screen (⌘F). It hides rows only; the folder is not listed again.
     const filterBar = document.createElement('form');
     filterBar.className = 'file-filter';
@@ -2659,11 +2664,11 @@ function setupFiles(session) {
     // Local panes are placed by the caller, inside .local-file-panes (one, or two when split).
     if (side !== 'local') (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
     const entry = {
-      side, element, address, location, pathBar, pathSpace, breadcrumbs, favoriteToggle, favorites, history, tools, items, body, tree,
+      side, element, address, location, pathBar, pathSpace, breadcrumbs, back, forward, favoriteToggle, favorites, history, tools, items, body, tree,
       folders: new Map(), expanded: new Set(['/']), entries: [], selected: new Set(), sortKey: 'name', sortDescending: false,
       sortName, sortSize, sortModified, sortType, pathHistory: [], pathHistoryIndex: -1, pendingPathIndex: undefined, localRequest: 0,
       filterBar, filterField, filterCount, filterButton, filterText: '',
-      toolbarControls: new Map([['filter', filterButton], ['favorite', favoriteToggle], ['favorites', favorites], ['recent', history]]),
+      toolbarControls: new Map([['filter', filterButton], ['back', back], ['forward', forward], ['favorite', favoriteToggle], ['favorites', favorites], ['recent', history]]),
     };
     filterBar.addEventListener('submit', event => event.preventDefault());
     filterField.addEventListener('input', () => applyFilter(entry));
@@ -2689,8 +2694,8 @@ function setupFiles(session) {
       }
       updateControls();
     });
-    element.addEventListener('auxclick', event => {
-      if (event.button !== 3 && event.button !== 4) return;
+    element.addEventListener('mousedown', event => {
+      if ((event.button !== 3 && event.button !== 4) || !mouseHistoryButtonsOn()) return;
       event.preventDefault();
       event.stopPropagation();
       movePathHistory(entry, event.button === 3 ? -1 : 1);
@@ -2799,22 +2804,27 @@ function setupFiles(session) {
     const render = () => {
       popover.querySelectorAll('.favorite-popover-row').forEach(row => row.remove());
       favoriteFolders(side).forEach((item, index) => {
-        // Rows show only the full path; it wraps instead of being cut off, so no tooltip is needed.
-        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true;
-        const location = document.createElement('span'); location.className = 'favorite-path'; location.textContent = item.path;
-        row.append(icon('folder'), location);
+        // The name on the left, the full path on the right. The path wraps instead of being cut off.
+        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true; row.title = item.path;
+        const name = document.createElement('span'); name.textContent = item.displayName;
+        const location = document.createElement('small'); location.className = 'favorite-path'; location.textContent = item.path;
+        row.append(icon('folder'), name, location);
         row.addEventListener('click', () => { navigate(side, item.path); popover.remove(); });
         row.addEventListener('contextmenu', async event => {
           event.preventDefault(); event.stopPropagation();
           try {
           const action = await api['context-menu']([
-            { id: 'edit', label: t('Edit Path') },
+            { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
             { id: 'up', label: t('Move Up'), enabled: index > 0 }, { id: 'down', label: t('Move Down'), enabled: index < favoriteFolders(side).length - 1 }, null,
             { id: 'remove', label: t('Remove from Favorites') },
           ]);
           if (!action) return;
           let values = favoriteFolders(side);
-          if (action === 'edit') {
+          if (action === 'rename') {
+            const value = await askName(item.displayName, 'Rename Favorite');
+            if (value === undefined) return;
+            await mutateFavorite(side, { action: 'rename', id: item.id, displayName: value }); render(); return;
+          } else if (action === 'edit') {
             const value = await askName(item.path, 'Edit Favorite Path');
             if (value === undefined) return;
             await mutateFavorite(side, { action: 'edit-path', id: item.id, path: value }); render(); return;
@@ -2849,17 +2859,21 @@ function setupFiles(session) {
     try { await refreshFavorites(side); } catch (error) { status(session, error.message, true); return; }
     const items = favoriteFolders(side);
     if (!items.length) return showFavorites(side);
-    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: item.path })));
+    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: `${item.displayName} — ${item.path}` })));
     if (chosen === null) return;
     const item = items[chosen];
     const action = await api['context-menu']([
-      { id: 'edit', label: t('Edit Path') },
+      { id: 'rename', label: t('Rename') }, { id: 'edit', label: t('Edit Path') },
       { id: 'up', label: t('Move Up'), enabled: chosen > 0 }, { id: 'down', label: t('Move Down'), enabled: chosen < items.length - 1 },
       null, { id: 'remove', label: t('Remove from Favorites') },
     ]);
     if (action === null) return;
     if (!action) return;
-    if (action === 'edit') {
+    if (action === 'rename') {
+      const value = await askName(item.displayName, 'Rename Favorite');
+      if (value === undefined) return;
+      await mutateFavorite(side, { action: 'rename', id: item.id, displayName: value });
+    } else if (action === 'edit') {
       const value = await askName(item.path, 'Edit Favorite Path');
       if (value === undefined) return;
       await mutateFavorite(side, { action: 'edit-path', id: item.id, path: value });
@@ -2914,16 +2928,28 @@ function setupFiles(session) {
     const nav = side.breadcrumbs;
     side.pathBar.hidden = false;
     nav.replaceChildren();
-    const parts = directory.split('/').filter(Boolean);
+    // A deep path keeps the root, the first folder and the last two folders in view. The folders between them sit
+    // behind an ellipsis, so the start of the path never scrolls out of sight.
+    const crumbs = [['/', '/']];
     let path = '';
-    for (const part of ['/', ...parts]) {
-      if (part !== '/') path += '/' + part;
-      const target = path || '/';
-      const crumb = button(part, () => navigate(side, target));
-      if (part === '/') crumb.classList.add('root-crumb');
-      else setFileButtonIcon(crumb, 'folder');
-      crumb.title = target;
-      if (target === directory) crumb.setAttribute('aria-current', 'location');
+    for (const part of directory.split('/').filter(Boolean)) { path += '/' + part; crumbs.push([part, path]); }
+    const hidden = crumbs.length > 4 ? crumbs.slice(2, -2) : [];
+    const shown = hidden.length ? [crumbs[0], crumbs[1], undefined, ...crumbs.slice(-2)] : crumbs;
+    for (const item of shown) {
+      let crumb;
+      if (!item) {
+        crumb = button('…', () => chooseMenu(hidden.map(([label, target]) => [label, () => navigate(side, target)]))
+          .catch(error => status(session, error.message, true)));
+        crumb.title = t('Show hidden folders');
+        crumb.setAttribute('aria-label', t('Show hidden folders'));
+      } else {
+        const [part, target] = item;
+        crumb = button(part, () => navigate(side, target));
+        if (part === '/') crumb.classList.add('root-crumb');
+        else setFileButtonIcon(crumb, 'folder');
+        crumb.title = target;
+        if (target === directory) crumb.setAttribute('aria-current', 'location');
+      }
       if (nav.childElementCount) {
         const separator = document.createElement('span');
         separator.className = 'file-breadcrumb-separator';
@@ -2933,13 +2959,15 @@ function setupFiles(session) {
       }
       nav.append(crumb);
     }
-    nav.scrollLeft = nav.scrollWidth;
+    nav.scrollLeft = 0;
     try {
       localStorage.setItem(historyKey(side), JSON.stringify([
         directory, ...recentFolders(side).filter(path => path !== directory),
       ].slice(0, 20)));
     } catch {}
     side.history.disabled = !recentFolders(side).length;
+    side.back.disabled = side.pathHistoryIndex <= 0;
+    side.forward.disabled = side.pathHistoryIndex >= side.pathHistory.length - 1;
   }
   async function loadLocal(side, target) {
     const request = ++side.localRequest;
@@ -3217,10 +3245,14 @@ function setupFiles(session) {
     if (directory !== '/') {
       const row = document.createElement('div');
       row.className = 'file-row file-parent';
-      const parent = button(t('..'), () => navigate(side, directory.replace(/\/[^/]+\/?$/, '') || '/'));
+      // Opens like the other folders: double-click or Enter. A single click only focuses the row.
+      const up = () => navigate(side, directory.replace(/\/[^/]+\/?$/, '') || '/');
+      const parent = button(t('..'), () => {});
       parent.className = 'file-name';
-      parent.title = 'Parent folder';
+      parent.title = 'Parent folder · Double-click to open';
       parent.setAttribute('aria-label', 'Parent folder (..)');
+      parent.addEventListener('dblclick', event => { if (!event.shiftKey && !event.metaKey) up(); });
+      parent.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); up(); } });
       setFileButtonIcon(parent, 'folder');
       row.append(parent);
       for (const [column, value] of [['size', '—'], ['modifiedAt', '—'], ['type', t('Folder')]]) {
@@ -4791,6 +4823,10 @@ snippetForm.addEventListener('submit', async event => {
 refresh().catch(showError);
 activate();
 
+// The mouse back and forward buttons move through a file pane's folders. Settings can turn this off.
+function mouseHistoryButtonsOn() {
+  try { return localStorage.getItem('file-mouse-history') !== 'off'; } catch { return true; }
+}
 api.onCommand(command => {
   const session = sessions.get(active);
   if (command === 'new-host') { byId('new-host').click(); return; }
