@@ -3039,6 +3039,11 @@ function setupFiles(session) {
   function syncTree(side) {
     if (side.tree.hidden || !currentDirectory(side)) return;
     const directory = currentDirectory(side);
+    // Scroll to the current folder only when the pane has moved to it. A re-render of the same folder keeps the scroll.
+    if (side.treeCurrent !== directory) {
+      side.treeCurrent = directory;
+      if (!side.treeReveal) side.treeReveal = 'scroll';
+    }
     const branches = new Map();
     let parent = '/';
     for (const part of directory.split('/').filter(Boolean)) {
@@ -3123,6 +3128,21 @@ function setupFiles(session) {
     list.append(branch({ path: '/', name: '/' }, new Set()));
     side.tree.replaceChildren(list);
     side.tree.scrollTop = scroll;
+    // The folders above the current one may still be loading. Their rows move the current row, so reveal it
+    // only once they have all arrived.
+    const loading = [...branches.keys()].some(path => {
+      const request = side.folders.get(path);
+      return request && !request.children && !request.failed;
+    });
+    if (side.treeReveal && !loading) {
+      const mode = side.treeReveal;
+      side.treeReveal = undefined;
+      const current = side.tree.querySelector('.file-tree-row [aria-current="location"]');
+      if (current) {
+        current.scrollIntoView({ block: 'nearest' });
+        if (mode === 'focus') current.focus({ preventScroll: true });
+      }
+    }
   }
 
   function selectedRows(side) {
@@ -3485,15 +3505,25 @@ function setupFiles(session) {
     const tree = iconButton('tree', 'Toggle folder tree', () => {
       side.tree.hidden = !side.tree.hidden;
       tree.setAttribute('aria-pressed', String(!side.tree.hidden));
-      if (!side.tree.hidden) syncTree(side);
+      // Opening the tree scrolls to the current folder, even when the pane has not moved since it was closed.
+      if (!side.tree.hidden) { side.treeCurrent = undefined; syncTree(side); }
     });
     tree.setAttribute('aria-pressed', 'false');
+    // Opens the tree if it is closed, then brings the current folder into view and moves keyboard focus to it.
+    const locate = iconButton('locate', 'Show current folder in tree', () => {
+      if (!currentDirectory(side)) return;
+      side.tree.hidden = false;
+      tree.setAttribute('aria-pressed', 'true');
+      side.treeCurrent = undefined;
+      side.treeReveal = 'focus';
+      syncTree(side);
+    });
     const refresh = iconButton('refresh', 'Refresh', () => {
       side.folders.clear();
       navigate(side, currentDirectory(side));
     });
-    side.tools.append(tree, refresh);
-    side.toolbarControls.set('tree', tree).set('refresh', refresh);
+    side.tools.append(tree, locate, refresh);
+    side.toolbarControls.set('tree', tree).set('locate', locate).set('refresh', refresh);
     const canDrop = () => {
       const source = layout.drag;
       if (!source || source.side === side || layout.transferring) return false;

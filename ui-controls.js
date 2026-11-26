@@ -30,6 +30,7 @@ const icons = {
   type: 'M3 18 8 6l5 12M5 14h6m3-2h7m-3.5 0v6',
   columns: 'M4 4h16v16H4z M10 4v16m5-16v16M4 10h6m5 4h5',
   tree: 'M4 4h4v4H4z M6 8v11h5m-5-6h5m0-2h8v4h-8zm0 6h8v4h-8z',
+  locate: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M12 2v4m0 12v4M2 12h4m12 0h4',
   history: 'M4 9a8 8 0 1 1 0 7M4 4v5h5m3-2v5l3 2',
   arrowLeft: 'M19 12H5m6-6-6 6 6 6',
   arrowRight: 'M5 12h14m-6-6 6 6-6 6',
