@@ -37,6 +37,11 @@ const stampFields = p => ({ host: p.host, hostname: p.hostname || '', port: p.po
 const stamp = p => hash(JSON.stringify(stampFields(p)));
 const legacyStamp = p => hash(JSON.stringify(p));
 const clean = value => String(value ?? '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 512);
+// What the bookmark's grant allows, as the agent tab shows it: the enabled parts and counts only.
+const accessOf = grant => ({ sftp: grant.sftp !== false, root: clean(grant.root), download: grant.download === true,
+  commandApproval: grant.commandApproval === true, commandAutoApprove: grant.commandAutoApprove === true,
+  task: clean(grant.task?.name), savedAuth: grant.savedAuth === true,
+  pam: Array.isArray(grant.pam) ? grant.pam.length : 0, triggers: Array.isArray(grant.triggers) ? grant.triggers.length : 0 });
 // Agent download limits. Each grant may set its own values within these bounds; a grant saved by an older version has none
 // and gets the defaults, which are the limits that applied before they could be set.
 const downloadLimits = {
@@ -204,6 +209,11 @@ async function createAgentService({ directory, state, save, profiles, transport,
       status: 'connecting', authDeadline: opened + authWindow, touched: opened, controller: new AbortController(), waiters: new Set() };
     sessions.set(s.id, s);
     busy(sessions.size);
+    // The tab opens when the agent asks for the session, not when it is ready. A session that is still authenticating
+    // (PAM, OTP) or only browses over SFTP is then visible too, with its status and what it does.
+    s.viewed = true;
+    view(s, 'open', { label: clean(p.label || p.host), host: clean(p.host), user: clean(p.username), mode,
+      client: clean(settings().clients?.find(item => item.id === client)?.name || ''), access: accessOf(grant) });
     const notify = (event, value) => {
       if (s.closed) return;
       if (event === 'ready') {
@@ -212,11 +222,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.endpoint = typeof value?.endpoint === 'string' ? value.endpoint : '';
         s.prompt = undefined;
         note(s, 'session.ready', 'success');
-        if (s.mode === 'ssh' && !s.closed) {
-          s.viewed = true;
-          view(s, 'open', { label: clean(profileFor(s.profile)?.label || profileFor(s.profile)?.host || ''),
-            client: clean(settings().clients?.find(item => item.id === s.client)?.name || '') });
-        }
+        view(s, 'status', { status: 'ready', endpoint: clean(s.endpoint) });
         if (s.mode === 'sftp') resolveRoot(s);
       }
       if (event === 'prompt') {
@@ -224,6 +230,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.status = 'waiting_for_user';
         wake(s);
         s.prompt = { id: value.id, text: clean(value.prompt) };
+        view(s, 'status', { status: 'waiting_for_user', prompt: s.prompt.text.slice(0, 200) });
         // Only the reason code and the fixed next steps. The question, the reply and any password stay out of the log.
         const promptDetail = {};
         if (SAVED_AUTH_REASONS.includes(value.savedAuth)) promptDetail.savedAuth = value.savedAuth;
@@ -236,8 +243,16 @@ async function createAgentService({ directory, state, save, profiles, transport,
         s.status = 'connecting';
         wake(s);
       }
-      if (event === 'auth.rule') audit(base(s, event, 'submitted', null, clean(value)));
-      if (event === 'hostkey.pinned' || event === 'hostkey.autotrusted') audit(base(s, event, 'success', null, JSON.stringify(value)));
+      if (event === 'auth.rule') {
+        audit(base(s, event, 'submitted', null, clean(value)));
+        // Says that a saved answer or rule was used. The answer itself and the rule id never reach the tab.
+        view(s, 'auth', { how: value === 'saved-password' ? 'saved-password' : 'rule' });
+      }
+      if (event === 'hostkey.pinned' || event === 'hostkey.autotrusted') {
+        audit(base(s, event, 'success', null, JSON.stringify(value)));
+        view(s, 'hostkey', { host: clean(value?.host), fingerprint: clean(value?.fingerprint),
+          trust: event === 'hostkey.autotrusted' ? 'automatic' : 'confirmed', ...(value?.source && { source: clean(value.source) }) });
+      }
       if (event === 'error') {
         // The first failure is the final reason. Later noise from the same OpenSSH exit is not recorded.
         if (s.failure) return;
@@ -352,6 +367,8 @@ async function createAgentService({ directory, state, save, profiles, transport,
     let started = false;
     let activeSession;
     let viewing = null;
+    // The SFTP operation this request performs, set before its checks so a denied path still shows in the agent tab.
+    let fileOp = null;
     let timeout;
     try {
       if (!operations.has(method) || !params || typeof params !== 'object' || Array.isArray(params)) throw problem('INVALID_REQUEST');
@@ -452,6 +469,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
                 return result;
               };
             } else {
+              fileOp = { session: s, operation: method, path: clean(params.path) };
               if (s.mode !== 'sftp' || (method === 'sftp.download' && !grant.download)) throw problem('ACCESS_DENIED');
               const target = remotePath(params.path);
               if (!inside(grant.root, target)) throw problem('PATH_NOT_ALLOWED', 'PATH_OUTSIDE_ROOT');
@@ -488,6 +506,9 @@ async function createAgentService({ directory, state, save, profiles, transport,
         }, 30_000);
       })]);
       if (activeSession) current(activeSession);
+      if (fileOp) view(fileOp.session, 'sftp', { operation: fileOp.operation, path: fileOp.path, ok: true,
+        count: Array.isArray(data?.entries) ? data.entries.length : undefined, truncated: data?.truncated === true,
+        bytes: Number.isSafeInteger(data?.bytes) ? data.bytes : undefined });
       const ranCommand = method === 'ssh.run' || method === 'ssh.command';
       finish(event, ranCommand && (data.exitCode !== 0 || data.truncated) ? 'failed' : 'success', null,
         JSON.stringify({ target: event.detail, durationMs: Date.now() - startedAt,
@@ -496,6 +517,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
     } catch (error) {
       const reason = error.agentCode || 'OPERATION_FAILED';
       if (viewing) { view(viewing, 'failed', { code: reason }); viewing = null; }
+      if (fileOp) view(fileOp.session, 'sftp', { operation: fileOp.operation, path: fileOp.path, ok: false, code: reason });
       if (started) finish(event, reason === 'TIMEOUT' ? 'unknown' : 'failed', reason);
       else audit({ ...event, result: 'denied', reason, ...(error.agentReason && { detail: error.agentReason }) });
       throw problem(reason, error.agentReason);
@@ -738,6 +760,7 @@ async function createAgentService({ directory, state, save, profiles, transport,
       if (!s.connection?.answer(id, value)) throw problem('PROMPT_EXPIRED');
       s.prompt = undefined;
       s.status = 'connecting';
+      view(s, 'status', { status: 'connecting' });
       wake(s);
       note(s, 'auth.user', 'submitted');
     },
