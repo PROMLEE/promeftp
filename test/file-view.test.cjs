@@ -33,10 +33,19 @@ test('a button the saved layout never listed takes its default place and default
   assert.ok(!layout.hidden.includes('split-right'), 'a listed button keeps the saved visibility');
 });
 
+test('the locate button sits after the tree toggle in both panes and is shown by default', () => {
+  for (const kind of ['remote', 'local']) {
+    const ids = fileToolbarItems[kind].map(item => item.id);
+    assert.equal(ids[ids.indexOf('tree') + 1], 'locate');
+    assert.ok(!defaultHiddenToolbarItems[kind].includes('locate'));
+  }
+});
+
 test('moving a button swaps it with its neighbour in the same group only', () => {
   const order = normalizeToolbarLayout('remote').order;
   const up = moveToolbarItem('remote', order, 'refresh', -1);
-  assert.ok(up.indexOf('refresh') < up.indexOf('tree'));
+  assert.equal(up.indexOf('refresh'), order.indexOf('locate'));
+  assert.equal(up.indexOf('locate'), order.indexOf('refresh'));
   // compare is the last leading button; filter, the next button in the list, belongs to another group.
   assert.deepEqual(moveToolbarItem('remote', order, 'compare', 1), order);
   assert.deepEqual(moveToolbarItem('remote', order, 'back', -1), order);

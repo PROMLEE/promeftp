@@ -10,6 +10,7 @@ const fileToolbarItems = {
     { id: 'compare', label: 'Compare folders', group: 'leading' },
     { id: 'filter', label: 'Filter by name', group: 'tools' },
     { id: 'tree', label: 'Toggle folder tree', group: 'tools' },
+    { id: 'locate', label: 'Show current folder in tree', group: 'tools' },
     { id: 'refresh', label: 'Refresh', group: 'tools' },
     { id: 'new-folder', label: 'New remote folder', group: 'tools' },
     { id: 'download', label: 'Download selection', group: 'tools' },
@@ -24,6 +25,7 @@ const fileToolbarItems = {
   local: [
     { id: 'filter', label: 'Filter by name', group: 'tools' },
     { id: 'tree', label: 'Toggle folder tree', group: 'tools' },
+    { id: 'locate', label: 'Show current folder in tree', group: 'tools' },
     { id: 'refresh', label: 'Refresh', group: 'tools' },
     { id: 'hidden-files', label: 'Show hidden files', group: 'tools' },
     { id: 'new-folder', label: 'New local folder', group: 'tools' },

@@ -604,6 +604,7 @@ Could not save folder favorite.|폴더 즐겨찾기를 저장할 수 없습니�
 Rename|이름 변경|名前を変更|重命名
 Delete|삭제|削除|删除
 Toggle folder tree|폴더 트리 전환|フォルダツリーを切り替え|切换文件夹树
+Show current folder in tree|트리에서 현재 폴더 보기|ツリーで現在のフォルダを表示|在文件夹树中显示当前文件夹
 Refresh|새로고침|更新|刷新
 Download selection|선택 항목 다운로드|選択項目をダウンロード|下载选中项
 Upload to selected remote|선택한 원격으로 업로드|選択したリモートにアップロード|上传到选中的远程窗格
