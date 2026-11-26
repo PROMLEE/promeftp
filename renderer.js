@@ -2609,7 +2609,12 @@ function setupFiles(session) {
     favorites.disabled = true;
     const history = iconButton('history', 'Recent folders', () => showHistory(entry));
     history.disabled = true;
-    address.append(location, pathBar, favoriteToggle, favorites, history);
+    // Back and forward move through the folders this pane visited. The mouse side buttons do the same.
+    const back = iconButton('arrowLeft', 'Back', () => movePathHistory(entry, -1));
+    const forward = iconButton('arrowRight', 'Forward', () => movePathHistory(entry, 1));
+    back.disabled = true;
+    forward.disabled = true;
+    address.append(location, pathBar, back, forward, favoriteToggle, favorites, history);
     // The name filter for the folder on screen (⌘F). It hides rows only; the folder is not listed again.
     const filterBar = document.createElement('form');
     filterBar.className = 'file-filter';
@@ -2659,11 +2664,11 @@ function setupFiles(session) {
     // Local panes are placed by the caller, inside .local-file-panes (one, or two when split).
     if (side !== 'local') (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
     const entry = {
-      side, element, address, location, pathBar, pathSpace, breadcrumbs, favoriteToggle, favorites, history, tools, items, body, tree,
+      side, element, address, location, pathBar, pathSpace, breadcrumbs, back, forward, favoriteToggle, favorites, history, tools, items, body, tree,
       folders: new Map(), expanded: new Set(['/']), entries: [], selected: new Set(), sortKey: 'name', sortDescending: false,
       sortName, sortSize, sortModified, sortType, pathHistory: [], pathHistoryIndex: -1, pendingPathIndex: undefined, localRequest: 0,
       filterBar, filterField, filterCount, filterButton, filterText: '',
-      toolbarControls: new Map([['filter', filterButton], ['favorite', favoriteToggle], ['favorites', favorites], ['recent', history]]),
+      toolbarControls: new Map([['filter', filterButton], ['back', back], ['forward', forward], ['favorite', favoriteToggle], ['favorites', favorites], ['recent', history]]),
     };
     filterBar.addEventListener('submit', event => event.preventDefault());
     filterField.addEventListener('input', () => applyFilter(entry));
@@ -2689,7 +2694,7 @@ function setupFiles(session) {
       }
       updateControls();
     });
-    element.addEventListener('auxclick', event => {
+    element.addEventListener('mousedown', event => {
       if (event.button !== 3 && event.button !== 4) return;
       event.preventDefault();
       event.stopPropagation();
@@ -2931,16 +2936,28 @@ function setupFiles(session) {
     const nav = side.breadcrumbs;
     side.pathBar.hidden = false;
     nav.replaceChildren();
-    const parts = directory.split('/').filter(Boolean);
+    // A deep path keeps the root, the first folder and the last two folders in view. The folders between them sit
+    // behind an ellipsis, so the start of the path never scrolls out of sight.
+    const crumbs = [['/', '/']];
     let path = '';
-    for (const part of ['/', ...parts]) {
-      if (part !== '/') path += '/' + part;
-      const target = path || '/';
-      const crumb = button(part, () => navigate(side, target));
-      if (part === '/') crumb.classList.add('root-crumb');
-      else setFileButtonIcon(crumb, 'folder');
-      crumb.title = target;
-      if (target === directory) crumb.setAttribute('aria-current', 'location');
+    for (const part of directory.split('/').filter(Boolean)) { path += '/' + part; crumbs.push([part, path]); }
+    const hidden = crumbs.length > 4 ? crumbs.slice(2, -2) : [];
+    const shown = hidden.length ? [crumbs[0], crumbs[1], undefined, ...crumbs.slice(-2)] : crumbs;
+    for (const item of shown) {
+      let crumb;
+      if (!item) {
+        crumb = button('…', () => chooseMenu(hidden.map(([label, target]) => [label, () => navigate(side, target)]))
+          .catch(error => status(session, error.message, true)));
+        crumb.title = t('Show hidden folders');
+        crumb.setAttribute('aria-label', t('Show hidden folders'));
+      } else {
+        const [part, target] = item;
+        crumb = button(part, () => navigate(side, target));
+        if (part === '/') crumb.classList.add('root-crumb');
+        else setFileButtonIcon(crumb, 'folder');
+        crumb.title = target;
+        if (target === directory) crumb.setAttribute('aria-current', 'location');
+      }
       if (nav.childElementCount) {
         const separator = document.createElement('span');
         separator.className = 'file-breadcrumb-separator';
@@ -2950,13 +2967,15 @@ function setupFiles(session) {
       }
       nav.append(crumb);
     }
-    nav.scrollLeft = nav.scrollWidth;
+    nav.scrollLeft = 0;
     try {
       localStorage.setItem(historyKey(side), JSON.stringify([
         directory, ...recentFolders(side).filter(path => path !== directory),
       ].slice(0, 20)));
     } catch {}
     side.history.disabled = !recentFolders(side).length;
+    side.back.disabled = side.pathHistoryIndex <= 0;
+    side.forward.disabled = side.pathHistoryIndex >= side.pathHistory.length - 1;
   }
   async function loadLocal(side, target) {
     const request = ++side.localRequest;
@@ -3234,10 +3253,14 @@ function setupFiles(session) {
     if (directory !== '/') {
       const row = document.createElement('div');
       row.className = 'file-row file-parent';
-      const parent = button(t('..'), () => navigate(side, directory.replace(/\/[^/]+\/?$/, '') || '/'));
+      // Opens like the other folders: double-click or Enter. A single click only focuses the row.
+      const up = () => navigate(side, directory.replace(/\/[^/]+\/?$/, '') || '/');
+      const parent = button(t('..'), () => {});
       parent.className = 'file-name';
-      parent.title = 'Parent folder';
+      parent.title = 'Parent folder · Double-click to open';
       parent.setAttribute('aria-label', 'Parent folder (..)');
+      parent.addEventListener('dblclick', event => { if (!event.shiftKey && !event.metaKey) up(); });
+      parent.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); up(); } });
       setFileButtonIcon(parent, 'folder');
       row.append(parent);
       for (const [column, value] of [['size', '—'], ['modifiedAt', '—'], ['type', t('Folder')]]) {

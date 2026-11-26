@@ -590,6 +590,10 @@ Refresh|새로고침|更新|刷新
 Download selection|선택 항목 다운로드|選択項目をダウンロード|下载选中项
 Upload to selected remote|선택한 원격으로 업로드|選択したリモートにアップロード|上传到选中的远程窗格
 Show hidden files|숨김 파일 표시|隠しファイルを表示|显示隐藏文件
+Back|뒤로|戻る|后退
+Forward|앞으로|進む|前进
+Show hidden folders|숨은 상위 폴더 보기|非表示のフォルダを表示|显示隐藏的文件夹
+Parent folder · Double-click to open|상위 폴더 · 더블클릭하여 열기|親フォルダ · ダブルクリックで開く|上级文件夹 · 双击打开
 Choose local folder|로컬 폴더 선택|ローカルフォルダを選択|选择本地文件夹
 New remote folder|새 원격 폴더|新規リモートフォルダ|新建远程文件夹
 Close remote panel|원격 패널 닫기|リモートペインを閉じる|关闭远程窗格
