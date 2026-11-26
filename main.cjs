@@ -1800,9 +1800,6 @@ const shortcutCatalog = [
   { id: 'zoom-in', label: 'Increase Font Size', accel: 'CmdOrCtrl+=', scope: 'terminal', menu: 'Terminal' },
   { id: 'zoom-out', label: 'Decrease Font Size', accel: 'CmdOrCtrl+-', scope: 'terminal', menu: 'Terminal' },
   { id: 'zoom-reset', label: 'Reset Font Size', accel: 'CmdOrCtrl+0', scope: 'terminal', menu: 'Terminal' },
-  // Back and forward in the file pane that has keyboard focus; the renderer ignores them where no file pane is.
-  { id: 'file-back', label: 'Back', accel: 'CmdOrCtrl+[', scope: 'files' },
-  { id: 'file-forward', label: 'Forward', accel: 'CmdOrCtrl+]', scope: 'files' },
 ];
 const shortcutById = new Map(shortcutCatalog.map(item => [item.id, item]));
 // Fixed: shown in Settings, never rebound. The renderer handles copy and paste itself.
@@ -1815,7 +1812,7 @@ const reservedAccelerators = ['CmdOrCtrl+Q', 'CmdOrCtrl+H', 'CmdOrCtrl+M', 'CmdO
 const editingAccelerators = ['CmdOrCtrl+C', 'CmdOrCtrl+V', 'CmdOrCtrl+X', 'CmdOrCtrl+Z', 'CmdOrCtrl+A', 'CmdOrCtrl+S'];
 let shortcutCapture = false;
 let keyLog = [];
-const keyNames = { Equal: '=', Minus: '-', Comma: ',', Period: '.', Slash: '/', Backquote: '`', NumpadAdd: '=', NumpadSubtract: '-', Digit0: '0', BracketLeft: '[', BracketRight: ']' };
+const keyNames = { Equal: '=', Minus: '-', Comma: ',', Period: '.', Slash: '/', Backquote: '`', NumpadAdd: '=', NumpadSubtract: '-', Digit0: '0' };
 function parseAccelerator(accel) {
   const parts = String(accel || '').split('+').filter(Boolean);
   const key = parts.pop() || '';
@@ -1869,7 +1866,6 @@ handle('keyboard-shortcuts', () => {
     { title: 'App', shortcuts: shortcutCatalog.filter(item => item.scope === 'app').map(row) },
     { title: 'Terminal', shortcuts: [...shortcutCatalog.filter(item => item.scope === 'terminal').map(row),
       ...fixedShortcuts.map(([label, accelerator]) => ({ label, accelerator, editable: false }))] },
-    { title: 'Files', shortcuts: shortcutCatalog.filter(item => item.scope === 'files').map(row) },
   ];
 });
 handle('shortcut-set', (id, accelerator, options) => {

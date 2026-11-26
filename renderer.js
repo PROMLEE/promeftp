@@ -2804,14 +2804,11 @@ function setupFiles(session) {
     const render = () => {
       popover.querySelectorAll('.favorite-popover-row').forEach(row => row.remove());
       favoriteFolders(side).forEach((item, index) => {
-        // Rows show the full path, wrapped instead of cut off. A name the user gave the favorite is shown above it.
-        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true;
-        const text = document.createElement('span'); text.className = 'favorite-text';
-        const name = favoriteLabel(item);
-        if (name) { const label = document.createElement('span'); label.className = 'favorite-name'; label.textContent = name; text.append(label); }
-        const location = document.createElement('span'); location.className = 'favorite-path'; location.textContent = item.path;
-        text.append(location);
-        row.append(icon('folder'), text);
+        // The name on the left, the full path on the right. The path wraps instead of being cut off.
+        const row = document.createElement('button'); row.type = 'button'; row.className = 'favorite-popover-row'; row.draggable = true; row.title = item.path;
+        const name = document.createElement('span'); name.textContent = item.displayName;
+        const location = document.createElement('small'); location.className = 'favorite-path'; location.textContent = item.path;
+        row.append(icon('folder'), name, location);
         row.addEventListener('click', () => { navigate(side, item.path); popover.remove(); });
         row.addEventListener('contextmenu', async event => {
           event.preventDefault(); event.stopPropagation();
@@ -2858,16 +2855,11 @@ function setupFiles(session) {
     const dismiss = event => { if (!popover.contains(event.target) && !side.favorites.contains(event.target)) { popover.remove(); document.removeEventListener('pointerdown', dismiss, true); } };
     setTimeout(() => document.addEventListener('pointerdown', dismiss, true), 0);
   }
-  // A favorite's name is shown only when it differs from the folder's own name, which is the default.
-  function favoriteLabel(item) {
-    const folder = item.path.split('/').filter(Boolean).at(-1) || '/';
-    return item.displayName && item.displayName !== folder ? item.displayName : '';
-  }
   async function manageFavorites(side) {
     try { await refreshFavorites(side); } catch (error) { status(session, error.message, true); return; }
     const items = favoriteFolders(side);
     if (!items.length) return showFavorites(side);
-    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: favoriteLabel(item) ? `${favoriteLabel(item)} — ${item.path}` : item.path })));
+    const chosen = await api['context-menu'](items.map((item, id) => ({ id, label: `${item.displayName} — ${item.path}` })));
     if (chosen === null) return;
     const item = items[chosen];
     const action = await api['context-menu']([
@@ -4831,22 +4823,12 @@ snippetForm.addEventListener('submit', async event => {
 refresh().catch(showError);
 activate();
 
-// The file pane with keyboard focus, else the first pane of the active tab's file layout.
-function focusedFileSide(session) {
-  const focused = document.activeElement?.closest?.('.file-browser');
-  return (focused ?? session?.listing?.querySelector('.file-browser'))?._fileSide;
-}
 // The mouse back and forward buttons move through a file pane's folders. Settings can turn this off.
 function mouseHistoryButtonsOn() {
   try { return localStorage.getItem('file-mouse-history') !== 'off'; } catch { return true; }
 }
 api.onCommand(command => {
   const session = sessions.get(active);
-  if (command === 'file-back' || command === 'file-forward') {
-    // The buttons do nothing when their direction has no history, so the shortcut follows the same rule.
-    focusedFileSide(session)?.[command === 'file-back' ? 'back' : 'forward'].click();
-    return;
-  }
   if (command === 'new-host') { byId('new-host').click(); return; }
   if (command === 'local') { byId('rail-local').click(); return; }
   if (command === 'snippets' || command === 'snippets-alt') { openSnippetsFromShortcut(session); return; }
