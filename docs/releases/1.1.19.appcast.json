@@ -1,0 +1,19 @@
+{
+  "heading": "Agent tabs, folder navigation, and a Dock menu",
+  "summary": "Agent sessions now get a tab when they start, including SFTP-only and authenticating sessions. The file panes gained Back and Forward buttons and easier navigation of deep folders.",
+  "changes": [
+    [
+      "Agent tabs",
+      "Every agent session opens a tab with its client, bookmark, mode, and granted access, and shows connecting, waiting-for-answer, and connected status. SFTP list, stat, and download activity is shown with its path and result."
+    ],
+    [
+      "Folders and favorites",
+      "Back and Forward buttons, mouse side buttons (switchable in Settings → Shortcuts), a path bar that collapses deep folders into a menu, double-click on .. to go up, and renaming SFTP favorites again."
+    ],
+    [
+      "Dock menu",
+      "Right-click the PromeFTP Dock icon to open a New Window."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
