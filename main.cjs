@@ -1585,7 +1585,33 @@ handle('local-mkdir', async (directory, name) => {
   const parent = await fs.realpath(directory ? expandHome(directory) : app.getPath('home'));
   await fs.mkdir(path.join(parent, name), { mode: 0o700 });
 });
+// Copy and Move to Trash for several items of one folder. The clipboard gets every path; Trash asks once for the whole list.
+async function localItemsAction(action, directory, names) {
+  if (!names.length || !names.every(item => validName(item))) throw Error('Invalid file name.');
+  const parent = await fs.realpath(directory ? expandHome(directory) : app.getPath('home'));
+  const targets = [];
+  for (const item of names) {
+    const target = path.join(parent, item);
+    await fs.lstat(target);
+    targets.push(target);
+  }
+  if (action === 'copy') {
+    clipboard.writeText(targets.join('\n'));
+    // The file-URL slot holds one item, so Finder pastes the first one. Electron has no multi-file clipboard.
+    clipboard.writeBuffer('public.file-url', Buffer.from(require('node:url').pathToFileURL(targets[0]).href));
+  } else if (action === 'trash') {
+    const result = await dialog.showMessageBox(dialogParent(), {
+      type: 'warning', message: `Move ${targets.length} items to Trash?`, detail: targets.join('\n'),
+      buttons: ['Cancel', 'Move to Trash'], defaultId: 0, cancelId: 0,
+    });
+    if (result.response !== 1) return;
+    const failed = [];
+    for (const target of targets) await shell.trashItem(target).catch(error => failed.push(`${path.basename(target)}: ${error.message}`));
+    if (failed.length) throw Error(`Could not move ${failed.length} of ${targets.length} items to Trash.\n${failed.join('\n')}`);
+  } else throw Error('Unsupported local file action.');
+}
 handle('local-action', async (action, directory, name, nextName) => {
+  if (Array.isArray(name)) return localItemsAction(action, directory, name);
   if (!validName(name)) throw Error('Invalid file name.');
   const parent = await fs.realpath(directory ? expandHome(directory) : app.getPath('home'));
   const target = path.join(parent, name);
@@ -1780,6 +1806,23 @@ handle('sftp', async (id, action, target, name) => {
       buttons: ['Cancel', 'Delete'], defaultId: 0, cancelId: 0,
     });
     if (result.response === 1) await sftpCall(channel, attributes.isDirectory() ? 'rmdir' : 'unlink', target);
+  } else if (action === 'delete-many') {
+    // Several items of one folder: one confirmation for the whole list, then each item in turn. Failures are reported together.
+    if (!Array.isArray(name) || !name.length || !name.every(item => validName(item))) throw Error('Invalid name.');
+    const targets = name.map(item => path.posix.join(target, item));
+    const result = await dialog.showMessageBox(dialogParent(), {
+      type: 'warning', message: `Delete ${targets.length} remote items?`, detail: targets.join('\n'),
+      buttons: ['Cancel', 'Delete'], defaultId: 0, cancelId: 0,
+    });
+    if (result.response !== 1) return;
+    const failed = [];
+    for (const item of targets) {
+      try {
+        const attributes = await sftpCall(channel, 'lstat', item);
+        await sftpCall(channel, attributes.isDirectory() ? 'rmdir' : 'unlink', item);
+      } catch (error) { failed.push(`${path.posix.basename(item)}: ${error.message}`); }
+    }
+    if (failed.length) throw Error(`Could not delete ${failed.length} of ${targets.length} items.\n${failed.join('\n')}`);
   } else throw Error('Unsupported SFTP action.');
 });
 

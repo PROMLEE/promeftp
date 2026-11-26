@@ -3128,6 +3128,15 @@ function setupFiles(session) {
   function selectedRows(side) {
     return side.entries.filter(entry => side.selected.has(entry.name) && !entry.link);
   }
+  // Repaints the selected rows from side.selected, then the toolbar controls that depend on it.
+  function paintSelection(side) {
+    for (const item of side.items.querySelectorAll('.file-name[aria-pressed]')) {
+      const selected = side.selected.has(item.dataset.name);
+      item.setAttribute('aria-pressed', String(selected));
+      item.parentElement.classList.toggle('selected', selected);
+    }
+    updateControls();
+  }
   function updateControls() {
     const canTransfer = session.ready && !busy && !layout.transferring && layout.directory && session.remoteDirectory;
     session.canUpload = Boolean(canTransfer);
@@ -3343,12 +3352,7 @@ function setupFiles(session) {
           else side.selected.add(entry.name);
           side.selectionAnchor = index;
         }
-        for (const item of side.items.querySelectorAll('.file-name[aria-pressed]')) {
-          const selected = side.selected.has(item.dataset.name);
-          item.setAttribute('aria-pressed', String(selected));
-          item.parentElement.classList.toggle('selected', selected);
-        }
-        updateControls();
+        paintSelection(side);
       });
       name.className = 'file-name';
       name.title = entry.directory ? entry.name + ' · Double-click to open' : entry.name;
@@ -3397,46 +3401,69 @@ function setupFiles(session) {
         else await api.sftp(session.id, 'delete', target);
         await reload();
       };
+      // The items a menu command or Cmd+Backspace acts on: the whole selection when this item is part of it, otherwise this item alone.
+      const targetsOf = () => side.selected.has(entry.name) ? selectedRows(side) : [entry];
+      // One item keeps the single-item path; several go in one call, so the confirmation is asked once.
+      const removeItems = async items => {
+        if (items.length === 1) return remove();
+        if (isLocal(side)) await api['local-action']('trash', currentDirectory(side), items.map(item => item.name));
+        else await api.sftp(session.id, 'delete-many', currentDirectory(side), items.map(item => item.name));
+        await reload();
+      };
       // Keyboard equivalents of the context menu's Rename and Delete (Delete moves local items to Trash; remote deletes still confirm in main).
       name.addEventListener('keydown', event => {
         if (event.key === 'F2') { event.preventDefault(); rename().catch(error => status(session, error.message, true)); }
         else if (event.metaKey && (event.key === 'Backspace' || event.key === 'Delete')) {
           event.preventDefault();
-          remove().catch(error => status(session, error.message, true));
+          removeItems(targetsOf()).catch(error => status(session, error.message, true));
         }
       });
       row.addEventListener('contextmenu', event => {
         event.preventDefault();
+        // As in Finder: right-clicking an item outside the selection selects only that item. Inside it, the whole selection is the target.
+        if (!entry.link && !side.selected.has(entry.name)) {
+          side.selected.clear();
+          side.selected.add(entry.name);
+          side.selectionAnchor = side.entries.indexOf(entry);
+          paintSelection(side);
+        }
+        const items = targetsOf();
+        const many = items.length > 1;
+        const names = items.map(item => item.name);
+        const paths = items.map(item => itemPath(side, item.name));
+        const files = items.filter(item => !item.directory);
+        const eachItem = async (list, action) => { for (const item of list) await action(item); };
         const properties = async () => {
           if (isLocal(side)) await api['local-action']('info', currentDirectory(side), entry.name);
           else await api.sftp(session.id, 'info', target);
         };
-        const backupNames = side.selected.has(entry.name) ? selectedRows(side).map(item => item.name) : [entry.name];
-        const backupLabel = backupNames.length > 1 ? t('Backup') + ' (' + backupNames.length + ')' : t('Backup');
+        const backupLabel = many ? t('Backup') + ' (' + names.length + ')' : t('Backup');
+        // Single-item commands (open folder, rename, info, reveal, remote edit) are disabled while several items are selected.
         const entries = isLocal(side) ? [
-          ...(entry.directory ? [[t('Open Folder'), () => navigate(side, target)]] : [
-            [t('Open'), () => api['local-action']('open', currentDirectory(side), entry.name)],
-            [t('Edit'), () => api['local-action']('edit', currentDirectory(side), entry.name)],
+          ...(entry.directory && !many ? [[t('Open Folder'), () => navigate(side, target)]] : [
+            [t('Open'), () => eachItem(files, item => api['local-action']('open', currentDirectory(side), item.name)), files.length > 0],
+            [t('Edit'), () => eachItem(files, item => api['local-action']('edit', currentDirectory(side), item.name)), files.length > 0],
           ]),
-          [t('Reveal in Finder'), () => api['local-action']('reveal', currentDirectory(side), entry.name)],
-          [t('Copy'), () => api['local-action']('copy', currentDirectory(side), entry.name)],
-          [t('Copy Path'), () => api['write-clipboard'](target)],
-          [t('Rename…'), rename],
-          [t('Move to Trash'), remove],
-          [t('Get Info'), properties],
+          [t('Reveal in Finder'), () => api['local-action']('reveal', currentDirectory(side), entry.name), !many],
+          [t('Copy'), () => api['local-action']('copy', currentDirectory(side), many ? names : entry.name)],
+          [t('Copy Path'), () => api['write-clipboard'](paths.join('\n'))],
+          [t('Rename…'), rename, !many],
+          [t('Move to Trash'), () => removeItems(items)],
+          [t('Get Info'), properties, !many],
           null,
           [t('Refresh Folder'), () => refreshFolder(side, currentDirectory(side))],
         ] : [
-          ...(entry.directory ? [[t('Open Folder'), () => navigate(side, target)]] : entry.link ? [] : [
-            [t('Download'), () => api.sftp(session.id, 'download', target)],
-            [t('Edit…'), () => api.sftp(session.id, 'edit', target)],
+          ...(entry.directory && !many ? [[t('Open Folder'), () => navigate(side, target)]] : entry.link ? [] : [
+            // Several items download through the transfer queue, as the toolbar's Download button does.
+            [t('Download'), () => many ? transfer(true, items) : api.sftp(session.id, 'download', target)],
+            [t('Edit…'), () => api.sftp(session.id, 'edit', target), !many],
           ]),
           // A selected item backs up the whole selection. Links are never backed up.
-          ...(entry.link ? [] : [[backupLabel, () => backupItems(backupNames), !session.backupRunning]]),
-          [t('Copy Path'), () => api['write-clipboard'](target)],
-          [t('Rename…'), rename],
-          [t('Delete'), remove],
-          [t('Get Info'), properties],
+          ...(entry.link ? [] : [[backupLabel, () => backupItems(names), !session.backupRunning]]),
+          [t('Copy Path'), () => api['write-clipboard'](paths.join('\n'))],
+          [t('Rename…'), rename, !many],
+          [t('Delete'), () => removeItems(items)],
+          [t('Get Info'), properties, !many],
           null,
           [t('Refresh Folder'), () => refreshFolder(side, currentDirectory(side))],
         ];
