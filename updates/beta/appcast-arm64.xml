@@ -4,11 +4,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>PromeFTP</title>
     <item>
-      <title>PromeFTP 1.1.18</title>
-      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.18</link>
-      <pubDate>Wed, 25 Nov 2026 01:03:47 +0000</pubDate>
-      <sparkle:version>1.1.18</sparkle:version>
-      <sparkle:shortVersionString>1.1.18</sparkle:shortVersionString>
+      <title>PromeFTP 1.1.19</title>
+      <link>https://github.com/PROMLEE/promeftp/releases/tag/v1.1.19</link>
+      <pubDate>Thu, 26 Nov 2026 01:16:21 +0000</pubDate>
+      <sparkle:version>1.1.19</sparkle:version>
+      <sparkle:shortVersionString>1.1.19</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
       <description sparkle:format="html">&lt;!doctype html&gt;
 &lt;html lang="en"&gt;&lt;meta charset="utf-8"&gt;&lt;meta name="color-scheme" content="light dark"&gt;
@@ -20,16 +20,16 @@ ul { padding-left: 19px; }
 li { margin-bottom: 10px; }
 .notice { padding: 9px 11px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }
 &lt;/style&gt;&lt;body&gt;
-&lt;h2&gt;Automatic updates install again&lt;/h2&gt;
-&lt;p&gt;Updates from PromeFTP 1.1.15 and 1.1.17 failed after download with an installer launch error. This release fixes the update installer, speeds up SFTP transfers, and lets you change keyboard shortcuts by clicking them.&lt;/p&gt;
-&lt;ul&gt;&lt;li&gt;&lt;strong&gt;SFTP transfers&lt;/strong&gt;&lt;br&gt;Transfers run faster, and the running transfer icon turns correctly while files move.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Update installation&lt;/strong&gt;&lt;br&gt;Updates download and install again. Builds 1.1.15 and 1.1.17 could not install because the updater helper was missing from the app.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Keyboard shortcuts&lt;/strong&gt;&lt;br&gt;In Preferences → Shortcuts, click a shortcut to change it, then press the new keys. Escape cancels and Delete clears it.&lt;/li&gt;&lt;/ul&gt;
-&lt;p class="notice"&gt;If you run 1.1.15 or 1.1.17, install 1.1.18 once from the DMG on this release page. Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
-&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.18"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Agent tabs, folder navigation, and a Dock menu&lt;/h2&gt;
+&lt;p&gt;Agent sessions now get a tab when they start, including SFTP-only and authenticating sessions. The file panes gained Back and Forward buttons and easier navigation of deep folders.&lt;/p&gt;
+&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Agent tabs&lt;/strong&gt;&lt;br&gt;Every agent session opens a tab with its client, bookmark, mode, and granted access, and shows connecting, waiting-for-answer, and connected status. SFTP list, stat, and download activity is shown with its path and result.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Folders and favorites&lt;/strong&gt;&lt;br&gt;Back and Forward buttons, mouse side buttons (switchable in Settings → Shortcuts), a path bar that collapses deep folders into a menu, double-click on .. to go up, and renaming SFTP favorites again.&lt;/li&gt;&lt;li&gt;&lt;strong&gt;Dock menu&lt;/strong&gt;&lt;br&gt;Right-click the PromeFTP Dock icon to open a New Window.&lt;/li&gt;&lt;/ul&gt;
+&lt;p class="notice"&gt;Close active sessions before updating. Requires macOS 13 or later on Apple Silicon.&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://github.com/PROMLEE/promeftp/releases/tag/v1.1.19"&gt;Read the full release notes&lt;/a&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</description>
-      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.18/PromeFTP-1.1.18-macos-arm64.zip" length="141107775" type="application/octet-stream" sparkle:edSignature="QQBrySnhR7y3yyjR17TAFxiN2aaZ5CqfBP0nQkX84H0xyI5Q/TG9avwuzTv/qd50O5xio4Vzj1Ir+iRakQUuCw=="></enclosure>
+      <enclosure url="https://github.com/PROMLEE/promeftp/releases/download/v1.1.19/PromeFTP-1.1.19-macos-arm64.zip" length="141110931" type="application/octet-stream" sparkle:edSignature="6/ooh0JqrJThyg9ntcwRspHmEyLRq+qsNvVHqLSrRGQ14tIGl6p0xeXrj0JWTfgx57qepeVtnDnkU3JXOfsnCw=="></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: b7ehLpkfuyNVS7BGk56hUI9y3nN4GxBMfJ7T+UP3A/chhFDabim2AduMfkh3epTrJfwfw81UPIuJnusFfmxPCA==
-length: 2905
+edSignature: qgA41Smib2tOg4+RLjm0mcer6K1G5soUmj7aKSSTjkK1NQqSNZ6b5fdc3LlfNjrPBhoiJv7c1XLnGvwk9BNxAQ==
+length: 2928
 -->
