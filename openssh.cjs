@@ -280,8 +280,11 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
       '-o', 'StrictHostKeyChecking=' + (strictHostKey || 'ask'), '-o', 'NoHostAuthenticationForLocalhost=no',
     );
     if (rules.size) authOptions.push('-o', 'PreferredAuthentications=publickey,keyboard-interactive');
+    // SFTP keepalives: a network that drops without a reset (sleep, Wi-Fi change) would otherwise leave the master
+    // silent, so SFTP requests wait forever. Failing the master here closes the session and offers Reconnect.
     const modeOptions = mode === 'ssh' ? ['-tt'] :
-      ['-N', '-o', 'RemoteCommand=none', '-o', 'PermitLocalCommand=no'];
+      ['-N', '-o', 'RemoteCommand=none', '-o', 'PermitLocalCommand=no',
+        ...(mode === 'sftp' ? ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3'] : [])];
     // Each agent connection gets its own empty known_hosts in the connection directory, removed on close.
     const restricted = agent ? agentRestrictedOptions({ ...config, knownHosts: path.join(directory, 'known_hosts') }) : [];
     terminal = pty.spawn(ssh, [...restricted, ...masterOptions, ...modeOptions, ...authOptions, ...configArgs(config, !agent), '--', config.host], {

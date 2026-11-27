@@ -1094,9 +1094,22 @@ handle('context-menu', entries => new Promise(resolve => {
   Menu.buildFromTemplate(items).popup({ window: dialogParent(), callback: () => setImmediate(() => resolve(null)) });
 }));
 
+// A request on a stuck connection never gets an answer. The limit keeps the pane's busy flag from staying set,
+// which would leave its toolbar buttons unresponsive until the session is reconnected.
+const sftpRequestTimeout = 60_000;
 function sftpCall(channel, method, ...args) {
   return new Promise((resolve, reject) => {
-    channel[method](...args, (error, value) => error ? reject(error) : resolve(value));
+    const timer = setTimeout(() => reject(Object.assign(Error('The server did not answer in time. Reconnect and try again.'), { code: 'ETIMEDOUT' })), sftpRequestTimeout);
+    try {
+      channel[method](...args, (error, value) => {
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(value);
+      });
+    } catch (error) {
+      clearTimeout(timer);
+      reject(error);
+    }
   });
 }
 function validName(name) {
