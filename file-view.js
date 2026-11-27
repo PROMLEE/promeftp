@@ -108,8 +108,30 @@ function fileFilterMatcher(query) {
   };
 }
 
+// The folder tree's share of the file browser width. The user drags the divider, and the share is kept per device.
+const fileTreeRatioDefault = 0.36;
+const fileTreeRatioRange = [0.15, 0.7];
+function clampTreeRatio(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fileTreeRatioDefault;
+  const clamped = Math.min(fileTreeRatioRange[1], Math.max(fileTreeRatioRange[0], number));
+  return Math.round(clamped * 1000) / 1000;
+}
+
+// The path bar's breadcrumbs. crumbs runs from the root: [['/', '/'], ['home', '/home'], ...].
+// The root and the first folder always stay. The folders between them and the last `trailing` folders go
+// behind an ellipsis, so the folders the user is working in stay in view. shown lists the crumbs in order,
+// with undefined where the ellipsis goes; hidden lists the folders behind it.
+function breadcrumbSplit(crumbs, trailing) {
+  const keep = Math.max(1, Math.floor(trailing) || 1);
+  if (crumbs.length - keep <= 2) return { hidden: [], shown: crumbs.slice() };
+  const hidden = crumbs.slice(2, crumbs.length - keep);
+  return { hidden, shown: [crumbs[0], crumbs[1], undefined, ...crumbs.slice(-keep)] };
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     fileToolbarItems, defaultHiddenToolbarItems, normalizeToolbarLayout, moveToolbarItem, setToolbarItemHidden, fileFilterMatcher,
+    clampTreeRatio, fileTreeRatioDefault, breadcrumbSplit,
   };
 }

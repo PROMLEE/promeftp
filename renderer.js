@@ -2457,6 +2457,26 @@ function makeFileLayout(root, directory, ratio) {
   return layout;
 }
 
+// The folder tree's width share of the file browser. Every file pane uses the same share, saved on this device.
+const fileTreeRatioKey = 'sftp-tree-ratio';
+let fileTreeRatio = (() => {
+  try {
+    const saved = localStorage.getItem(fileTreeRatioKey);
+    return saved === null ? fileTreeRatioDefault : clampTreeRatio(saved);
+  } catch { return fileTreeRatioDefault; }
+})();
+function applyFileTreeRatio(value) {
+  fileTreeRatio = clampTreeRatio(value);
+  document.documentElement.style.setProperty('--file-tree-ratio', String(fileTreeRatio));
+  for (const divider of document.querySelectorAll('.file-tree-divider')) {
+    divider.setAttribute('aria-valuenow', String(Math.round(fileTreeRatio * 100)));
+  }
+}
+function saveFileTreeRatio() {
+  try { localStorage.setItem(fileTreeRatioKey, String(fileTreeRatio)); } catch {}
+}
+applyFileTreeRatio(fileTreeRatio);
+
 // The file pane toolbars: which buttons show and in what order. One layout per pane kind (local, remote),
 // shared by every pane. It lives in localStorage, so other windows pick a change up from the storage event.
 const toolbarStorageKey = 'sftp-toolbar';
@@ -2703,14 +2723,47 @@ function setupFiles(session) {
     tree.className = 'file-tree';
     tree.setAttribute('aria-label', title + ' folder tree');
     tree.hidden = true;
+    // Drag the divider, or use the arrow keys, to set the folder tree's width. The width is shared by every file pane.
+    const treeDivider = document.createElement('button');
+    treeDivider.type = 'button';
+    treeDivider.className = 'file-tree-divider';
+    treeDivider.setAttribute('role', 'separator');
+    treeDivider.setAttribute('aria-orientation', 'vertical');
+    treeDivider.setAttribute('aria-label', 'Resize folder tree');
+    treeDivider.setAttribute('aria-valuemin', String(Math.round(fileTreeRatioRange[0] * 100)));
+    treeDivider.setAttribute('aria-valuemax', String(Math.round(fileTreeRatioRange[1] * 100)));
+    treeDivider.setAttribute('aria-valuenow', String(Math.round(fileTreeRatio * 100)));
+    treeDivider.addEventListener('pointerdown', event => { if (event.button === 0) treeDivider.setPointerCapture(event.pointerId); });
+    treeDivider.addEventListener('pointermove', event => {
+      if (!treeDivider.hasPointerCapture(event.pointerId)) return;
+      const rect = body.getBoundingClientRect();
+      if (rect.width) applyFileTreeRatio((event.clientX - rect.left) / rect.width);
+    });
+    const endTreeDrag = event => {
+      if (treeDivider.hasPointerCapture(event.pointerId)) treeDivider.releasePointerCapture(event.pointerId);
+      saveFileTreeRatio();
+    };
+    treeDivider.addEventListener('pointerup', endTreeDrag);
+    treeDivider.addEventListener('pointercancel', endTreeDrag);
+    treeDivider.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      applyFileTreeRatio(fileTreeRatio + (event.key === 'ArrowRight' ? 0.025 : -0.025));
+      saveFileTreeRatio();
+    });
     const items = document.createElement('div');
     items.className = 'file-items';
     items.setAttribute('aria-label', title + ' files');
+    // The filter, the column headers and the rows form one column to the right of the folder tree. The headers
+    // move over with the rows when the tree opens.
+    const column = document.createElement('div');
+    column.className = 'file-main';
+    column.append(filterBar, sortBar, items);
     const header = document.createElement('div');
     header.className = 'file-heading';
     header.append(heading, tools);
-    body.append(tree, items);
-    element.append(header, address, filterBar, sortBar, body);
+    body.append(tree, treeDivider, column);
+    element.append(header, address, body);
     // Local panes are placed by the caller, inside .local-file-panes (one, or two when split).
     if (side !== 'local') (session.tabRecord.fileLayout ? session.pane : layout.remotesRoot).append(element);
     const entry = {
@@ -2955,36 +3008,25 @@ function setupFiles(session) {
     control.classList.add('file-label-button');
     control.replaceChildren(icon(name), label);
   }
-  function showPath(side, directory) {
-    if (!favoritesCache.has(side)) refreshFavorites(side).catch(() => {});
-    // A filter belongs to one folder: opening another folder empties it. The bar stays open for the next one.
-    if (side.filterDirectory !== directory) {
-      side.filterDirectory = directory;
-      side.filterField.value = '';
-      side.filterText = '';
-    }
-    if (side.pendingPathIndex !== undefined && side.pathHistory[side.pendingPathIndex] === directory) {
-      side.pathHistoryIndex = side.pendingPathIndex;
-      side.pendingPathIndex = undefined;
-    } else if (side.pathHistory[side.pathHistoryIndex] !== directory) {
-      side.pathHistory.splice(side.pathHistoryIndex + 1);
-      side.pathHistory.push(directory);
-      side.pathHistoryIndex = side.pathHistory.length - 1;
-      side.pendingPathIndex = undefined;
-    }
-    side.location.value = directory;
-    side.location.hidden = true;
-    syncFavoriteControl(side);
-    const nav = side.breadcrumbs;
-    side.pathBar.hidden = false;
-    nav.replaceChildren();
-    // A deep path keeps the root, the first folder and the last two folders in view. The folders between them sit
-    // behind an ellipsis, so the start of the path never scrolls out of sight.
+  // The path bar: every folder of the current path, as crumbs. When the path is too wide for the bar, the folders
+  // in the middle go behind an ellipsis, and the folders nearest the current one stay in view.
+  function fitCrumbs(side) {
+    const directory = side.crumbDirectory;
     const crumbs = [['/', '/']];
     let path = '';
     for (const part of directory.split('/').filter(Boolean)) { path += '/' + part; crumbs.push([part, path]); }
-    const hidden = crumbs.length > 4 ? crumbs.slice(2, -2) : [];
-    const shown = hidden.length ? [crumbs[0], crumbs[1], undefined, ...crumbs.slice(-2)] : crumbs;
+    const nav = side.breadcrumbs;
+    side.crumbWidth = side.pathBar.clientWidth;
+    for (let trailing = crumbs.length; trailing >= 1; trailing--) {
+      drawCrumbs(side, directory, breadcrumbSplit(crumbs, trailing));
+      // A hidden bar cannot measure, so it shows the whole path and scrolls it.
+      if (!nav.clientWidth || nav.scrollWidth <= nav.clientWidth) break;
+    }
+    nav.scrollLeft = nav.scrollWidth;
+  }
+  function drawCrumbs(side, directory, { hidden, shown }) {
+    const nav = side.breadcrumbs;
+    nav.replaceChildren();
     for (const item of shown) {
       let crumb;
       if (!item) {
@@ -3009,7 +3051,35 @@ function setupFiles(session) {
       }
       nav.append(crumb);
     }
-    nav.scrollLeft = 0;
+  }
+  function showPath(side, directory) {
+    if (!favoritesCache.has(side)) refreshFavorites(side).catch(() => {});
+    // A filter belongs to one folder: opening another folder empties it. The bar stays open for the next one.
+    if (side.filterDirectory !== directory) {
+      side.filterDirectory = directory;
+      side.filterField.value = '';
+      side.filterText = '';
+    }
+    if (side.pendingPathIndex !== undefined && side.pathHistory[side.pendingPathIndex] === directory) {
+      side.pathHistoryIndex = side.pendingPathIndex;
+      side.pendingPathIndex = undefined;
+    } else if (side.pathHistory[side.pathHistoryIndex] !== directory) {
+      side.pathHistory.splice(side.pathHistoryIndex + 1);
+      side.pathHistory.push(directory);
+      side.pathHistoryIndex = side.pathHistory.length - 1;
+      side.pendingPathIndex = undefined;
+    }
+    side.location.value = directory;
+    side.location.hidden = true;
+    syncFavoriteControl(side);
+    side.pathBar.hidden = false;
+    side.crumbDirectory = directory;
+    fitCrumbs(side);
+    // The path bar's width changes with the pane and the folder tree. The crumbs refit when it does.
+    side.crumbObserver ??= new ResizeObserver(() => {
+      if (side.crumbDirectory && side.pathBar.clientWidth !== side.crumbWidth) fitCrumbs(side);
+    });
+    side.crumbObserver.observe(side.pathBar);
     try {
       localStorage.setItem(historyKey(side), JSON.stringify([
         directory, ...recentFolders(side).filter(path => path !== directory),
