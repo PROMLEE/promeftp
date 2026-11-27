@@ -219,9 +219,6 @@ async function start(config, mode, size, notify, responseRules, strictHostKey = 
   const masterOptions = [
     '-S', socket, '-o', 'ControlMaster=yes', '-o', 'ControlPersist=no',
     '-o', 'ForkAfterAuthentication=no', '-o', 'ClearAllForwardings=yes',
-    // A dead network otherwise leaves the master connection open and every SFTP request waiting. With these, the
-    // master exits after about 45 seconds without an answer, and the session shows its Reconnect button.
-    '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
   ];
   let terminal;
   let auth;

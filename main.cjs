@@ -1094,21 +1094,9 @@ handle('context-menu', entries => new Promise(resolve => {
   Menu.buildFromTemplate(items).popup({ window: dialogParent(), callback: () => setImmediate(() => resolve(null)) });
 }));
 
-// ssh2 never calls back a request on a channel that died silently (a sleeping laptop, a dropped network), so the
-// caller would wait forever. The timeout frees the renderer's busy flag, so the refresh and list controls work again.
-const sftpCallTimeout = 45_000;
 function sftpCall(channel, method, ...args) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(Error('The SFTP server did not respond. Reconnect to continue.')), sftpCallTimeout);
-    try {
-      channel[method](...args, (error, value) => {
-        clearTimeout(timer);
-        if (error) reject(error); else resolve(value);
-      });
-    } catch (error) {
-      clearTimeout(timer);
-      reject(error);
-    }
+    channel[method](...args, (error, value) => error ? reject(error) : resolve(value));
   });
 }
 function validName(name) {
