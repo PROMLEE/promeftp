@@ -761,6 +761,7 @@ Remove directive|지시문 삭제|ディレクティブを削除|移除指令
 Remove rule|규칙 삭제|ルールを削除|移除规则
 Remove snippet|스니펫 삭제|スニペットを削除|移除代码片段
 Resize local file pane|로컬 파일 패널 크기 조절|ローカルファイルパネルの幅を変更|调整本地文件面板大小
+Resize folder tree|폴더 트리 크기 조절|フォルダツリーの幅を変更|调整文件夹树大小
 Resize panes|패널 크기 조절|パネルのサイズを変更|调整面板大小
 SSH config directive|SSH 설정 지시문|SSH 設定ディレクティブ|SSH 配置指令
 Save changes to the selected bookmark|선택한 북마크의 변경 사항 저장|選択したブックマークへの変更を保存|保存对所选书签的更改

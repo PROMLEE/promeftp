@@ -462,7 +462,7 @@ dialog .actions { margin-top: var(--space-5); justify-content: flex-end; }
 .toolbar-item-row .icon-button { flex: none; width: 24px; height: 24px; }
 .toolbar-item-row .icon-button svg { width: 13px; height: 13px; }
 .file-breadcrumbs { min-width: 0; display: flex; align-items: center; overflow: auto; scrollbar-width: none; font-size: var(--fs-xs); color: var(--muted); }
-.file-breadcrumbs button { flex: none; max-width: 105px; padding: 1px var(--space-2); color: inherit; }
+.file-breadcrumbs button { flex: none; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px var(--space-2); color: inherit; }
 .file-breadcrumb-separator { flex: none; padding: 0 var(--space-1); color: var(--muted); opacity: .7; font-size: var(--fs-base); line-height: 1; pointer-events: none; }
 .file-breadcrumbs button svg, .file-tree-row > button:last-child svg { width: 12px; height: 12px; color: var(--accent); }
 .file-breadcrumbs button + button { border-left: 0; }
@@ -477,7 +477,15 @@ dialog .actions { margin-top: var(--space-5); justify-content: flex-end; }
 
 .file-browser-body { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .file-items { min-width: 0; }
-.file-tree { flex: 0 0 36%; min-width: 0; overflow: auto; border-right: 1px solid var(--line); padding: var(--space-2) var(--space-1); font-size: var(--fs-xs); }
+.file-tree { flex: 0 0 calc(var(--file-tree-ratio, 0.36) * 100%); min-width: 0; overflow: auto; padding: var(--space-2) var(--space-1); font-size: var(--fs-xs); }
+.file-tree[hidden] + .file-tree-divider { display: none; }
+.file-tree-divider {
+  flex: 0 0 6px; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  cursor: col-resize; touch-action: none; background: var(--paper); position: relative;
+}
+.file-tree-divider::before { content: ''; position: absolute; inset: 0 auto 0 2px; width: 1px; background: var(--line); }
+.file-tree-divider:hover::before, .file-tree-divider:focus-visible::before { background: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.file-main { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .file-tree ul { list-style: none; margin: 0; padding: 0 0 0 var(--space-5); }
 .file-tree > ul { padding-left: 0; }
 .file-tree-row { display: flex; min-width: 0; }
