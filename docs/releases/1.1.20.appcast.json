@@ -1,0 +1,19 @@
+{
+  "heading": "Steadier SFTP and a resizable folder tree",
+  "summary": "SFTP buttons recover after a dropped connection instead of freezing, and the SFTP folder tree is easier to size and read.",
+  "changes": [
+    [
+      "Idle connections",
+      "A silently dropped SFTP connection is detected after about 45 seconds and offers Reconnect. Each SFTP request gives up after 60 seconds instead of waiting forever."
+    ],
+    [
+      "Folder tree",
+      "Drag the divider, or use the arrow keys, to resize the folder tree. The width is shared by every file pane and saved on this device."
+    ],
+    [
+      "Headers and path bar",
+      "Column headers and the filter move with the rows when the folder tree opens. The path bar shows every folder that fits and collapses only the middle folders of very long paths."
+    ]
+  ],
+  "notice": "Close active sessions before updating. Requires macOS 13 or later on Apple Silicon."
+}
